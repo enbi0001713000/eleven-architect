@@ -65,7 +65,9 @@ export function shapePoint(slot: Slot, ins: TeamInstructions, phase: Phase, role
     return { x, y: 2.5 };
   }
   const isDefender = slot.position === 'CB' || slot.position === 'SB';
-  let x = slot.x + ins.defensiveLine * (isDefender ? 0.3 : 0.18);
+  // 守備ラインの高さは、守備時はチーム全体を押し上げる（コンパクトにする）が、攻撃時の前線の位置はあまり変えない
+  const lineShift = phase === 'defend' ? (isDefender ? 0.3 : 0.18) : (isDefender ? 0.15 : 0.06);
+  let x = slot.x + ins.defensiveLine * lineShift;
   let y = slot.y;
   if (phase === 'attack') {
     x += ATTACK_PUSH[slot.position] + ins.mentality * (slot.position === 'CB' ? 0.08 : 0.22) + (role?.attackX ?? 0);

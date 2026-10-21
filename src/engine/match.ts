@@ -174,7 +174,7 @@ const EVENT_TYPE: Record<CommentaryKey, MatchEventType> = {
   corner: 'corner', freeKick: 'freeKick', foul: 'foul', yellowCard: 'yellowCard',
   secondYellow: 'redCard', redCard: 'redCard', offside: 'offside',
   substitution: 'substitution', tacticsAttack: 'tactics', tacticsDefend: 'tactics', tacticsChange: 'tactics', injury: 'injury',
-  throughBall: 'buildUp', dribble: 'buildUp', tackle: 'buildUp', interception: 'buildUp', cross: 'buildUp',
+  throughBall: 'buildUp', breakaway: 'buildUp', dribble: 'buildUp', tackle: 'buildUp', interception: 'buildUp', cross: 'buildUp',
 };
 
 function emptyPlayerStats(): PlayerMatchStats {
@@ -215,6 +215,10 @@ export class LiveMatch {
   private zone = 0;
   /** 直前にパス（やクロス）を出した選手。アシストとキーパスの記録に使う。 */
   private lastPasser: number | null = null;
+  /** ボールを失った直後で、守備の形が整っていない時刻まで（その側が守るとき） */
+  private readonly transitionUntil: [number, number] = [-1, -1];
+  /** 直前に裏へのボールが通り、GKと1対1に近い形になっている */
+  private breakaway = false;
 
   // 1手の間は守備の圧力を使い回すためのキャッシュ
   private stepId = 0;
@@ -641,7 +645,8 @@ export class LiveMatch {
     const value = C.attributeCenter + (raw - C.attributeCenter) * C.attributeSpread;
     // 戦術の熟成度が低いと、判断力とポジショニングが下がる
     const familiar = key === 'decisions' || key === 'positioning' || key === 'offTheBall' ? 1 - C.familiarityWeight * (1 - op.familiarity) : 1;
-    return value * home * op.form * (0.72 + 0.28 * (op.stamina / 100)) * (0.85 + 0.15 * op.fit)
+    const tired = C.staminaFloor + (1 - C.staminaFloor) * (op.stamina / 100);
+    return value * home * op.form * tired * (0.85 + 0.15 * op.fit)
       * op.fatigueFactor * familiar * (op.injured ? C.injury.playingHurt : 1);
   }
 
@@ -669,9 +674,12 @@ export class LiveMatch {
       this.defendScoreCache[defSide] = scores;
       this.defendScoreStamp[defSide] = this.stepId;
     }
+    // ボールを失った直後は、攻めていたときの位置から守ることになる（前に人数をかけていたほど、後ろが手薄）
+    const w = this.transitionWeight(defSide);
     let sum = 0;
     for (let i = 0; i < scores.length; i++) {
-      sum += (state.defendInfluence[i]?.[zone] ?? 0) * (scores[i] ?? 0);
+      const influence = (1 - w) * (state.defendInfluence[i]?.[zone] ?? 0) + w * (state.attackInfluence[i]?.[zone] ?? 0);
+      sum += influence * (scores[i] ?? 0);
     }
     let value = sum / C.zoneStrengthScale;
     // 相手陣内（守る側から見て前の半分）では、プレスの強さに応じてボールに寄せる
@@ -683,6 +691,23 @@ export class LiveMatch {
     cache[zone] = value;
     stamp[zone] = this.stepId;
     return value;
+  }
+
+  /** 守備の形が整っていない度合い（0〜transition.blend）。ボールを失った直後ほど大きい */
+  private transitionWeight(side: Side): number {
+    const left = this.transitionUntil[side] - this.time;
+    return left > 0 ? C.transition.blend * Math.min(1, left / C.transition.seconds) : 0;
+  }
+
+  /** 走る速さ（スピードと加速） */
+  private speed(side: Side, op: OnPitch): number {
+    return 0.5 * this.attr(side, op, 'pace') + 0.5 * this.attr(side, op, 'acceleration');
+  }
+
+  /** 最終ライン（CBとSB）の平均の速さ */
+  private backLineSpeed(side: Side): number {
+    const line = this.sides[side].players.filter((op) => !op.sentOff && (op.position === 'CB' || op.position === 'SB'));
+    return line.length === 0 ? 8 : line.reduce((sum, op) => sum + this.speed(side, op), 0) / line.length;
   }
 
   /** 前線と中盤の、寄せる力（運動量・スピード・スタミナ）。1が平均的。 */
@@ -703,6 +728,12 @@ export class LiveMatch {
       if (!op.sentOff && filter(op, i)) result.push(i);
     });
     return result;
+  }
+
+  /** 抜け出してGKと1対1になったときのxG */
+  private breakawayXg(f: Frame): number {
+    const row = C.xg[f.r] ?? [0];
+    return (row[Math.min(2, Math.abs(f.c - 2))] ?? 0) * C.behind.breakawayXg;
   }
 
   /** GKが前に出て、裏へのボールやクロスを処理する力（0が平均的）。飛び出しが主で、前に出て守る型だと強くなる */
@@ -761,16 +792,21 @@ export class LiveMatch {
     }
     const f = this.frame(att, this.zone);
     const presHere = this.pressure(def, this.zone);
-    if (carrier.position !== 'GK' && this.tryDispossess(att, def, f, presHere)) {
+    // 裏に抜け出した選手は、寄せられる前にシュートまで持ち込みやすい
+    const breakaway = this.breakaway && f.r === ROWS - 1;
+    this.breakaway = false;
+    if (!breakaway && carrier.position !== 'GK' && this.tryDispossess(att, def, f, presHere)) {
       this.tick(Math.max(1.5, C.secondsPerAction + this.rng.next() * 2 - 1), att);
       return;
     }
-    const action = carrier.position === 'GK' ? 'pass' : this.chooseAction(att, carrier, f, presHere);
+    const action = carrier.position === 'GK' ? 'pass'
+      : breakaway && this.rng.chance(C.behind.breakawayShoot) ? 'shoot'
+        : this.chooseAction(att, carrier, f, presHere);
 
     switch (action) {
       case 'pass': this.doPass(att, def, f, presHere); break;
       case 'dribble': this.doDribble(att, def, f); break;
-      case 'shoot': this.doShot(att, def, f, 'open', this.holder, null, presHere); break;
+      case 'shoot': this.doShot(att, def, f, 'open', this.holder, breakaway ? this.breakawayXg(f) : null, presHere); break;
       case 'cross': this.doCross(att, def); break;
       case 'clear': this.doClear(att, def); break;
     }
@@ -785,8 +821,11 @@ export class LiveMatch {
   private tryDispossess(att: Side, def: Side, f: Frame, pressure: number): boolean {
     const carrier = this.op(att, this.holder);
     const keep = 0.5 * this.attr(att, carrier, 'composure') + 0.5 * this.attr(att, carrier, 'firstTouch');
+    // 長いボールを使うチームは早くボールを離すので、寄せられて奪われにくい（そのぶんパスの精度は落ちる）
+    const ins = this.sides[att].ins;
+    const direct = 1 - C.dispossession.directRelief * clamp(ins.passingLength + 0.5 * ins.tempo, -2, 2);
     const chance = C.dispossession.base * Math.max(0, pressure - 0.4)
-      * (f.r === ROWS - 1 ? C.dispossession.boxMultiplier : 1) * (1.5 - keep / 20);
+      * (f.r === ROWS - 1 ? C.dispossession.boxMultiplier : 1) * (1.5 - keep / 20) * direct;
     if (!this.rng.chance(chance)) return false;
     const defenderIndex = this.pickDefender(def, this.zone, f.r === ROWS - 1);
     const defender = this.op(def, defenderIndex);
@@ -880,9 +919,20 @@ export class LiveMatch {
 
     const a = (k: AttributeKey) => this.attr(att, passer, k);
     const quality = 0.5 * a('passing') + 0.25 * a('vision') + 0.25 * a('decisions');
+    // 長いボールは寄せてくる相手の頭を越えるので、出し手への寄せの影響が小さい
+    const longBall = dist >= 3;
+    const passerPressure = (C.pass.pressurePenalty * presHere + C.pass.pressureDistancePenalty * presHere * Math.min(dist, 3))
+      * (longBall ? C.pass.longBallPressureRelief : 1);
+    // 最終ラインの裏へのボール：ラインが高いほど、受け手が守備陣より速いほど通りやすい
+    const behind = dr >= 2 && tf.r >= ROWS - 2;
+    // プレスをかけるとチーム全体が前に出るので、ラインを上げたときと同じように背後が空く
+    const lineHeight = defIns.defensiveLine + C.behind.pressingShare * defIns.pressing + 2 * this.transitionWeight(def);
+    const paceEdge = behind ? clamp((this.speed(att, receiver) - this.backLineSpeed(def)) / 8, -1, 1) : 0;
+    const space = clamp((lineHeight + 2) / 4, 0, 1.25);
+    const behindBonus = behind ? C.behind.line * lineHeight + C.behind.pace * paceEdge * space : 0;
     const success = clamp(
       C.pass.base - C.pass.distancePenalty * dist + 0.012 * (quality - 12)
-        - C.pass.pressurePenalty * presHere - C.pass.pressureDistancePenalty * presHere * dist
+        - passerPressure + behindBonus
         - 0.07 * (this.pressure(def, tz) - 0.8)
         - C.pass.forwardPenalty * Math.max(0, dr) + 0.004 * (this.attr(att, receiver, 'firstTouch') - 12)
         - (tf.r === ROWS - 1 && f.r < ROWS - 1 ? C.pass.boxEntryPenalty : 0)
@@ -895,12 +945,16 @@ export class LiveMatch {
       passer.stats.passesCompleted++;
       passer.stats.rating += 0.01;
       state.stats.passesCompleted++;
-      if (dr >= 2 && tf.r >= 3) {
-        this.say('throughBall', att, 1, { p: passer.player.name, q: receiver.player.name });
-      }
       this.holder = target;
       this.zone = tz;
       this.lastPasser = passerIndex;
+      const runChance = clamp((paceEdge * space + 0.1 * lineHeight) * C.behind.breakawayRate, 0, C.behind.breakawayMax);
+      if (behind && tf.r === ROWS - 1 && runChance > 0 && this.rng.chance(runChance)) {
+        this.breakaway = true;
+        this.say('breakaway', att, 2, { p: passer.player.name, q: receiver.player.name });
+      } else if (dr >= 2 && tf.r >= 3) {
+        this.say('throughBall', att, 1, { p: passer.player.name, q: receiver.player.name });
+      }
       return;
     }
 
@@ -1271,6 +1325,8 @@ export class LiveMatch {
     this.holder = holderIndex;
     this.zone = zone;
     this.lastPasser = null;
+    this.breakaway = false;
+    if (wonInPlay) this.transitionUntil[other(newSide)] = this.time + C.transition.seconds;
     if (wonInPlay && this.frame(newSide, zone).r >= 3) {
       this.sides[newSide].stats.highRecoveries++;
     }
@@ -1281,7 +1337,7 @@ export class LiveMatch {
     this.sides[possessing].stats.possessionSeconds += seconds;
     for (const state of this.sides) {
       const ins = state.ins;
-      const intensity = 1 + 0.12 * ins.pressing + 0.04 * ins.tempo;
+      const intensity = 1 + C.pressing.staminaCost * ins.pressing + 0.04 * ins.tempo;
       for (const op of state.players) {
         if (op.sentOff) continue;
         const { stamina, workRate } = op.player.attributes;

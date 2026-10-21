@@ -10,7 +10,7 @@ import { ATTRIBUTE_KEYS, type AttributeKey, type MatchResult, type Team } from '
 const rng = createRng(31);
 const home = generateTeam(rng, { id: 'h', name: 'ホーム', level: 12 });
 const away = generateTeam(rng, { id: 'a', name: 'アウェイ', level: 12, formation: '4-3-3' });
-const SEEDS = Array.from({ length: 10 }, (_, i) => 700 + i);
+const SEEDS = Array.from({ length: 30 }, (_, i) => 700 + i);
 
 function lowered(team: Team, key: AttributeKey): Team {
   return { ...team, players: team.players.map((p) => ({ ...p, attributes: { ...p.attributes, [key]: 1 } })) };
