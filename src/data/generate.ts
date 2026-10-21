@@ -2,8 +2,9 @@
 
 import { FORMATIONS } from '../engine/formations';
 import type { Rng } from '../engine/rng';
+import { roleForSlot } from '../engine/roles';
 import type {
-  AttributeKey, Attributes, FormationName, HiddenAttributes, Player, Position, Team, TeamInstructions,
+  AttributeKey, Attributes, FormationName, HiddenAttributes, Player, Position, Role, Team, TeamInstructions,
 } from '../engine/types';
 import { ATTRIBUTE_KEYS } from '../engine/types';
 import { FOREIGN_NAMES, GIVEN_NAMES, SURNAMES } from './names';
@@ -118,8 +119,25 @@ export function withTactics(team: Team, formation: FormationName | undefined, in
   return {
     ...team,
     tactics: {
+      ...team.tactics,
       formation: formation ?? team.tactics.formation,
       instructions: { ...team.tactics.instructions, ...instructions },
     },
   };
+}
+
+/** 指定したポジションの枠の役割を変えたチーム（戦術の相性を確かめるときに使う） */
+export function withRoles(team: Team, positions: readonly Position[], role: Role): Team {
+  const slots = FORMATIONS[team.tactics.formation];
+  return {
+    ...team,
+    tactics: { ...team.tactics, roles: slots.map((slot, i) => (positions.includes(slot.position) ? role : roleForSlot(team.tactics, i, slot.position))) },
+  };
+}
+
+/** 指定したポジションの先発の能力値を変えたチーム */
+export function withAttributes(team: Team, positions: readonly Position[], change: Partial<Attributes>): Team {
+  const slots = FORMATIONS[team.tactics.formation];
+  const ids = new Set(team.lineup.filter((_, i) => positions.includes(slots[i]?.position ?? 'GK')));
+  return { ...team, players: team.players.map((p) => (ids.has(p.id) ? { ...p, attributes: { ...p.attributes, ...change } } : p)) };
 }

@@ -9,7 +9,7 @@ export type CommentaryKey =
   | 'penalty' | 'penaltyMissed' | 'penaltyWide' | 'corner' | 'freeKick'
   | 'foul' | 'yellowCard' | 'secondYellow' | 'redCard' | 'offside'
   | 'substitution' | 'tacticsAttack' | 'tacticsDefend' | 'tacticsChange' | 'injury'
-  | 'throughBall' | 'dribble' | 'tackle' | 'interception' | 'cross';
+  | 'throughBall' | 'breakaway' | 'dribble' | 'tackle' | 'interception' | 'cross';
 
 const TEMPLATES: Record<CommentaryKey, readonly string[]> = {
   kickoff: ['{team}のキックオフで試合開始！'],
@@ -49,6 +49,7 @@ const TEMPLATES: Record<CommentaryKey, readonly string[]> = {
   tacticsDefend: ['{team}は守りを固める', '{team}はリードを守る態勢に入った'],
   tacticsChange: ['{team}が戦術を変更'],
   throughBall: ['{p}から{q}へ縦パス', '{p}が前線の{q}へ通す'],
+  breakaway: ['{p}のパスで{q}が裏へ抜け出した！', '{q}が最終ラインの裏を取った！ GKと1対1！', '{p}から裏へ！ {q}が抜け出す！'],
   dribble: ['{p}がドリブルで前へ運ぶ', '{p}が一人かわした'],
   tackle: ['{q}が{p}からボールを奪う'],
   interception: ['{q}がパスをカット'],

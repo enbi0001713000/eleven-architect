@@ -75,9 +75,10 @@ function makeEmblem(rng: Rng, seed: ClubSeed): EmblemSpec {
 }
 
 function randomInstructions(rng: Rng, size: ClubSize): TeamInstructions {
-  const small = () => rng.int(-1, 1);
+  // 多くのクラブは標準に近い。極端な指示に偏った世界にならないように、0を半分の確率にする
+  const small = () => (rng.chance(0.5) ? 0 : rng.chance(0.5) ? 1 : -1);
   return {
-    mentality: size === 'large' ? rng.int(0, 1) : size === 'small' ? rng.int(-1, 0) : small(),
+    mentality: size === 'large' ? (rng.chance(0.6) ? 0 : 1) : size === 'small' ? (rng.chance(0.6) ? 0 : -1) : small(),
     defensiveLine: small(),
     pressing: small(),
     width: small(),

@@ -2,7 +2,7 @@
 //   npm run simulate              … 1,000試合
 //   npm run simulate -- --n=5000  … 試合数を変える
 
-import { generateTeam, withTactics } from '../data/generate';
+import { generateTeam, withAttributes, withRoles, withTactics } from '../data/generate';
 import { simulateMatch } from '../engine/match';
 import { createRng } from '../engine/rng';
 import { averageTeamStats, summarize } from '../engine/summary';
@@ -74,3 +74,70 @@ for (const pressing of [-2, 0, 2]) {
   ];
   console.log(`  ${padDisplay(pressing > 0 ? `+${pressing}` : `${pressing}`, 8)}${cells.map((c) => padDisplay(c, 16, 'right')).join('')}`);
 }
+
+// 4. 戦術の相性：同じ相手でも、組み合わせによって結果が変わるか（要件定義書「検証と性能」）
+const m = Math.max(300, Math.floor(n / 2));
+const pairRng = createRng(4242);
+const teamA = generateTeam(pairRng, { id: 'A', name: 'A', level: 12, formation: '4-4-2' });
+const teamB = generateTeam(pairRng, { id: 'B', name: 'B', level: 12, formation: '4-3-3' });
+interface Line { gf: number; ga: number; win: number; highRecoveries: number }
+const play = (home: Team, away: Team, ai: [boolean, boolean] = [true, true]): Line => {
+  const line: Line = { gf: 0, ga: 0, win: 0, highRecoveries: 0 };
+  for (let i = 0; i < m; i++) {
+    const r = simulateMatch(home, away, { seed: 9000 + i, detailedCommentary: false, aiControl: ai });
+    line.gf += r.score[0] / m;
+    line.ga += r.score[1] / m;
+    line.win += (r.score[0] > r.score[1] ? 1 : 0) / m;
+    line.highRecoveries += r.stats[0].highRecoveries / m;
+  }
+  return line;
+};
+const show = (label: string, l: Line) =>
+  console.log(`    ${padDisplay(label, 34)}得点 ${l.gf.toFixed(2)}  失点 ${l.ga.toFixed(2)}  勝率 ${percent(l.win)}`);
+console.log(`\n■ 戦術の相性（各${m}試合。Aのチーム指示や役割だけを変えて、同じBと対戦）`);
+
+console.log('  ハイライン × 足の速いFW（背後のスペース）');
+const fastB = withRoles(withAttributes(teamB, ['FW', 'W'], { pace: 18, acceleration: 18 }), ['FW'], 'runner');
+const slowB = withRoles(withAttributes(teamB, ['FW', 'W'], { pace: 8, acceleration: 8 }), ['FW'], 'runner');
+const lines = [-2, 2].map((defensiveLine) => {
+  const a = withTactics(teamA, undefined, { defensiveLine });
+  const fast = play(a, fastB);
+  const slow = play(a, slowB);
+  show(`ライン${defensiveLine > 0 ? '高い' : '低い'} 対 速いFW`, fast);
+  show(`ライン${defensiveLine > 0 ? '高い' : '低い'} 対 遅いFW`, slow);
+  return fast.ga - slow.ga;
+});
+check('速いFWで増える失点の差（高い−低い）', (lines[1] ?? 0) - (lines[0] ?? 0), 0.15, 10, (v) => v.toFixed(2));
+
+console.log('  ポゼッション × カウンター');
+const possessionA = withTactics(teamA, undefined, { passingLength: -2, tempo: -1, mentality: 1, defensiveLine: 1 });
+const counterB = withTactics(teamB, undefined, { mentality: -1, tempo: 2, passingLength: 1, defensiveLine: -1, pressing: -1 });
+const pn = play(possessionA, teamB);
+const pc = play(possessionA, counterB);
+const nn = play(teamA, teamB);
+const nc = play(teamA, counterB);
+show('ポゼッション 対 普通', pn);
+show('ポゼッション 対 カウンター', pc);
+show('普通 対 普通', nn);
+show('普通 対 カウンター', nc);
+check('カウンターで下がる勝率の差（ポゼ−普通）', (pn.win - pc.win) - (nn.win - nc.win), 0.01, 1, percent);
+
+console.log('  疲れ（コンディション70%で試合に入る）');
+const tiredA: Team = { ...teamA, readiness: Object.fromEntries(teamA.players.map((p) => [p.id, { condition: 70, fatigue: 50, morale: 60, familiarity: 1 }])) };
+const tired = play(tiredA, teamB);
+show('万全', nn);
+show('疲れている', tired);
+check('疲れで下がる得失点差', (nn.gf - nn.ga) - (tired.gf - tired.ga), 0.1, 10, (v) => v.toFixed(2));
+const noSubs = play(teamA, teamB, [false, true]);
+console.log(`    参考：交代も試合中の戦術の変更もしない場合　得点 ${noSubs.gf.toFixed(2)}  失点 ${noSubs.ga.toFixed(2)}  勝率 ${percent(noSubs.win)}`);
+
+console.log('  参考：プレス（敵陣で奪う回数は増えるが、背後が空き、疲れる）');
+const press0 = play(teamA, teamB);
+const press2 = play(withTactics(teamA, undefined, { pressing: 2 }), teamB);
+console.log(`    プレス普通：敵陣で奪取 ${press0.highRecoveries.toFixed(1)}  得点 ${press0.gf.toFixed(2)}  失点 ${press0.ga.toFixed(2)}`);
+console.log(`    プレス最大：敵陣で奪取 ${press2.highRecoveries.toFixed(1)}  得点 ${press2.gf.toFixed(2)}  失点 ${press2.ga.toFixed(2)}`);
+console.log('  参考：SBの役割（相手はカウンターと縦に突破するウイング）');
+const wingersB = withTactics(withRoles(withAttributes(teamB, ['W'], { pace: 16, dribbling: 15 }), ['W'], 'winger'), undefined,
+  { mentality: -1, tempo: 2, passingLength: 1, defensiveLine: -1, pressing: -1 });
+show('攻撃参加のSB', play(withRoles(teamA, ['SB'], 'attackingFullback'), wingersB));
+show('守備重視のSB', play(withRoles(teamA, ['SB'], 'defensiveFullback'), wingersB));
