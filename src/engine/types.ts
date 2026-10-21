@@ -68,6 +68,16 @@ export interface Player {
 
 export type FormationName = '4-4-2' | '4-3-3' | '4-2-3-1';
 
+/** 選手の役割（ポジションごとに選べるものは roles.ts の ROLE_OPTIONS） */
+export type Role =
+  | 'goalkeeper' | 'sweeperKeeper'
+  | 'stopper' | 'ballPlayingDefender'
+  | 'defensiveFullback' | 'attackingFullback'
+  | 'anchor' | 'playmaker' | 'boxToBox'
+  | 'advancedPlaymaker' | 'shadowStriker'
+  | 'wideMidfielder' | 'winger' | 'insideForward'
+  | 'targetMan' | 'runner' | 'falseNine';
+
 /** チーム指示。どれも -2（弱い・低い・短い）〜 +2（強い・高い・長い）。 */
 export interface TeamInstructions {
   /** 攻撃と守備のバランス（守備的〜攻撃的） */
@@ -87,6 +97,11 @@ export interface TeamInstructions {
 export interface Tactics {
   formation: FormationName;
   instructions: TeamInstructions;
+  /** フォーメーションの枠ごとの役割。省略した枠はポジションの初期値になる。 */
+  roles?: Role[];
+  captainId?: string;
+  /** セットプレーのキッカー。省略するか、ピッチにいなければ自動で選ぶ。 */
+  setPieces?: { penalty?: string; freeKick?: string; corner?: string };
 }
 
 export interface Team {
@@ -95,6 +110,8 @@ export interface Team {
   players: Player[];
   /** 先発11人の選手ID。フォーメーションの枠の順に並べる（先頭はGK）。 */
   lineup: string[];
+  /** 控えの選手ID（最大9人） */
+  bench?: string[];
   tactics: Tactics;
 }
 
@@ -145,6 +162,7 @@ export type MatchEventType =
   | 'goal' | 'penaltyGoal' | 'shotSaved' | 'shotOff' | 'shotBlocked'
   | 'penalty' | 'penaltyMissed' | 'corner' | 'freeKick'
   | 'foul' | 'yellowCard' | 'redCard' | 'offside'
+  | 'substitution' | 'tactics'
   | 'buildUp';
 
 export interface MatchEvent {
@@ -163,7 +181,14 @@ export interface MatchPlayerLine {
   side: Side;
   player: Player;
   position: Position;
+  role: Role;
   stats: PlayerMatchStats;
+  /** 先発したか */
+  started: boolean;
+  /** 途中出場した分（先発なら null） */
+  minuteOn: number | null;
+  /** 途中交代した分（最後まで出ていたら null） */
+  minuteOff: number | null;
 }
 
 export interface MatchResult {

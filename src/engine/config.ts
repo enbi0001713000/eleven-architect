@@ -27,7 +27,7 @@ export const ENGINE_CONFIG = {
   weights: {
     pass: 3.0,
     dribble: 0.25,
-    shotInBox: 0.44,
+    shotInBox: 0.42,
     shotInBoxWide: 0.15,
     shotOutsideBox: 0.22,
     shotOutsideBoxWide: 0.04,

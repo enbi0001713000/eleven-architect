@@ -35,17 +35,24 @@ export const NEUTRAL_INSTRUCTIONS: TeamInstructions = {
 
 let playerCounter = 0;
 
-function playerName(rng: Rng, nationality: string): string {
+export function playerName(rng: Rng, nationality: string): string {
   const foreign = FOREIGN_NAMES[nationality];
   if (foreign) return `${rng.pick(foreign.given)}・${rng.pick(foreign.family)}`;
   return `${rng.pick(SURNAMES)} ${rng.pick(GIVEN_NAMES)}`;
+}
+
+export interface PlayerOptions {
+  /** 指定しなければ連番のIDを付ける */
+  id?: string;
+  age?: number;
+  nationality?: string;
 }
 
 /**
  * 選手を1人作る。
  * @param level チームの水準（1〜20）。能力値はこの値を中心にばらつく。
  */
-export function generatePlayer(rng: Rng, position: Position, level: number): Player {
+export function generatePlayer(rng: Rng, position: Position, level: number, options: PlayerOptions = {}): Player {
   const profile = PROFILES[position];
   const attributes = {} as Attributes;
   for (const key of ATTRIBUTE_KEYS) {
@@ -67,12 +74,12 @@ export function generatePlayer(rng: Rng, position: Position, level: number): Pla
     pressure: rng.int(5, 17),
     temperament: rng.int(5, 17),
   };
-  const nationality = rng.chance(0.15) ? rng.pick(Object.keys(FOREIGN_NAMES)) : '日本';
+  const nationality = options.nationality ?? (rng.chance(0.15) ? rng.pick(Object.keys(FOREIGN_NAMES)) : '日本');
   playerCounter++;
   return {
-    id: `p${playerCounter}`,
+    id: options.id ?? `p${playerCounter}`,
     name: playerName(rng, nationality),
-    age: rng.int(18, 34),
+    age: options.age ?? rng.int(18, 34),
     nationality,
     foot: rng.chance(0.75) ? 'right' : rng.chance(0.85) ? 'left' : 'both',
     position,
@@ -101,6 +108,7 @@ export function generateTeam(rng: Rng, options: TeamOptions): Team {
     name: options.name,
     players: [...starters, ...bench],
     lineup: starters.map((p) => p.id),
+    bench: bench.map((p) => p.id),
     tactics: { formation, instructions: { ...NEUTRAL_INSTRUCTIONS, ...options.instructions } },
   };
 }

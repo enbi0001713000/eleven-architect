@@ -1,16 +1,21 @@
-// 試合エンジン（ゾーン方式）。要件定義書「試合エンジン」の章に対応する。
+// 試合エンジン（ゾーン方式）。要件定義書「試合エンジン」「戦術と観戦」の章に対応する。
 //
 // ピッチを縦6×横5の30マスに分け、ボールを持った選手のプレーを一手ずつ計算する。
 // マスの番号は「ホームが攻める向き」で数える（行0 = ホームのゴール側、行5 = アウェイのゴール側）。
 // 計算の中では、攻めている側から見た向き（行5 = 相手ゴール前）に直して考える。
+//
+// LiveMatch は少しずつ進められるので、観戦画面で止めて交代や戦術の変更ができる。
+// AIが采配する側は、決まった時間に交代や戦術の変更を自分で行う。
 
 import { commentary, type CommentaryKey, type CommentaryNames } from './commentary';
 import { ENGINE_CONFIG as C } from './config';
 import { FORMATIONS, shapePoint, type Slot } from './formations';
+import { positionFit, positionRating } from './ratings';
 import { createRng, type Rng } from './rng';
+import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot, type RoleProfile } from './roles';
 import type {
-  AttributeKey, MatchEvent, MatchEventType, MatchResult, Player, PlayerMatchStats,
-  Position, Side, Team, TeamInstructions, TeamStats,
+  AttributeKey, FormationName, MatchEvent, MatchEventType, MatchPlayerLine, MatchResult, Player,
+  PlayerMatchStats, Position, Role, Side, Tactics, Team, TeamInstructions, TeamStats,
 } from './types';
 
 const ROWS = 6;
@@ -18,32 +23,107 @@ const COLS = 5;
 const ZONES = ROWS * COLS;
 const HALF = 45 * 60;
 
-export interface SimulateOptions {
+/** 交代のルール（要件定義書：5人まで、交代できる回数は3回まで。ハーフタイムの交代は回数に数えない） */
+export const SUBSTITUTION_RULES = { maxSubs: 5, maxWindows: 3 } as const;
+
+export interface MatchOptions {
   seed: number;
   /** false にすると細かい実況（重要度1）を作らない。大量に試合を回すとき用。 */
   detailedCommentary?: boolean;
+  /** AIが交代と戦術の変更を行う側。省略すると両チームともAI。 */
+  aiControl?: [boolean, boolean];
+  /** ダービーなどの重要な試合。勝負強さ（隠れ能力）が出来に影響する。 */
+  important?: boolean;
 }
 
-export function simulateMatch(home: Team, away: Team, options: SimulateOptions): MatchResult {
-  return new MatchSimulator(home, away, options).run();
+/** 互換のための別名 */
+export type SimulateOptions = MatchOptions;
+
+export type MatchPhase = 'firstHalf' | 'halftime' | 'secondHalf' | 'finished';
+
+export interface ChangeResult {
+  ok: boolean;
+  message?: string;
+}
+
+export interface TacticsChange {
+  formation?: FormationName;
+  instructions?: TeamInstructions;
+  /** 枠ごとの役割 */
+  roles?: Role[];
+  /** 枠の順に並べたピッチ上の選手ID（11人、退場者を含む）。省略すると自動で割り当てる。 */
+  order?: string[];
+}
+
+export interface LivePlayer {
+  player: Player;
+  position: Position;
+  role: Role;
+  stamina: number;
+  sentOff: boolean;
+  stats: PlayerMatchStats;
+}
+
+export interface LiveSideSnapshot {
+  team: Team;
+  tactics: Tactics;
+  /** 枠の順 */
+  onPitch: LivePlayer[];
+  bench: { player: Player; used: boolean }[];
+  subsUsed: number;
+  windowsUsed: number;
+  stats: TeamStats;
+}
+
+export interface LiveSnapshot {
+  clock: number;
+  minute: string;
+  phase: MatchPhase;
+  score: [number, number];
+  sides: [LiveSideSnapshot, LiveSideSnapshot];
+}
+
+export function simulateMatch(home: Team, away: Team, options: MatchOptions): MatchResult {
+  return new LiveMatch(home, away, options).playToEnd();
 }
 
 interface OnPitch {
   player: Player;
   position: Position;
   slot: Slot;
+  role: Role;
+  profile: RoleProfile;
+  /** 本来のポジションとの適性（1 = 本来のポジション） */
+  fit: number;
   /** 0〜100 */
   stamina: number;
   /** その日の出来（1.0 が普段どおり） */
   form: number;
   sentOff: boolean;
+  started: boolean;
+  /** 結果に並べる順（先発は枠の順、途中出場は出た順） */
+  order: number;
+  minuteOn: number | null;
+  minuteOff: number | null;
   stats: PlayerMatchStats;
 }
 
 interface SideState {
   team: Team;
+  tactics: Tactics;
   ins: TeamInstructions;
+  /** 試合開始時のチーム指示（AIが戻すときの基準） */
+  baseIns: TeamInstructions;
+  /** 枠の順 */
   players: OnPitch[];
+  bench: { player: Player; used: boolean }[];
+  /** 途中で退いた選手 */
+  subbedOff: OnPitch[];
+  subsUsed: number;
+  windowsUsed: number;
+  lastSubClock: number | null;
+  ai: boolean;
+  aiDone: Set<string>;
   /** [選手][マス] 攻撃時にその選手がマスに与える影響（0〜1） */
   attackInfluence: number[][];
   /** [選手][マス] 守備時にその選手がマスに与える影響（0〜1） */
@@ -70,6 +150,11 @@ const DRIBBLE_TENDENCY: Record<Position, number> = {
   GK: 0, CB: 0.3, SB: 0.8, DM: 0.5, CM: 0.8, AM: 1.3, WM: 1.1, W: 1.6, FW: 1.0,
 };
 
+/** AIの交代のタイミング（分）と、そのときに代える最大人数 */
+const AI_SUB_CHECKPOINTS: { minute: number; count: number }[] = [
+  { minute: 60, count: 2 }, { minute: 70, count: 2 }, { minute: 80, count: 1 },
+];
+
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 const other = (side: Side): Side => (side === 0 ? 1 : 0);
 
@@ -80,12 +165,13 @@ const EVENT_TYPE: Record<CommentaryKey, MatchEventType> = {
   shotBlocked: 'shotBlocked', penalty: 'penalty', penaltyMissed: 'penaltyMissed', penaltyWide: 'penaltyMissed',
   corner: 'corner', freeKick: 'freeKick', foul: 'foul', yellowCard: 'yellowCard',
   secondYellow: 'redCard', redCard: 'redCard', offside: 'offside',
+  substitution: 'substitution', tacticsAttack: 'tactics', tacticsDefend: 'tactics', tacticsChange: 'tactics',
   throughBall: 'buildUp', dribble: 'buildUp', tackle: 'buildUp', interception: 'buildUp', cross: 'buildUp',
 };
 
 function emptyPlayerStats(): PlayerMatchStats {
   return {
-    rating: 6, passes: 0, passesCompleted: 0, keyPasses: 0, dribbles: 0, dribblesWon: 0,
+    rating: 6.3, passes: 0, passesCompleted: 0, keyPasses: 0, dribbles: 0, dribblesWon: 0,
     shots: 0, shotsOnTarget: 0, goals: 0, assists: 0, tackles: 0, interceptions: 0,
     fouls: 0, yellowCards: 0, redCards: 0, saves: 0,
   };
@@ -99,18 +185,21 @@ function emptyTeamStats(): TeamStats {
   };
 }
 
-class MatchSimulator {
+export class LiveMatch {
   private readonly rng: Rng;
   private readonly seed: number;
   private readonly detailed: boolean;
+  private readonly important: boolean;
   private readonly sides: [SideState, SideState];
-  private readonly events: MatchEvent[] = [];
-  private readonly score: [number, number] = [0, 0];
-  private clock = 0;
+  private readonly eventList: MatchEvent[] = [];
+  private readonly goals: [number, number] = [0, 0];
+  private matchPhase: MatchPhase = 'firstHalf';
+  private time = 0;
   private half: 1 | 2 = 1;
   private halfEnd = HALF;
   /** プレー以外で止まった時間（ファウル、ゴールなど） */
   private stoppage = 0;
+  private finalResult: MatchResult | null = null;
 
   // ボールの状態
   private side: Side = 0;
@@ -128,57 +217,266 @@ class MatchSimulator {
   private readonly pressingUnitCache: [number, number] = [1, 1];
   private readonly pressingUnitStamp: [number, number] = [-1, -1];
 
-  constructor(home: Team, away: Team, options: SimulateOptions) {
+  constructor(home: Team, away: Team, options: MatchOptions) {
     this.seed = options.seed;
     this.detailed = options.detailedCommentary ?? true;
+    this.important = options.important ?? false;
     this.rng = createRng(options.seed);
-    this.sides = [this.createSide(home, 0), this.createSide(away, 1)];
-  }
-
-  run(): MatchResult {
+    const ai = options.aiControl ?? [true, true];
+    this.sides = [this.createSide(home, 0, ai[0]), this.createSide(away, 1, ai[1])];
     this.kickoff(0, 'kickoff');
     this.halfEnd = HALF + this.rng.int(1, 4) * 60;
-    for (;;) {
+  }
+
+  get phase(): MatchPhase {
+    return this.matchPhase;
+  }
+
+  /** 試合開始からの秒数（後半は2700秒から数える） */
+  get clock(): number {
+    return this.time;
+  }
+
+  get score(): readonly [number, number] {
+    return this.goals;
+  }
+
+  get events(): readonly MatchEvent[] {
+    return this.eventList;
+  }
+
+  /** untilClock 秒まで進める。ハーフタイムか試合終了になったら、そこで止まる。 */
+  advance(untilClock: number): void {
+    if (this.matchPhase === 'halftime' || this.matchPhase === 'finished') return;
+    while (this.time < untilClock) {
+      this.aiTick();
       this.step();
-      if (this.clock < this.halfEnd) continue;
-      if (this.half === 2) break;
-      this.say('halftime', null, 2, {});
-      this.half = 2;
-      this.clock = HALF;
-      this.halfEnd = 2 * HALF + this.rng.int(2, 6) * 60;
-      this.kickoff(1, 'secondHalf');
+      if (this.time < this.halfEnd) continue;
+      if (this.half === 1) {
+        this.say('halftime', null, 2, {});
+        this.matchPhase = 'halftime';
+      } else {
+        this.say('fulltime', null, 2, {});
+        this.matchPhase = 'finished';
+        this.finalResult = this.finish();
+      }
+      return;
     }
-    this.say('fulltime', null, 2, {});
-    return this.finish();
+  }
+
+  /** ハーフタイムから後半を始める */
+  startSecondHalf(): void {
+    if (this.matchPhase !== 'halftime') return;
+    this.matchPhase = 'secondHalf';
+    this.half = 2;
+    this.time = HALF;
+    this.halfEnd = 2 * HALF + this.rng.int(2, 6) * 60;
+    this.kickoff(1, 'secondHalf');
+  }
+
+  /** 最後まで進めて結果を返す */
+  playToEnd(): MatchResult {
+    while (this.matchPhase !== 'finished') {
+      this.advance(Number.POSITIVE_INFINITY);
+      if (this.matchPhase === 'halftime') this.startSecondHalf();
+    }
+    return this.result();
+  }
+
+  result(): MatchResult {
+    if (!this.finalResult) throw new Error('試合はまだ終わっていません');
+    return this.finalResult;
+  }
+
+  // ---- 采配 ----
+
+  /** その側の交代と戦術の変更を、AIに任せるかどうか（「結果まで飛ばす」ときなど） */
+  setAiControl(side: Side, ai: boolean): void {
+    this.sides[side].ai = ai;
+  }
+
+  isAiControlled(side: Side): boolean {
+    return this.sides[side].ai;
+  }
+
+  /** 選手交代。outId を下げて、控えの inId を入れる。 */
+  substitute(side: Side, outId: string, inId: string): ChangeResult {
+    if (this.matchPhase === 'finished') return { ok: false, message: '試合は終わっています' };
+    const state = this.sides[side];
+    if (state.subsUsed >= SUBSTITUTION_RULES.maxSubs) {
+      return { ok: false, message: `交代枠（${SUBSTITUTION_RULES.maxSubs}人）を使い切っています` };
+    }
+    const index = state.players.findIndex((op) => op.player.id === outId);
+    const outgoing = state.players[index];
+    if (!outgoing) return { ok: false, message: '下げる選手がピッチにいません' };
+    if (outgoing.sentOff) return { ok: false, message: '退場した選手は交代できません' };
+    const benchEntry = state.bench.find((b) => b.player.id === inId);
+    if (!benchEntry) return { ok: false, message: '入れる選手が控えにいません' };
+    if (benchEntry.used) return { ok: false, message: 'その選手はすでに出場しています' };
+
+    // ハーフタイム以外で、新しく試合を止めて交代するときは「交代の回数」を1回使う
+    const newWindow = this.matchPhase !== 'halftime' && state.lastSubClock !== this.time;
+    if (newWindow && state.windowsUsed >= SUBSTITUTION_RULES.maxWindows) {
+      return { ok: false, message: `交代できる回数（${SUBSTITUTION_RULES.maxWindows}回）を使い切っています` };
+    }
+    if (newWindow) {
+      state.windowsUsed++;
+      state.lastSubClock = this.time;
+    }
+
+    const minute = this.currentMinute();
+    outgoing.minuteOff = minute;
+    state.subbedOff.push(outgoing);
+    const incoming = this.createOnPitch(benchEntry.player, outgoing.slot, outgoing.role, false);
+    incoming.minuteOn = minute;
+    incoming.order = 100 + state.subsUsed;
+    state.players[index] = incoming;
+    benchEntry.used = true;
+    state.subsUsed++;
+    if (this.side === side && this.holder === index) this.lastPasser = null;
+    this.say('substitution', side, 2, { team: state.team.name, p: incoming.player.name, q: outgoing.player.name });
+    this.updateInfluence(state, side);
+    this.stepId++;
+    return { ok: true };
+  }
+
+  /** フォーメーション、チーム指示、役割、並びを変える */
+  changeTactics(side: Side, change: TacticsChange, announce: CommentaryKey = 'tacticsChange'): ChangeResult {
+    if (this.matchPhase === 'finished') return { ok: false, message: '試合は終わっています' };
+    const state = this.sides[side];
+    const formation = change.formation ?? state.tactics.formation;
+    const slots = FORMATIONS[formation];
+
+    if (change.formation !== undefined || change.order !== undefined) {
+      const order = change.order ?? this.autoOrder(state.players, slots);
+      const current = new Map(state.players.map((op) => [op.player.id, op]));
+      if (order.length !== slots.length || new Set(order).size !== order.length || order.some((id) => !current.has(id))) {
+        return { ok: false, message: 'ピッチにいる11人を、それぞれ1つの枠に入れてください' };
+      }
+      const holderId = this.side === side ? state.players[this.holder]?.player.id : undefined;
+      state.players = order.map((id, i) => {
+        const op = current.get(id) as OnPitch;
+        const slot = slots[i] as Slot;
+        op.slot = slot;
+        op.position = slot.position;
+        op.fit = positionFit(op.player.position, slot.position);
+        return op;
+      });
+      if (holderId !== undefined) this.holder = Math.max(0, state.players.findIndex((op) => op.player.id === holderId));
+      this.lastPasser = null;
+    }
+
+    const roles = state.players.map((op, i) => {
+      const wanted = change.roles?.[i] ?? (change.formation === undefined ? op.role : undefined);
+      return wanted && ROLE_OPTIONS[op.position].includes(wanted) ? wanted : roleForSlot({ ...state.tactics, roles: [] }, i, op.position);
+    });
+    state.players.forEach((op, i) => {
+      op.role = roles[i] as Role;
+      op.profile = ROLE_PROFILES[op.role];
+    });
+    if (change.instructions) state.ins = { ...change.instructions };
+    state.tactics = { ...state.tactics, formation, instructions: state.ins, roles };
+    this.say(announce, side, 2, { team: state.team.name });
+    this.updateInfluence(state, side);
+    this.stepId++;
+    return { ok: true };
+  }
+
+  snapshot(): LiveSnapshot {
+    const sideSnapshot = (state: SideState): LiveSideSnapshot => ({
+      team: state.team,
+      tactics: state.tactics,
+      onPitch: state.players.map((op) => ({
+        player: op.player, position: op.position, role: op.role, stamina: op.stamina,
+        sentOff: op.sentOff, stats: { ...op.stats },
+      })),
+      bench: state.bench.map((b) => ({ ...b })),
+      subsUsed: state.subsUsed,
+      windowsUsed: state.windowsUsed,
+      stats: { ...state.stats },
+    });
+    return {
+      clock: this.time,
+      minute: this.minuteLabel(),
+      phase: this.matchPhase,
+      score: [this.goals[0], this.goals[1]],
+      sides: [sideSnapshot(this.sides[0]), sideSnapshot(this.sides[1])],
+    };
   }
 
   // ---- 準備 ----
 
-  private createSide(team: Team, side: Side): SideState {
+  private createSide(team: Team, side: Side, ai: boolean): SideState {
     const slots = FORMATIONS[team.tactics.formation];
     if (team.lineup.length !== slots.length) {
       throw new Error(`${team.name}: 先発は${slots.length}人必要です（今は${team.lineup.length}人）`);
     }
-    const players = team.lineup.map((id, i): OnPitch => {
+    const findPlayer = (id: string): Player => {
       const player = team.players.find((p) => p.id === id);
-      const slot = slots[i];
-      if (!player || !slot) throw new Error(`${team.name}: 先発の選手 ${id} が見つかりません`);
-      // 安定感が低いほど、その日の出来のブレが大きい
-      const spread = 0.02 + 0.08 * (1 - player.hidden.consistency / 20);
-      return {
-        player, position: slot.position, slot, stamina: 100,
-        form: clamp(this.rng.normal(1, spread), 0.8, 1.2), sentOff: false, stats: emptyPlayerStats(),
-      };
+      if (!player) throw new Error(`${team.name}: 選手 ${id} が見つかりません`);
+      return player;
+    };
+    const players = team.lineup.map((id, i): OnPitch => {
+      const slot = slots[i] as Slot;
+      const op = this.createOnPitch(findPlayer(id), slot, roleForSlot(team.tactics, i, slot.position), true);
+      op.order = i;
+      return op;
     });
+    const ins = { ...team.tactics.instructions };
     const state: SideState = {
-      team, ins: team.tactics.instructions, players,
-      attackInfluence: [], defendInfluence: [], attackZone: [], stats: emptyTeamStats(),
+      team,
+      tactics: { ...team.tactics, roles: players.map((op) => op.role) },
+      ins,
+      baseIns: { ...ins },
+      players,
+      bench: (team.bench ?? []).filter((id) => !team.lineup.includes(id)).map((id) => ({ player: findPlayer(id), used: false })),
+      subbedOff: [],
+      subsUsed: 0,
+      windowsUsed: 0,
+      lastSubClock: null,
+      ai,
+      aiDone: new Set(),
+      attackInfluence: [],
+      defendInfluence: [],
+      attackZone: [],
+      stats: emptyTeamStats(),
     };
     this.updateInfluence(state, side);
     return state;
   }
 
-  /** 立ち位置から、各選手が各マスに与える影響を計算し直す（開始時と退場者が出たとき） */
+  private createOnPitch(player: Player, slot: Slot, role: Role, started: boolean): OnPitch {
+    // 安定感が低いほど、その日の出来のブレが大きい。重要な試合では勝負強さが効く。
+    const spread = 0.02 + 0.08 * (1 - player.hidden.consistency / 20);
+    const bigMatch = this.important ? 1 + (player.hidden.bigMatch - 10) * 0.005 : 1;
+    return {
+      player, position: slot.position, slot, role, profile: ROLE_PROFILES[role],
+      fit: positionFit(player.position, slot.position), stamina: 100,
+      form: clamp(this.rng.normal(1, spread), 0.8, 1.2) * bigMatch, sentOff: false,
+      started, order: 0, minuteOn: null, minuteOff: null, stats: emptyPlayerStats(),
+    };
+  }
+
+  /** 新しいフォーメーションの枠に、ピッチ上の選手を適性の高い順に割り当てる */
+  private autoOrder(players: OnPitch[], slots: Slot[]): string[] {
+    const remaining = [...players];
+    const order: (string | null)[] = slots.map(() => null);
+    // GK→守備→前線の順に、空いている枠へ一番合う選手を入れる
+    const slotOrder = slots.map((slot, i) => ({ slot, i }))
+      .sort((a, b) => (a.slot.position === 'GK' ? -1 : 0) - (b.slot.position === 'GK' ? -1 : 0));
+    for (const { slot, i } of slotOrder) {
+      const candidates = remaining.filter((op) => !op.sentOff);
+      if (candidates.length === 0) break;
+      const best = candidates.reduce((a, b) =>
+        positionRating(b.player, slot.position) > positionRating(a.player, slot.position) ? b : a);
+      order[i] = best.player.id;
+      remaining.splice(remaining.indexOf(best), 1);
+    }
+    // 退場者は残りの枠へ
+    return order.map((id) => id ?? (remaining.shift() as OnPitch).player.id);
+  }
+
+  /** 立ち位置から、各選手が各マスに与える影響を計算し直す（開始時、交代、戦術変更、退場のとき） */
   private updateInfluence(state: SideState, side: Side): void {
     const toAbsolute = (p: { x: number; y: number }) => (side === 0 ? p : { x: 6 - p.x, y: 5 - p.y });
     const influenceRow = (p: { x: number; y: number }, out: boolean): number[] => {
@@ -194,11 +492,66 @@ class MatchSimulator {
     state.defendInfluence = [];
     state.attackZone = [];
     for (const op of state.players) {
-      const attack = toAbsolute(shapePoint(op.slot, state.ins, 'attack'));
-      const defend = toAbsolute(shapePoint(op.slot, state.ins, 'defend'));
+      const attack = toAbsolute(shapePoint(op.slot, state.ins, 'attack', op.profile));
+      const defend = toAbsolute(shapePoint(op.slot, state.ins, 'defend', op.profile));
       state.attackInfluence.push(influenceRow(attack, op.sentOff));
       state.defendInfluence.push(influenceRow(defend, op.sentOff));
       state.attackZone.push(clamp(Math.floor(attack.x), 0, ROWS - 1) * COLS + clamp(Math.floor(attack.y), 0, COLS - 1));
+    }
+  }
+
+  // ---- AIの采配 ----
+
+  private aiTick(): void {
+    const minute = Math.floor(this.time / 60);
+    for (const side of [0, 1] as const) {
+      const state = this.sides[side];
+      if (!state.ai || this.half === 1) continue;
+      this.aiTactics(side, state, minute);
+      this.aiSubstitutions(side, state, minute);
+    }
+  }
+
+  private aiTactics(side: Side, state: SideState, minute: number): void {
+    const diff = this.goals[side] - this.goals[other(side)];
+    const once = (key: string, at: number, action: () => void) => {
+      if (minute < at || state.aiDone.has(key)) return;
+      state.aiDone.add(key);
+      action();
+    };
+    const withMentality = (m: number, tempo: number) =>
+      ({ ...state.ins, mentality: clamp(m, -2, 2), tempo: clamp(tempo, -2, 2) });
+    once('tactics60', 60, () => {
+      if (diff < 0) this.changeTactics(side, { instructions: withMentality(state.baseIns.mentality + 1, state.ins.tempo) }, 'tacticsAttack');
+    });
+    once('tactics75', 75, () => {
+      if (diff < 0) {
+        this.changeTactics(side, { instructions: withMentality(state.baseIns.mentality + 2, state.baseIns.tempo + 1) }, 'tacticsAttack');
+      } else if (diff > 0) {
+        this.changeTactics(side, { instructions: withMentality(state.baseIns.mentality - 1, state.baseIns.tempo - 1) }, 'tacticsDefend');
+      }
+    });
+  }
+
+  private aiSubstitutions(side: Side, state: SideState, minute: number): void {
+    for (const checkpoint of AI_SUB_CHECKPOINTS) {
+      const key = `subs${checkpoint.minute}`;
+      if (minute < checkpoint.minute || state.aiDone.has(key)) continue;
+      state.aiDone.add(key);
+      // 疲れている選手と、出来の悪い選手から代える
+      const tired = state.players
+        .filter((op) => !op.sentOff && op.position !== 'GK' && (op.stamina < 72 || op.stats.rating < 5.8))
+        .sort((a, b) => (a.stamina + 15 * a.stats.rating) - (b.stamina + 15 * b.stats.rating));
+      let made = 0;
+      for (const op of tired) {
+        if (made >= checkpoint.count) break;
+        const available = state.bench.filter((b) => !b.used && b.player.position !== 'GK');
+        if (available.length === 0) return;
+        const best = available.reduce((a, b) =>
+          positionRating(b.player, op.position) > positionRating(a.player, op.position) ? b : a);
+        if (positionRating(best.player, op.position) < positionRating(op.player, op.position) * 0.75) continue;
+        if (this.substitute(side, op.player.id, best.player.id).ok) made++;
+      }
     }
   }
 
@@ -226,18 +579,19 @@ class MatchSimulator {
     return op;
   }
 
-  /** スタミナ、その日の出来、ホームの後押しを反映した能力値 */
+  /** スタミナ、その日の出来、ホームの後押し、ポジションの適性を反映した能力値 */
   private attr(side: Side, op: OnPitch, key: AttributeKey): number {
     const home = side === 0 ? C.homeAdvantage : 1;
     // 能力の差がそのまま出すぎないよう、平均からの差を少し縮める（番狂わせが起きる余地を残す）
     const raw = op.player.attributes[key];
     const value = C.attributeCenter + (raw - C.attributeCenter) * C.attributeSpread;
-    return value * home * op.form * (0.72 + 0.28 * (op.stamina / 100));
+    return value * home * op.form * (0.72 + 0.28 * (op.stamina / 100)) * (0.85 + 0.15 * op.fit);
   }
 
   private defendScore(side: Side, op: OnPitch): number {
     const a = (k: AttributeKey) => this.attr(side, op, k);
-    return 0.35 * a('tackling') + 0.3 * a('positioning') + 0.15 * a('concentration') + 0.1 * a('pace') + 0.1 * a('strength');
+    return (0.35 * a('tackling') + 0.3 * a('positioning') + 0.15 * a('concentration') + 0.1 * a('pace') + 0.1 * a('strength'))
+      * op.profile.defend;
   }
 
   private supportScore(side: Side, op: OnPitch): number {
@@ -312,6 +666,20 @@ class MatchSimulator {
       (state.defendInfluence[i]?.[zone] ?? 0) + 0.02);
   }
 
+  /** セットプレーのキッカー。指定された選手がピッチにいればその選手、いなければ能力で選ぶ。 */
+  private setPieceTaker(att: Side, kind: 'penalty' | 'freeKick' | 'corner'): number {
+    const state = this.sides[att];
+    const chosenId = state.tactics.setPieces?.[kind];
+    const field = this.active(att, (op) => op.position !== 'GK');
+    const chosen = field.find((i) => this.op(att, i).player.id === chosenId);
+    if (chosen !== undefined) return chosen;
+    const score = (op: OnPitch) => {
+      const a = op.player.attributes;
+      return kind === 'penalty' ? a.shooting + a.composure : kind === 'freeKick' ? a.shooting : a.crossing;
+    };
+    return field.reduce((best, i) => (score(this.op(att, i)) > score(this.op(att, best)) ? i : best));
+  }
+
   // ---- 1手の進行 ----
 
   private step(): void {
@@ -365,19 +733,20 @@ class MatchSimulator {
   private chooseAction(att: Side, op: OnPitch, f: Frame, pressure: number): Action {
     const W = C.weights;
     const ins = this.sides[att].ins;
+    const role = op.profile;
     const a = (k: AttributeKey) => this.attr(att, op, k);
     const central = f.c >= 1 && f.c <= 3;
     const wide = f.c === 0 || f.c === COLS - 1;
 
-    const shootBias = SHOOT_TENDENCY[op.position] * (a('shooting') / 12) * (1 + 0.12 * ins.mentality);
+    const shootBias = SHOOT_TENDENCY[op.position] * role.shoot * (a('shooting') / 12) * (1 + 0.12 * ins.mentality);
     let shoot = 0;
     if (f.r === 5) shoot = (central ? W.shotInBox : W.shotInBoxWide) * shootBias;
     else if (f.r === 4) shoot = (central ? W.shotOutsideBox : W.shotOutsideBoxWide) * shootBias;
 
     const cross = wide && f.r >= 3
-      ? (f.r >= 4 ? W.cross : W.earlyCross) * (a('crossing') / 12) * (1 + 0.12 * ins.width)
+      ? (f.r >= 4 ? W.cross : W.earlyCross) * role.cross * (a('crossing') / 12) * (1 + 0.12 * ins.width)
       : 0;
-    const dribble = W.dribble * DRIBBLE_TENDENCY[op.position] * (a('dribbling') / 12)
+    const dribble = W.dribble * DRIBBLE_TENDENCY[op.position] * role.dribble * (a('dribbling') / 12)
       * (1 + 0.1 * ins.mentality) * (f.r >= 2 ? 1 : 0.4) * (f.r === 5 ? 0.5 : 1);
     const clear = f.r <= 1 && pressure > 1 ? W.clear * (pressure - 0.6) * (1.2 - a('composure') / 20) : 0;
 
@@ -414,14 +783,14 @@ class MatchSimulator {
     const target = this.rng.weighted(candidates, (j) => {
       const { tz, dr, dist } = targetInfo(j);
       const lengthPreference = isKeeper ? 1 - 0.2 * ins.passingLength : 1 - 0.15 * ins.passingLength;
-      let forward = dr > 0 ? 1 + 0.45 * dr * (1 + 0.15 * ins.tempo + 0.1 * ins.mentality)
+      let forward = dr > 0 ? 1 + 0.45 * dr * (1 + 0.15 * ins.tempo + 0.1 * ins.mentality) * passer.profile.forward
         : dr === 0 ? 0.75 : 0.4 * (1 - 0.12 * ins.tempo);
       if (dr >= 2) forward *= vision / 12;
       const receiver = this.op(att, j);
       const sup = (state.attackInfluence[j]?.[tz] ?? 0) * this.supportScore(att, receiver) / C.zoneStrengthScale;
       const open = sup / (sup + this.pressure(def, tz) + 0.1);
       const boxWeight = this.frame(att, tz).r === ROWS - 1 && f.r < ROWS - 1 ? C.pass.boxTargetWeight : 1;
-      return Math.exp(-dist * C.pass.distanceDecay * lengthPreference) * forward * open * boxWeight;
+      return Math.exp(-dist * C.pass.distanceDecay * lengthPreference) * forward * open * boxWeight * receiver.profile.target;
     });
     const { tz, tf, dr, dist } = targetInfo(target);
     const receiver = this.op(att, target);
@@ -429,9 +798,9 @@ class MatchSimulator {
     passer.stats.passes++;
     state.stats.passes++;
 
-    // オフサイド（相手のラインが高いほど起きやすい）
+    // オフサイド（相手のラインが高いほど、裏を狙う選手ほど起きやすい）
     if (tf.r >= 4 && dr >= 2 &&
-      this.rng.chance(Math.max(0.01, C.offside.base + C.offside.perLineStep * defIns.defensiveLine))) {
+      this.rng.chance(Math.max(0.01, C.offside.base + C.offside.perLineStep * defIns.defensiveLine) * receiver.profile.offside)) {
       state.stats.offsides++;
       this.say('offside', att, 1, { p: receiver.player.name });
       this.stoppage += 15;
@@ -597,6 +966,10 @@ class MatchSimulator {
     this.turnover(def, keeperIndex ?? 0, this.toZone(def, 0, 2), false);
   }
 
+  private aerial(side: Side, op: OnPitch): number {
+    return 0.5 * this.attr(side, op, 'heading') + 0.5 * this.attr(side, op, 'jumping');
+  }
+
   private doCross(att: Side, def: Side): void {
     const crosserIndex = this.holder;
     const crosser = this.op(att, crosserIndex);
@@ -604,13 +977,14 @@ class MatchSimulator {
     this.say('cross', att, 1, { p: crosser.player.name });
 
     const state = this.sides[att];
-    const aerial = (side: Side, op: OnPitch) => 0.5 * this.attr(side, op, 'heading') + 0.5 * this.attr(side, op, 'jumping');
     const targets = this.active(att, (op, i) => i !== crosserIndex && op.position !== 'GK');
-    const targetIndex = this.rng.weighted(targets, (i) =>
-      ((state.attackInfluence[i]?.[tz] ?? 0) + 0.05) * aerial(att, this.op(att, i)));
+    const targetIndex = this.rng.weighted(targets, (i) => {
+      const op = this.op(att, i);
+      return ((state.attackInfluence[i]?.[tz] ?? 0) + 0.05) * this.aerial(att, op) * op.profile.aerialTarget;
+    });
     const target = this.op(att, targetIndex);
     const defenderIndex = this.pickDefender(def, tz, false);
-    const duel = aerial(att, target) - aerial(def, this.op(def, defenderIndex));
+    const duel = this.aerial(att, target) - this.aerial(def, this.op(def, defenderIndex));
 
     const reach = clamp(C.cross.base + 0.02 * (this.attr(att, crosser, 'crossing') - 12)
       + 0.025 * duel - 0.08 * (this.pressure(def, tz) - 1), 0.1, 0.55);
@@ -648,14 +1022,15 @@ class MatchSimulator {
     this.say('corner', att, 1, { team: state.team.name });
 
     const field = this.active(att, (op) => op.position !== 'GK');
-    const takerIndex = field.reduce((best, i) =>
-      this.op(att, i).player.attributes.crossing > this.op(att, best).player.attributes.crossing ? i : best);
+    const takerIndex = this.setPieceTaker(att, 'corner');
     if (this.rng.chance(C.cornerShotChance)) {
-      const aerial = (side: Side, op: OnPitch) => 0.5 * this.attr(side, op, 'heading') + 0.5 * this.attr(side, op, 'jumping');
-      const headerIndex = this.rng.weighted(field.filter((i) => i !== takerIndex), (i) => aerial(att, this.op(att, i)) ** 2);
+      const headerIndex = this.rng.weighted(field.filter((i) => i !== takerIndex), (i) => {
+        const op = this.op(att, i);
+        return this.aerial(att, op) ** 2 * op.profile.aerialTarget;
+      });
       const tz = this.toZone(att, ROWS - 1, 2);
       const defender = this.op(def, this.pickDefender(def, tz, false));
-      const duel = aerial(att, this.op(att, headerIndex)) - aerial(def, defender);
+      const duel = this.aerial(att, this.op(att, headerIndex)) - this.aerial(def, defender);
       this.lastPasser = takerIndex;
       this.holder = headerIndex;
       this.zone = tz;
@@ -713,13 +1088,10 @@ class MatchSimulator {
     this.lastPasser = null;
     if (f.r === ROWS - 2 && central) {
       this.say('freeKick', att, 2, { team: this.sides[att].team.name });
-      const field = this.active(att, (op) => op.position !== 'GK');
-      const takerIndex = field.reduce((best, i) =>
-        this.op(att, i).player.attributes.shooting > this.op(att, best).player.attributes.shooting ? i : best);
       if (this.rng.chance(0.5)) {
-        this.doShot(att, def, f, 'freeKick', takerIndex, C.freeKickXg, 0.8);
+        this.doShot(att, def, f, 'freeKick', this.setPieceTaker(att, 'freeKick'), C.freeKickXg, 0.8);
       } else {
-        this.holder = takerIndex;
+        this.holder = this.setPieceTaker(att, 'corner');
         this.doCross(att, def);
       }
     }
@@ -740,10 +1112,7 @@ class MatchSimulator {
     const state = this.sides[att];
     this.stoppage += 60;
     this.say('penalty', att, 3, { p: this.op(att, victimIndex).player.name });
-    const takerIndex = this.active(att, (op) => op.position !== 'GK').reduce((best, i) => {
-      const score = (op: OnPitch) => op.player.attributes.shooting + op.player.attributes.composure;
-      return score(this.op(att, i)) > score(this.op(att, best)) ? i : best;
-    });
+    const takerIndex = this.setPieceTaker(att, 'penalty');
     const taker = this.op(att, takerIndex);
     const keeperIndex = this.goalkeeper(def);
     const keeper = keeperIndex === null ? null : this.op(def, keeperIndex);
@@ -775,7 +1144,7 @@ class MatchSimulator {
     const def = other(att);
     const state = this.sides[att];
     const scorer = this.op(att, scorerIndex);
-    this.score[att]++;
+    this.goals[att]++;
     state.stats.goals++;
     state.stats.shotsOnTarget++;
     scorer.stats.goals++;
@@ -789,7 +1158,7 @@ class MatchSimulator {
       assister.stats.rating += 0.5;
       text += `（アシスト：${assister.player.name}）`;
     }
-    text += `　${this.score[0]}-${this.score[1]}`;
+    text += `　${this.goals[0]}-${this.goals[1]}`;
     this.pushEvent(EVENT_TYPE[key], att, 3, text);
 
     for (const op of this.sides[def].players) {
@@ -830,7 +1199,7 @@ class MatchSimulator {
   }
 
   private tick(seconds: number, possessing: Side): void {
-    this.clock += seconds;
+    this.time += seconds;
     this.sides[possessing].stats.possessionSeconds += seconds;
     for (const state of this.sides) {
       const ins = state.ins;
@@ -838,7 +1207,7 @@ class MatchSimulator {
       for (const op of state.players) {
         if (op.sentOff) continue;
         const { stamina, workRate } = op.player.attributes;
-        const drain = C.staminaDrainPerMinute * (1.3 - 0.6 * stamina / 20) * (0.8 + 0.4 * workRate / 20) * intensity;
+        const drain = C.staminaDrainPerMinute * (1.3 - 0.6 * stamina / 20) * (0.8 + 0.4 * workRate / 20) * intensity * op.profile.stamina;
         op.stamina = Math.max(0, op.stamina - drain * seconds / 60);
       }
     }
@@ -846,10 +1215,15 @@ class MatchSimulator {
 
   // ---- 実況 ----
 
+  /** 今が何分目か（後半のアディショナルタイムも 90 以上の数で返す） */
+  private currentMinute(): number {
+    return Math.floor(this.time / 60) + 1;
+  }
+
   private minuteLabel(): string {
-    if (this.half === 1 && this.clock >= HALF) return `45+${Math.floor((this.clock - HALF) / 60) + 1}'`;
-    if (this.half === 2 && this.clock >= 2 * HALF) return `90+${Math.floor((this.clock - 2 * HALF) / 60) + 1}'`;
-    return `${Math.floor(this.clock / 60) + 1}'`;
+    if (this.half === 1 && this.time >= HALF) return `45+${Math.floor((this.time - HALF) / 60) + 1}'`;
+    if (this.half === 2 && this.time >= 2 * HALF) return `90+${Math.floor((this.time - 2 * HALF) / 60) + 1}'`;
+    return `${Math.floor(this.time / 60) + 1}'`;
   }
 
   private say(key: CommentaryKey, side: Side | null, importance: 1 | 2 | 3, names: CommentaryNames): void {
@@ -858,35 +1232,41 @@ class MatchSimulator {
   }
 
   private pushEvent(type: MatchEventType, side: Side | null, importance: 1 | 2 | 3, text: string): void {
-    this.events.push({ clock: this.clock, minute: this.minuteLabel(), side, type, importance, text });
+    this.eventList.push({ clock: this.time, minute: this.minuteLabel(), side, type, importance, text });
   }
 
   // ---- 試合終了 ----
 
   private finish(): MatchResult {
-    const result = (side: Side) => Math.sign(this.score[side] - this.score[other(side)]);
+    const result = (side: Side) => Math.sign(this.goals[side] - this.goals[other(side)]);
+    const lines: MatchPlayerLine[] = [];
     this.sides.forEach((state, sideIndex) => {
       const side = sideIndex as Side;
       const onPitch = state.players.filter((op) => !op.sentOff);
       state.stats.staminaAtEnd = onPitch.reduce((sum, op) => sum + op.stamina, 0) / Math.max(1, onPitch.length);
       state.stats.xg = Math.round(state.stats.xg * 100) / 100;
-      const cleanSheet = this.score[other(side)] === 0;
-      for (const op of state.players) {
+      const cleanSheet = this.goals[other(side)] === 0;
+      // 先発（途中で退いた選手を含む）を枠の順に、そのあと途中出場を出た順に並べる
+      const everyone = [...state.players, ...state.subbedOff].sort((a, b) => a.order - b.order);
+      for (const op of everyone) {
         if (cleanSheet && op.position === 'GK') op.stats.rating += 0.4;
         if (cleanSheet && (op.position === 'CB' || op.position === 'SB')) op.stats.rating += 0.25;
         op.stats.rating += 0.2 * result(side);
         op.stats.rating = Math.round(clamp(op.stats.rating, 3, 10) * 10) / 10;
+        lines.push({
+          side, player: op.player, position: op.position, role: op.role, stats: op.stats,
+          started: op.started, minuteOn: op.minuteOn, minuteOff: op.minuteOff,
+        });
       }
     });
     const [home, away] = this.sides;
     return {
       seed: this.seed,
       teams: [home.team, away.team],
-      score: [this.score[0], this.score[1]],
+      score: [this.goals[0], this.goals[1]],
       stats: [home.stats, away.stats],
-      players: this.sides.flatMap((state, side) =>
-        state.players.map((op) => ({ side: side as Side, player: op.player, position: op.position, stats: op.stats }))),
-      events: this.events,
+      players: lines,
+      events: this.eventList,
     };
   }
 }

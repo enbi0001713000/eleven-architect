@@ -23,7 +23,7 @@ describe('1試合', () => {
     expect(result.events.at(-1)?.type).toBe('fulltime');
     const goalEvents = result.events.filter((e) => e.type === 'goal' || e.type === 'penaltyGoal').length;
     expect(goalEvents).toBe(result.score[0] + result.score[1]);
-    expect(result.players).toHaveLength(22);
+    expect(result.players.filter((l) => l.started)).toHaveLength(22);
   });
 
   it('同じシードなら同じ試合になる', () => {
