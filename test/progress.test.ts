@@ -6,7 +6,7 @@ import { createRng } from '../src/engine/rng';
 import { overallRating } from '../src/engine/ratings';
 import type { MatchResult } from '../src/engine/types';
 import { BALANCE } from '../src/game/balance';
-import { applyInjury, canPlay, createInjury, teamFamiliarity } from '../src/game/condition';
+import { applyInjury, canPlay, createInjury, injuryName, teamFamiliarity } from '../src/game/condition';
 import { developWeek } from '../src/game/development';
 import { checkPromises } from '../src/game/morale';
 import { advanceDay, advanceToNextEvent, instructionFamiliarity, todaysFixture } from '../src/game/progress';
@@ -121,6 +121,22 @@ describe('ケガ', () => {
     expect(validateSelection(state, club.id, club.tactics.formation, repaired)).toEqual([]);
   });
 
+  it('試合の日にメンバーに出られない選手がいたら、アシスタントが入れ替えて知らせる', () => {
+    const state = newGame();
+    const club = state.clubs[state.manager.clubId]!;
+    const victim = state.players[club.selection!.lineup[5]!]!;
+    applyInjury(victim, { kind: 'fracture', part: 'すね', date: state.date, days: 60, daysLeft: 60 });
+    while (!todaysFixture(state)) advanceDay(state);
+    expect(club.selection!.lineup).not.toContain(victim.id);
+    expect(validateSelection(state, club.id, club.tactics.formation, club.selection!)).toEqual([]);
+    expect(state.inbox.some((m) => m.subject.includes('入れ替えました') && m.body.includes(victim.name))).toBe(true);
+  });
+
+  it('ケガの名前は部位と種類を重ねない', () => {
+    expect(injuryName({ kind: 'backPain', part: '腰' })).toBe('腰痛');
+    expect(injuryName({ kind: 'strain', part: '太もも裏' })).toBe('太もも裏の肉離れ');
+  });
+
   it('1シーズンで、1クラブあたり10〜30件くらいのケガが起きる', () => {
     const state = newGame(8);
     const before = new Map(Object.values(state.players).map((p) => [p.id, p.injuryHistory.length]));
@@ -175,6 +191,14 @@ describe('成長と衰え', () => {
     expect(overallRating(young)).toBeGreaterThan(youngBefore + 0.5);
     expect(overallRating(young)).toBeLessThan(youngBefore + 3);
     expect(old.attributes.pace).toBeLessThan(paceBefore - 1);
+  });
+
+  it('潜在能力は総合力と同じ目盛りで、若いほど伸びしろが大きい', () => {
+    const state = newGame();
+    const players = Object.values(state.players).filter((p) => p.clubId);
+    expect(players.every((p) => p.hidden.potential >= overallRating(p) - 0.05)).toBe(true);
+    const gap = (list: PlayerRecord[]) => list.reduce((n, p) => n + p.hidden.potential - overallRating(p), 0) / list.length;
+    expect(gap(players.filter((p) => p.age <= 21))).toBeGreaterThan(gap(players.filter((p) => p.age >= 28)) + 1);
   });
 
   it('潜在能力に届いた選手は伸びない', () => {

@@ -53,8 +53,13 @@ export function maybePlayerRequest(rng: Rng, state: GameState): void {
   const since = addDays(state.date, -30);
   const recentRequest = state.inbox.some((m) => m.action?.kind === 'playerRequest' && m.date > since);
   if (recentRequest) return;
+  // 同じ選手が申し出るのは、60日に1回まで
+  const askedRecently = new Set(state.inbox
+    .filter((m) => m.action?.kind === 'playerRequest' && m.date > addDays(state.date, -60))
+    .map((m) => m.playerId));
   const candidates = club.playerIds.map((id) => state.players[id]).filter((p): p is PlayerRecord =>
     p !== undefined && p.status.injury === null && isUnhappyWithPlayingTime(p) && p.status.morale < 50
+    && !askedRecently.has(p.id)
     && !state.promises.some((pr) => pr.playerId === p.id)
     && !state.requests.some((r) => r.playerId === p.id));
   if (candidates.length === 0) return;

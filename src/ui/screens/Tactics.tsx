@@ -5,10 +5,14 @@ import { FORMATIONS } from '../../engine/formations';
 import { overallRating, positionFit, positionRating } from '../../engine/ratings';
 import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot } from '../../engine/roles';
 import type { FormationName, Role, TeamInstructions } from '../../engine/types';
+import { teamFamiliarity } from '../../game/condition';
+import { instructionFamiliarity } from '../../game/progress';
 import { LEAGUE_RULES } from '../../game/rules';
-import { arrangeForFormation, autoSelect, clubPlayers, isAvailable, isForeign, validateSelection } from '../../game/selection';
+import {
+  arrangeForFormation, autoSelect, clubPlayers, isAvailable, isForeign, repairSelection, selectionWarnings, unavailableReason, validateSelection,
+} from '../../game/selection';
 import type { PlayerRecord } from '../../game/types';
-import { Panel } from '../components/bits';
+import { Condition, Panel, StatusTags } from '../components/bits';
 import { FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL } from '../format';
 import { store, useGame } from '../store';
 
@@ -25,6 +29,7 @@ export function Tactics() {
   const players = clubPlayers(game, clubId);
   const byId = (id: string | undefined) => (id ? game.players[id] : undefined);
   const errors = validateSelection(game, clubId, tactics.formation, selection);
+  const warnings = errors.length === 0 ? selectionWarnings(game, selection) : [];
   const foreignCount = [...selection.lineup, ...selection.bench].filter((id) => {
     const p = byId(id);
     return p ? isForeign(p) : false;
@@ -91,7 +96,7 @@ export function Tactics() {
         <label className="inline">
           フォーメーション
           <select value={tactics.formation} onChange={(e) => changeFormation(e.target.value as FormationName)}>
-            {FORMATIONS_LIST.map((f) => <option key={f} value={f}>{f}</option>)}
+            {FORMATIONS_LIST.map((f) => <option key={f} value={f}>{f}（熟成度 {Math.round(club.familiarity.formations[f] ?? 0)}%）</option>)}
           </select>
         </label>
         <button type="button" className="secondary" onClick={() => {
@@ -101,8 +106,20 @@ export function Tactics() {
           自動で選ぶ
         </button>
         <span className="muted small">外国籍選手 {foreignCount}/{LEAGUE_RULES.foreignLimit}</span>
+        <span className="muted small" title="フォーメーション6割、チーム指示4割">
+          熟成度 {Math.round(teamFamiliarity(club))}%（{tactics.formation} {Math.round(club.familiarity.formations[tactics.formation] ?? 0)}%・指示 {Math.round(instructionFamiliarity(club))}%）
+        </span>
       </div>
-      {errors.length > 0 && <div className="warning">{errors.join('／')}</div>}
+      {errors.length > 0 && (
+        <div className="warning">
+          {errors.join('／')}
+          <button type="button" className="secondary small" onClick={() => {
+            const fixed = repairSelection(game, clubId, tactics.formation, selection);
+            save(fixed.lineup, fixed.bench);
+          }}>出られない選手だけ入れ替える</button>
+        </div>
+      )}
+      {warnings.length > 0 && <div className="warning small">{warnings.map((w) => <div key={w}>{w}</div>)}</div>}
 
       <div className="tactics-grid">
         <div>
@@ -112,7 +129,7 @@ export function Tactics() {
               const p = byId(selection.lineup[i]);
               const role = roleForSlot(tactics, i, s.position);
               const fit = p ? positionFit(p.position, s.position) : 0;
-              const problem = !p || !isAvailable(p) || fit < 0.85;
+              const problem = !p || !isAvailable(p) || fit < 0.85 || p.status.injury !== null;
               return (
                 <button key={i} type="button"
                   className={`pitch-slot${selectedSlot === i ? ' selected' : ''}${problem ? ' problem' : ''}`}
@@ -121,7 +138,7 @@ export function Tactics() {
                   <span className="slot-pos">{POSITION_LABEL[s.position]}</span>
                   <span className="slot-name">{p ? p.name.split(' ')[0]?.split('・')[0] : '（空き）'}</span>
                   <span className="slot-role">{ROLE_PROFILES[role].label}</span>
-                  {p && <span className="slot-rating">{positionRating(p, s.position).toFixed(1)}</span>}
+                  {p && <span className="slot-rating">{positionRating(p, s.position).toFixed(1)}　<Condition value={p.status.condition} /></span>}
                 </button>
               );
             })}
@@ -137,7 +154,7 @@ export function Tactics() {
                     <span className="pos-chip">{POSITION_LABEL[p.position]}</span>
                     <span>{p.name}</span>
                     <span className="muted small">{overallRating(p).toFixed(1)}</span>
-                    {!isAvailable(p) && <span className="tag tag-bad">出場停止</span>}
+                    <StatusTags player={p} />
                     <button type="button" className="link" onClick={() => save(selection.lineup, selection.bench.filter((b) => b !== id))}>外す</button>
                   </li>
                 );
@@ -167,7 +184,7 @@ export function Tactics() {
                 ))}
               </div>
               <table className="data-table compact">
-                <thead><tr><th>Pos</th><th>名前</th><th className="num">この枠での力</th><th>状態</th><th /></tr></thead>
+                <thead><tr><th>Pos</th><th>名前</th><th className="num">この枠での力</th><th>調子</th><th>状態</th><th /></tr></thead>
                 <tbody>
                   {candidates.slice(0, 12).map((p) => {
                     const where = selection.lineup.includes(p.id) ? '先発' : selection.bench.includes(p.id) ? '控え' : '';
@@ -176,7 +193,8 @@ export function Tactics() {
                         <td>{POSITION_LABEL[p.position]}</td>
                         <td>{p.name}{isForeign(p) ? <span className="muted small">（外）</span> : null}</td>
                         <td className="num">{positionRating(p, slot.position).toFixed(1)}</td>
-                        <td>{!isAvailable(p) ? <span className="tag tag-bad">出場停止</span> : where}</td>
+                        <td><Condition value={p.status.condition} /></td>
+                        <td>{unavailableReason(p) ? <StatusTags player={p} /> : <>{where} <StatusTags player={p} /></>}</td>
                         <td>
                           {p.id !== slotPlayer?.id && isAvailable(p) && (
                             <button type="button" className="secondary small" onClick={() => assign(p.id)}>入れる</button>

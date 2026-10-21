@@ -1,7 +1,10 @@
 // セーブデータの形と、ファイルへの書き出し・読み込み。要件定義書「非機能要件」の「セーブの互換性」に対応する。
 // セーブデータには版番号を持たせ、古い形のデータは新しい形に直してから読み込む。
 
+import { overallRating } from '../engine/ratings';
+import { createRng } from '../engine/rng';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
+import { potentialFor } from './development';
 import { addMessage } from './inbox';
 import type { GameState } from './types';
 import { STATE_VERSION } from './world';
@@ -29,7 +32,10 @@ function migrate(state: GameState, fromVersion: number): GameState {
 
 /** フェーズ1（版1）→ フェーズ2（版2）：選手の状態、練習、熟成度、受信箱などを足す */
 function migrateV1toV2(state: GameState): GameState {
+  // 版1の潜在能力は総合力と目盛りが違ったので、今の総合力と年齢から決め直す
+  const rng = createRng(state.seed ^ 0x5a17);
   for (const player of Object.values(state.players)) {
+    player.hidden.potential = potentialFor(rng, overallRating(player), player.age);
     const fields = playerPhase2Fields();
     player.status ??= fields.status;
     player.trainingFocus ??= null;

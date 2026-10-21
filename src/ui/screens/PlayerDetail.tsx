@@ -2,12 +2,16 @@
 
 import { useState } from 'react';
 import { overallRating, positionRating } from '../../engine/ratings';
-import type { Position } from '../../engine/types';
-import { knowledgeOf, viewAttribute } from '../../game/knowledge';
+import { ATTRIBUTE_KEYS, type AttributeKey, type Position } from '../../engine/types';
+import { GOALKEEPING_KEYS, INJURY_TYPES } from '../../game/balance';
+import { injuryName } from '../../game/condition';
+import { knowledgeOf, potentialStars, viewAttribute } from '../../game/knowledge';
+import { expectedPlayingTime, isUnhappyWithPlayingTime, SQUAD_ROLE_LABEL } from '../../game/morale';
+import { talkCooldownLeft } from '../../game/talks';
 import { LEAGUE_RULES } from '../../game/rules';
 import { averageRating } from '../../game/season';
-import { AttributeValue, ClubLink, Panel, Rating } from '../components/bits';
-import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, formatYen, POSITION_LABEL, POSITION_NAME, POSITION_ORDER } from '../format';
+import { AttributeValue, Bar, ClubLink, Condition, Fatigue, Morale, Panel, Rating, Stars, StatusTags } from '../components/bits';
+import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, formatDate, formatYen, POSITION_LABEL, POSITION_NAME, POSITION_ORDER } from '../format';
 import { store, useGame } from '../store';
 
 type Tab = 'attributes' | 'records' | 'contract' | 'scout';
@@ -44,6 +48,45 @@ export function PlayerDetail({ id }: { id: string }) {
       </header>
 
       {player.discipline.suspendedMatches > 0 && <div className="warning">出場停止：残り{player.discipline.suspendedMatches}試合</div>}
+      {mine && player.status.injury && (
+        <div className="warning">{injuryName(player.status.injury)}で離脱中：残り{player.status.injury.daysLeft}日（全治{player.status.injury.days}日）</div>
+      )}
+
+      {mine && (
+        <Panel title="状態" actions={
+          <button type="button" className="secondary small" disabled={talkCooldownLeft(game, player) > 0}
+            onClick={() => store.navigate({ name: 'talk', playerId: player.id })}>
+            個人面談{talkCooldownLeft(game, player) > 0 ? `（あと${talkCooldownLeft(game, player)}日）` : ''}
+          </button>}>
+          <div className="grid-2">
+            <dl className="facts">
+              <dt>コンディション</dt><dd><Bar value={player.status.condition} /> <Condition value={player.status.condition} /></dd>
+              <dt>蓄積疲労</dt><dd><Bar value={player.status.fatigue} invert /> <Fatigue value={player.status.fatigue} /></dd>
+              <dt>モラル</dt><dd><Morale value={player.status.morale} /></dd>
+              <dt>ケガ</dt><dd>{player.status.injury ? injuryName(player.status.injury) : 'なし'} <StatusTags player={player} /></dd>
+            </dl>
+            <dl className="facts">
+              <dt>約束した役割</dt><dd>{player.contract ? SQUAD_ROLE_LABEL[player.contract.role] : '-'}</dd>
+              <dt>出場機会</dt>
+              <dd>最近 {Math.round(player.status.playingTime * 100)}%（目安 {Math.round(expectedPlayingTime(player) * 100)}%）{isUnhappyWithPlayingTime(player) && <span className="tag tag-warn" style={{ marginLeft: 6 }}>不満</span>}</dd>
+              <dt>伸びしろ</dt><dd><Stars count={potentialStars(player)} /></dd>
+              <dt>戦術への慣れ</dt><dd><Bar value={player.status.integration} /> {Math.round(player.status.integration)}%</dd>
+              <dt>練習の重点</dt>
+              <dd>
+                <select value={player.trainingFocus ?? ''} onChange={(e) => store.update((g) => {
+                  const p = g.players[player.id];
+                  if (p) p.trainingFocus = (e.target.value || null) as AttributeKey | null;
+                })}>
+                  <option value="">なし</option>
+                  {ATTRIBUTE_KEYS.filter((k) => player.position === 'GK' || !GOALKEEPING_KEYS.includes(k)).map((k) => (
+                    <option key={k} value={k}>{ATTRIBUTE_LABEL[k]}</option>
+                  ))}
+                </select>
+              </dd>
+            </dl>
+          </div>
+        </Panel>
+      )}
 
       <div className="segmented tabs">
         <button type="button" className={tab === 'attributes' ? 'active' : ''} onClick={() => setTab('attributes')}>能力</button>
@@ -90,6 +133,36 @@ export function PlayerDetail({ id }: { id: string }) {
         </div>
       )}
 
+      {tab === 'records' && player.career.length > 0 && (
+        <Panel title="経歴">
+          <table className="data-table compact">
+            <thead><tr><th>年</th><th>クラブ</th><th className="num">出場</th><th className="num">得点</th><th className="num">アシスト</th><th className="num">平均評価</th></tr></thead>
+            <tbody>
+              {[...player.career].reverse().map((c) => (
+                <tr key={c.year}>
+                  <td>{c.year}</td>
+                  <td>{c.clubId ? <ClubLink game={game} clubId={c.clubId} short /> : '-'}</td>
+                  <td className="num">{c.appearances}</td>
+                  <td className="num">{c.goals}</td>
+                  <td className="num">{c.assists}</td>
+                  <td className="num"><Rating value={c.averageRating} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
+      )}
+      {tab === 'records' && mine && (
+        <Panel title="ケガの履歴">
+          {player.injuryHistory.length === 0 ? <p className="muted">ケガの記録はありません。</p> : (
+            <ul className="notice-list">
+              {player.injuryHistory.map((h, i) => (
+                <li key={i}><span className="muted small">{formatDate(h.date)}</span>{h.part}の{INJURY_TYPES[h.kind].label}（全治{h.days}日）</li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
       {tab === 'records' && (
         <Panel title={`${game.season.year}年シーズン`}>
           <dl className="facts">
@@ -110,6 +183,7 @@ export function PlayerDetail({ id }: { id: string }) {
             <dl className="facts">
               <dt>年俸</dt><dd>{mine ? formatYen(player.contract.salary) : '非公開'}</dd>
               <dt>契約満了</dt><dd>{player.contract.endYear}年</dd>
+              {mine && <><dt>約束した役割</dt><dd>{SQUAD_ROLE_LABEL[player.contract.role]}</dd></>}
             </dl>
           ) : <p className="muted">契約はありません。</p>}
           <p className="muted small">契約の交渉はフェーズ4で追加します。</p>

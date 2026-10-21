@@ -18,8 +18,14 @@ export function SeasonEnd() {
   const finished = game.season.round > 34;
 
   if (!finished) {
+    const last = game.history.at(-1);
     return (
-      <div className="page"><Panel><p>まだシーズンの途中です（次は第{game.season.round}節）。</p></Panel></div>
+      <div className="page">
+        <Panel>
+          <p>まだシーズンの途中です（次は第{game.season.round}節）。</p>
+          {last && <p className="muted">{last.year}年の優勝は{game.clubs[last.championId]?.name}でした。過去のシーズンは「リーグ」の画面で見られます。</p>}
+        </Panel>
+      </div>
     );
   }
 
@@ -41,7 +47,7 @@ export function SeasonEnd() {
               {mine.position}位　勝ち点{mine.points}（{mine.won}勝{mine.drawn}分{mine.lost}敗、得点{mine.goalsFor}・失点{mine.goalsAgainst}）
             </p>
           )}
-          <p className="muted">次のシーズンへ進む機能（成長と衰え、引退、新人の加入）は、フェーズ2で追加します。</p>
+          <p className="muted">画面右上の「次の出来事まで進める」で、12月10日のシーズンの総括、12月20日の引退の発表と契約の更新、1月1日の新しい日程、1月10日の新人の加入と進み、2月末に次のシーズンが開幕します。</p>
         </Panel>
         <Panel title="個人タイトル">
           <dl className="facts">

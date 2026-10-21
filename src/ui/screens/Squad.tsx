@@ -28,6 +28,7 @@ export function Squad() {
           <button type="button" className={preset === 'custom' ? 'active' : ''} disabled={!s.settings.squadColumns}
             onClick={() => setPreset('custom')}>自分で選んだ列</button>
         </div>
+        <button type="button" className="secondary" onClick={() => store.navigate({ name: 'meeting' })}>チームミーティング</button>
         <ColumnPicker columns={columns} visible={keys} onChange={(next) => {
           store.updateSettings({ squadColumns: next });
           setPreset('custom');

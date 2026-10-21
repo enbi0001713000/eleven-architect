@@ -1,7 +1,7 @@
 // 画面で使う表示の決まりごと（ポジション名、能力値の名前、金額、日付など）
 
 import type { AttributeKey, FormationName, Position, TeamInstructions } from '../engine/types';
-import type { ClubSize } from '../game/types';
+import type { ClubSize, InboxCategory } from '../game/types';
 
 export const POSITION_LABEL: Record<Position, string> = {
   GK: 'GK', CB: 'CB', SB: 'SB', DM: 'DM', CM: 'CM', AM: 'AM', WM: 'SM', W: 'WG', FW: 'FW',
@@ -79,4 +79,17 @@ export function ratingTone(rating: number | null): string {
   if (rating >= 6.9) return 'tone-good';
   if (rating >= 6.2) return 'tone-mid';
   return 'tone-low';
+}
+
+export const INBOX_CATEGORY_LABEL: Record<InboxCategory, string> = {
+  match: '試合', medical: 'メディカル', discipline: '規律', player: '選手', media: 'メディア',
+  training: '練習', league: 'リーグ', club: 'クラブ',
+};
+
+export function fanMoodLabel(value: number): string {
+  if (value >= 75) return '熱狂';
+  if (value >= 60) return '好意的';
+  if (value >= 40) return '普通';
+  if (value >= 25) return '不満';
+  return '怒り';
 }

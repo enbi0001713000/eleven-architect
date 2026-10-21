@@ -14,7 +14,7 @@ import type { Position } from '../engine/types';
 import { BALANCE } from './balance';
 import { monthDay, yearOf } from './dates';
 import { assignSquadRoles, defaultStatus, playerPhase2Fields, roleByRank } from './defaults';
-import { decideRetirement } from './development';
+import { decideRetirement, potentialFor } from './development';
 import { addMessage } from './inbox';
 import { HOME_NATIONALITY, LEAGUE_RULES } from './rules';
 import { makeSchedule, seasonDates } from './schedule';
@@ -26,8 +26,8 @@ import { emptySeason, salaryFor, SIZE_PROFILE, SQUAD_TEMPLATE } from './world';
 
 const isSeasonDone = (state: GameState): boolean => state.season.round > LEAGUE_RULES.rounds;
 
-/** AIのクラブが契約を更新しない選手：序列がこれより下で、25歳以上 */
-const RELEASE_RANK = 22;
+/** AIのクラブが契約を更新しない選手：序列が20番目より下の24歳以上と、15番目より下の30歳以上 */
+const releases = (rank: number, age: number): boolean => (rank >= 20 && age >= 24) || (rank >= 15 && age >= 30);
 /** 退団させても、この人数は残す */
 const RELEASE_MIN_SQUAD = 24;
 
@@ -102,7 +102,7 @@ export function retirementsAndContracts(state: GameState, rng: Rng): void {
     let remaining = ranked.length;
     ranked.forEach((player, rank) => {
       if (!player.contract || player.contract.endYear > year) return;
-      if (club.id !== myId && rank >= RELEASE_RANK && player.age >= 25 && remaining > RELEASE_MIN_SQUAD) {
+      if (club.id !== myId && releases(rank, player.age) && remaining > RELEASE_MIN_SQUAD) {
         player.leaving = true;
         remaining--;
         return;
@@ -172,6 +172,7 @@ export function newSeason(state: GameState, rng: Rng): void {
       id: `p${String(state.nextPlayerNumber++).padStart(4, '0')}`, age: rng.int(19, 27), nationality,
     });
     base.name = uniqueName(rng, names, base.name, nationality);
+    base.hidden.potential = potentialFor(rng, overallRating(base), base.age);
     state.players[base.id] = {
       ...base, clubId: null, squadNumber: null, contract: null, season: emptySeason(),
       discipline: { yellowAccumulation: 0, suspendedMatches: 0 }, ...playerPhase2Fields(),
@@ -240,12 +241,12 @@ export function newcomers(state: GameState, rng: Rng): void {
       const position = neededPosition(state, club.id);
       const fromHighSchool = rng.chance(0.55);
       const age = fromHighSchool ? 18 : 22;
-      const level = club.level - (fromHighSchool ? 3.2 : 2.4) + rng.normal(0, 0.6);
+      const level = club.level - (fromHighSchool ? 3.6 : 2.8) + rng.normal(0, 0.6);
       const base = generatePlayer(rng, position, level, {
         id: `p${String(state.nextPlayerNumber++).padStart(4, '0')}`, age, nationality: HOME_NATIONALITY,
       });
       base.name = uniqueName(rng, names, base.name, base.nationality);
-      base.hidden.potential = Math.round(Math.max(overallRating(base) + 1, Math.min(18.5, club.level + rng.normal(0.3, 1.6))) * 10) / 10;
+      base.hidden.potential = potentialFor(rng, overallRating(base), age);
       let number = 2;
       while (numbers.has(number)) number++;
       numbers.add(number);

@@ -18,8 +18,9 @@ export function addMessage(state: GameState, message: NewMessage): InboxMessage 
   return full;
 }
 
-export function unreadCount(state: GameState): number {
-  return state.inbox.filter((m) => !m.read).length;
+/** メニューに出す数：まだ読んでいない大事な知らせと、返事を待っている知らせ */
+export function attentionCount(state: GameState): number {
+  return state.inbox.filter((m) => (!m.read && m.important) || (m.action && !m.resolved)).length;
 }
 
 /** 返事を待っている知らせ */

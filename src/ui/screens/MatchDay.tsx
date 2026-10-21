@@ -1,16 +1,23 @@
-// 試合の日：試合前の確認 → 観戦（速さの変更、一時停止、交代と戦術の変更）→ 試合後のレポート → 結果の確定
-// 要件定義書「戦術と観戦」「観戦画面」に対応する。他会場の試合は Web Worker で先に計算しておき、時間に合わせて見せる。
+// 試合の日：試合前の確認 → 試合前の声かけ → 観戦（速さの変更、一時停止、交代と戦術の変更、ハーフタイムの声かけ）
+// → 試合後のレポートと声かけ → 結果の確定
+// 要件定義書「戦術と観戦」「観戦画面」「面談と声かけ」に対応する。他会場の試合は Web Worker で先に計算しておき、時間に合わせて見せる。
 
 import { useEffect, useRef, useState } from 'react';
 import { LiveMatch, SUBSTITUTION_RULES } from '../../engine/match';
+import { createRng } from '../../engine/rng';
 import { positionRating } from '../../engine/ratings';
 import { ROLE_OPTIONS, ROLE_PROFILES } from '../../engine/roles';
 import type { FormationName, MatchResult, Role, Side, TeamInstructions } from '../../engine/types';
 import { applyMatchday, isSeasonOver, nextFixtureOf, prepareMatchday } from '../../game/season';
-import { autoSelect, validateSelection } from '../../game/selection';
+import { autoSelect, repairSelection, selectionWarnings, validateSelection } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
-import type { Fixture } from '../../game/types';
+import {
+  applyTalkMorale, averageOverall, strengthBalance, TALK_TONES, teamTalk,
+  type Reaction, type TalkMoment, type TalkTone,
+} from '../../game/talks';
+import type { Fixture, PlayerRecord } from '../../game/types';
 import { FormBadges, Panel, StaminaBar } from '../components/bits';
+import { Reactions } from '../components/Reactions';
 import { Emblem } from '../components/Emblem';
 import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
 import { FORMATIONS_LIST, formatDate, INSTRUCTION_LABELS, POSITION_LABEL, ratingTone } from '../format';
@@ -18,13 +25,17 @@ import type { CommentaryMode, MatchSpeed } from '../settings';
 import { simulateInBackground } from '../simClient';
 import { store, useGame, useStore } from '../store';
 
-type Stage = 'preview' | 'loading' | 'live' | 'report';
+type Stage = 'preview' | 'loading' | 'pretalk' | 'live' | 'report';
 
 interface Running {
   live: LiveMatch;
   fixture: Fixture;
   mySide: Side;
   others: Record<string, MatchResult>;
+  /** 力関係（1 有利、0 互角、-1 不利） */
+  favorite: -1 | 0 | 1;
+  /** 声かけの反応（試合前、ハーフタイム、試合後）。モラルは結果の確定のときに反映する */
+  talks: Partial<Record<TalkMoment, Reaction[]>>;
 }
 
 /** 他会場の、その時点までのスコア */
@@ -84,10 +95,23 @@ export function MatchDay() {
     );
   }
 
+  if ((stage === 'preview' || stage === 'loading') && fixture.date !== game.date) {
+    return (
+      <div className="page">
+        <Panel>
+          <p>次の試合（第{fixture.round}節）は{formatDate(fixture.date)}です。今日は{formatDate(game.date)}です。</p>
+          <button type="button" className="primary" onClick={() => store.advance()}>次の出来事まで進める ▶</button>
+        </Panel>
+      </div>
+    );
+  }
+
   const club = game.clubs[myId];
   const formation = club?.tactics.formation ?? '4-4-2';
   const selection = club?.selection ?? null;
   const problems = selection ? validateSelection(game, myId, formation, selection) : ['メンバーが決まっていません'];
+  const warnings = selection && problems.length === 0 ? selectionWarnings(game, selection) : [];
+  const press = game.inbox.find((m) => m.action?.kind === 'press' && m.action.fixtureId === fixture.id && !m.resolved);
 
   const begin = async () => {
     setError(null);
@@ -104,9 +128,12 @@ export function MatchDay() {
       const live = new LiveMatch(mine.home, mine.away, {
         seed: mine.seed, important: mine.important, aiControl: mySide === 0 ? [false, true] : [true, false],
       });
-      match.current = { live, fixture: mine.fixture, mySide, others };
-      setStage('live');
-      setRunning(true);
+      const myTeam = mySide === 0 ? mine.home : mine.away;
+      const theirTeam = mySide === 0 ? mine.away : mine.home;
+      const strength = (ids: string[]) => averageOverall(ids.map((id) => game.players[id]).filter((p): p is PlayerRecord => p !== undefined));
+      const favorite = strengthBalance(strength(myTeam.lineup), strength(theirTeam.lineup));
+      match.current = { live, fixture: mine.fixture, mySide, others, favorite, talks: {} };
+      setStage('pretalk');
     } catch (e) {
       setError((e as Error).message);
       setStage('preview');
@@ -118,7 +145,10 @@ export function MatchDay() {
     const m = match.current;
     if (!m) return;
     const result = m.live.result();
-    store.update((g) => applyMatchday(g, { ...m.others, [m.fixture.id]: result }));
+    store.update((g) => {
+      applyMatchday(g, { ...m.others, [m.fixture.id]: result });
+      for (const reactions of Object.values(m.talks)) applyTalkMorale(g, reactions);
+    });
     store.setLocked(false);
     void store.saveNow();
     match.current = null;
@@ -164,11 +194,24 @@ export function MatchDay() {
         {problems.length > 0 && (
           <div className="warning">
             メンバーに問題があります：{problems.join('／')}
+            {selection && (
+              <button type="button" className="secondary small" onClick={() => store.update((g) => {
+                const c = g.clubs[myId];
+                if (c?.selection) c.selection = repairSelection(g, myId, c.tactics.formation, c.selection);
+              })}>出られない選手だけ入れ替える</button>
+            )}
             <button type="button" className="secondary small" onClick={() => store.update((g) => {
               const c = g.clubs[myId];
               if (c) c.selection = autoSelect(g, myId, c.tactics.formation);
             })}>自動で選び直す</button>
           </div>
+        )}
+        {warnings.length > 0 && <div className="warning small">{warnings.map((w) => <div key={w}>{w}</div>)}</div>}
+        {press && (
+          <Panel title="試合前の記者会見">
+            <p className="small">記者会見の準備ができています。出なければ、コーチが代わりに無難に答えます。</p>
+            <button type="button" className="secondary" onClick={() => store.navigate({ name: 'press', fixtureId: fixture.id })}>記者会見に出る</button>
+          </Panel>
         )}
         {error && <p className="error">{error}</p>}
         <div className="button-row">
@@ -184,6 +227,38 @@ export function MatchDay() {
   if (!m) return null;
   const snap = m.live.snapshot();
   const finished = snap.phase === 'finished';
+
+  /** 声かけをする。試合前とハーフタイムはその日の出来も変わる */
+  const giveTalk = (moment: TalkMoment, tone: TalkTone) => {
+    const squad = moment === 'post'
+      ? m.live.result().players.filter((l) => l.side === m.mySide).map((l) => l.player.id)
+      : [...snap.sides[m.mySide].onPitch.map((p) => p.player.id), ...snap.sides[m.mySide].bench.filter((b) => !b.used).map((b) => b.player.id)];
+    const players = squad.map((id) => game.players[id]).filter((p): p is PlayerRecord => p !== undefined);
+    const goalDiff = snap.score[m.mySide] - snap.score[m.mySide === 0 ? 1 : 0];
+    const rng = createRng(game.seed * 31 + m.fixture.round * 7919 + (moment === 'pre' ? 11 : moment === 'half' ? 22 : 33));
+    const reactions = teamTalk(rng, players, { moment, goalDiff, favorite: m.favorite }, tone);
+    if (moment !== 'post' && tone !== 'none') {
+      const label = TALK_TONES.find((t) => t.id === tone)?.label ?? '';
+      m.live.boostForm(m.mySide, Object.fromEntries(reactions.map((r) => [r.playerId, r.form])),
+        `${snap.sides[m.mySide].team.name}の監督が選手に声をかける（${label}）`);
+    }
+    m.talks[moment] = reactions;
+    setTick((t) => t + 1);
+  };
+
+  if (stage === 'pretalk') {
+    return (
+      <div className="page">
+        <ScoreHeader game={game} homeId={m.fixture.homeId} awayId={m.fixture.awayId} homeGoals={null} awayGoals={null}
+          sub={`第${m.fixture.round}節　キックオフ前`} />
+        <TalkPanel moment="pre" situation={m.favorite === 1 ? '相手より力が上と見られています。' : m.favorite === -1 ? '相手のほうが力が上と見られています。' : '力は互角と見られています。'}
+          reactions={m.talks.pre} onTalk={(tone) => giveTalk('pre', tone)} />
+        <div className="button-row">
+          <button type="button" className="primary large" onClick={() => { setStage('live'); setRunning(true); }}>キックオフ ▶</button>
+        </div>
+      </div>
+    );
+  }
 
   if (stage === 'report' && finished) {
     const result = m.live.result();
@@ -205,7 +280,7 @@ export function MatchDay() {
                     <tr key={l.player.id}>
                       <td>{POSITION_LABEL[l.position]}</td>
                       <td>{l.player.name}{l.minuteOn !== null ? <span className="muted small">（{l.minuteOn}分〜）</span> : null}{l.minuteOff !== null ? <span className="muted small">（〜{l.minuteOff}分）</span> : null}</td>
-                      <td className="small">{[l.stats.goals ? `⚽${l.stats.goals}` : '', l.stats.assists ? `A${l.stats.assists}` : '', l.stats.yellowCards ? '🟨' : '', l.stats.redCards ? '🟥' : ''].join(' ')}</td>
+                      <td className="small">{[l.stats.goals ? `⚽${l.stats.goals}` : '', l.stats.assists ? `A${l.stats.assists}` : '', l.stats.yellowCards ? '🟨' : '', l.stats.redCards ? '🟥' : '', l.injured ? '🩹負傷' : ''].join(' ')}</td>
                       <td className="num"><span className={`rating ${ratingTone(l.stats.rating)}`}>{l.stats.rating.toFixed(1)}</span></td>
                     </tr>
                   ))}
@@ -217,6 +292,8 @@ export function MatchDay() {
             <OtherScores game={game} m={m} half={2} clock={Number.POSITIVE_INFINITY} />
           </Panel>
         </div>
+        <TalkPanel moment="post" situation={result.score[m.mySide] > result.score[m.mySide === 0 ? 1 : 0] ? '勝ちました。' : result.score[m.mySide] === result.score[m.mySide === 0 ? 1 : 0] ? '引き分けました。' : '負けました。'}
+          reactions={m.talks.post} onTalk={(tone) => giveTalk('post', tone)} />
         <div className="button-row">
           <button type="button" className="primary large" onClick={confirm}>結果を確定して次へ</button>
         </div>
@@ -269,6 +346,11 @@ export function MatchDay() {
         </div>
         {finished && <button type="button" className="primary" onClick={() => setStage('report')}>試合後のレポートへ ▶</button>}
       </div>
+
+      {snap.phase === 'halftime' && (
+        <TalkPanel moment="half" situation={`前半を終えて ${snap.score[m.mySide]} - ${snap.score[m.mySide === 0 ? 1 : 0]}。`}
+          reactions={m.talks.half} onTalk={(tone) => giveTalk('half', tone)} />
+      )}
 
       {showTactics && !finished && (
         <TacticsPanel live={m.live} side={m.mySide} onChange={() => setTick((t) => t + 1)}
@@ -335,7 +417,7 @@ function PlayersOnPitch({ side, compact }: { side: ReturnType<LiveMatch['snapsho
         {side.onPitch.map((p) => (
           <tr key={p.player.id} className={p.sentOff ? 'sent-off' : ''}>
             <td>{POSITION_LABEL[p.position]}</td>
-            <td>{p.player.name}{p.stats.yellowCards > 0 && !p.sentOff ? ' 🟨' : ''}{p.sentOff ? ' 🟥' : ''}{p.stats.goals > 0 ? ` ⚽${p.stats.goals > 1 ? p.stats.goals : ''}` : ''}</td>
+            <td>{p.player.name}{p.stats.yellowCards > 0 && !p.sentOff ? ' 🟨' : ''}{p.sentOff ? ' 🟥' : ''}{p.stats.goals > 0 ? ` ⚽${p.stats.goals > 1 ? p.stats.goals : ''}` : ''}{p.injured ? ' 🩹' : ''}</td>
             {!compact && <td className="small muted">{ROLE_PROFILES[p.role].label}</td>}
             <td><StaminaBar value={p.stamina} /></td>
             <td className="num"><span className={`rating ${ratingTone(p.stats.rating)}`}>{p.stats.rating.toFixed(1)}</span></td>
@@ -448,5 +530,29 @@ function TacticsPanel({ live, side, onChange, onClose }: { live: LiveMatch; side
         {message && <p className="notice">{message}</p>}
       </Panel>
     </div>
+  );
+}
+
+const MOMENT_TITLE: Record<TalkMoment, string> = { pre: '試合前の声かけ', half: 'ハーフタイムの声かけ', post: '試合後の声かけ' };
+
+/** 声かけ：言い方を選ぶと、選手の反応が出る。選手の性格と試合の状況で効き方が変わる */
+function TalkPanel({ moment, situation, reactions, onTalk }: {
+  moment: TalkMoment; situation: string; reactions: Reaction[] | undefined; onTalk: (tone: TalkTone) => void;
+}) {
+  return (
+    <section className="panel talk-panel">
+      <header className="panel-header"><h2>{MOMENT_TITLE[moment]}</h2></header>
+      <div className="panel-body">
+        <p className="small">{situation}{reactions ? '' : ' 選手たちにどう声をかけますか？'}</p>
+        {reactions ? <Reactions reactions={reactions} /> : (
+          <div className="button-row">
+            {TALK_TONES.map((t) => (
+              <button key={t.id} type="button" className={t.id === 'none' ? 'secondary' : 'primary'} onClick={() => onTalk(t.id)}>{t.label}</button>
+            ))}
+          </div>
+        )}
+        {!reactions && <p className="muted small">気の強い選手は叱られて奮起し、プレッシャーに弱い選手は鼓舞されると萎縮することがあります。</p>}
+      </div>
+    </section>
   );
 }

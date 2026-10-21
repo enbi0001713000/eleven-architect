@@ -85,14 +85,24 @@ export function developWeek(rng: Rng, player: PlayerRecord, club: Club | null, w
   return { overall: overallRating(player) - before, notable };
 }
 
+/**
+ * 潜在能力（総合力がここまで伸びると止まる）。今の総合力と年齢から決める。
+ * 若いほど伸びしろが大きく、同じ年齢でも選手によって差がある。
+ */
+export function potentialFor(rng: Rng, overall: number, age: number): number {
+  const base = age <= 19 ? 3.2 : age <= 21 ? 2.5 : age <= 23 ? 1.6 : age <= 25 ? 0.8 : age <= 27 ? 0.35 : 0.1;
+  const gap = base * (0.35 + 1.0 * rng.next());
+  return Math.round(Math.min(20, overall + gap) * 10) / 10;
+}
+
 /** シーズン終了時に引退する確率 */
 export function retirementChance(player: PlayerRecord): number {
   const age = player.position === 'GK' ? player.age - 2 : player.age;
   const overall = overallRating(player);
   if (age >= 39) return 1;
-  if (age >= 35) return Math.min(1, 0.4 + (age - 35) * 0.17 + Math.max(0, 11.5 - overall) * 0.12);
-  if (age >= 33) return Math.min(1, 0.15 + Math.max(0, 11 - overall) * 0.15);
-  if (age >= 30) return Math.max(0, 9.5 - overall) * 0.12;
+  if (age >= 35) return Math.min(1, 0.45 + (age - 35) * 0.17 + Math.max(0, 12.5 - overall) * 0.12);
+  if (age >= 33) return Math.min(1, 0.2 + Math.max(0, 12.5 - overall) * 0.15);
+  if (age >= 31) return Math.min(1, 0.04 + Math.max(0, 12 - overall) * 0.1);
   return 0;
 }
 

@@ -8,6 +8,7 @@ import { createRng, type Rng } from '../engine/rng';
 import type { FormationName, Position, TeamInstructions } from '../engine/types';
 import { CLUB_SEEDS, type ClubSeed } from './clubData';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
+import { potentialFor } from './development';
 import { addMessage } from './inbox';
 import { makeSchedule, seasonDates } from './schedule';
 import { autoSelect } from './selection';
@@ -121,7 +122,7 @@ export function createWorld(seed: number): GameState {
         const playerLevel = youth ? level - 2.5 : k === 0 ? level + 0.3 : k === 1 ? level - 0.4 : level - 1.4;
         const base = generatePlayer(rng, position, playerLevel, { id: nextId(), age: youth ? rng.int(18, 20) : undefined });
         base.name = uniqueName(base.name, base.nationality);
-        if (youth) base.hidden.potential = Math.min(20, Math.round((level + rng.next() * 3) * 10) / 10);
+        base.hidden.potential = potentialFor(rng, overallRating(base), base.age);
         const record: PlayerRecord = {
           ...base,
           clubId: clubSeed.id,
@@ -186,6 +187,7 @@ export function createWorld(seed: number): GameState {
       id: nextId(), age: rng.int(19, 31), nationality: rng.pick(nationalities),
     });
     base.name = uniqueName(base.name, base.nationality);
+    base.hidden.potential = potentialFor(rng, overallRating(base), base.age);
     players[base.id] = {
       ...base, clubId: null, squadNumber: null, contract: null, season: emptySeason(),
       discipline: { yellowAccumulation: 0, suspendedMatches: 0 }, ...playerPhase2Fields(),

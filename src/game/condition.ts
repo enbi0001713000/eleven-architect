@@ -8,7 +8,8 @@ import type { Club, GameState, Injury, InjuryKind, PlayerRecord } from './types'
 
 export function injuryName(injury: { kind: InjuryKind; part: string }): string {
   const type = INJURY_TYPES[injury.kind];
-  return injury.part === '膝' && injury.kind === 'acl' ? type.label : `${injury.part}の${type.label}`;
+  // 「膝の前十字靭帯断裂」「腰の腰痛」のように重ならないようにする
+  return injury.kind === 'acl' || injury.kind === 'backPain' ? type.label : `${injury.part}の${type.label}`;
 }
 
 /** 新しいケガを作る。復帰してすぐ（再発しやすい期間）なら、同じ部位を痛めやすい */

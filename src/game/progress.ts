@@ -16,6 +16,7 @@ import { addMessage } from './inbox';
 import { afterMatchMorale, checkPromises, dailyMorale, maybePlayerRequest } from './morale';
 import { seasonEvents } from './offseason';
 import { LEAGUE_RULES } from './rules';
+import { repairSelection, validateSelection } from './selection';
 import { closePress, schedulePress } from './talks';
 import type { Club, Fixture, GameState, PlayerRecord } from './types';
 
@@ -202,7 +203,28 @@ export function advanceDay(state: GameState): void {
   for (const club of Object.values(state.clubs)) dailyClub(state, club, ctx);
   if (weekday(state.date) === 1) weekly(state, rng);
   const fixture = todaysFixture(state);
-  if (fixture) schedulePress(state, fixture);
+  if (fixture) {
+    schedulePress(state, fixture);
+    prepareSelection(state);
+  }
+}
+
+/** 試合の日の朝：メンバーに出られない選手がいたら、アシスタントコーチが入れ替えておく */
+function prepareSelection(state: GameState): void {
+  const club = state.clubs[state.manager.clubId];
+  if (!club?.selection) return;
+  if (validateSelection(state, club.id, club.tactics.formation, club.selection).length === 0) return;
+  const before = new Set([...club.selection.lineup, ...club.selection.bench]);
+  const repaired = repairSelection(state, club.id, club.tactics.formation, club.selection);
+  const after = new Set([...repaired.lineup, ...repaired.bench]);
+  const out = [...before].filter((id) => !after.has(id)).map((id) => state.players[id]?.name ?? '');
+  const added = [...after].filter((id) => !before.has(id)).map((id) => state.players[id]?.name ?? '');
+  club.selection = repaired;
+  addMessage(state, {
+    category: 'club', from: 'アシスタントコーチ', important: false,
+    subject: '試合に出られない選手を入れ替えました',
+    body: `今日の試合のメンバーに、ケガや出場停止で出られない選手がいたので入れ替えました。\n外した選手：${out.join('、') || 'なし'}\n入れた選手：${added.join('、') || 'なし'}\n戦術の画面で変えられます。`,
+  });
 }
 
 export type StopReason = 'match' | 'message' | 'limit';

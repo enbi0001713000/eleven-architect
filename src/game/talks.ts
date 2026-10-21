@@ -425,8 +425,8 @@ function talkScore(player: PlayerRecord, situation: TalkSituation, tone: TalkTon
   if (tone === 'none') return 0;
   if (moment === 'pre') {
     switch (tone) {
-      case 'calm': return favorite < 0 ? 2 + (nervous ? 1 : 0) : favorite === 0 ? 1 : 0;
-      case 'motivate': return favorite === 1 ? 1 : nervous && favorite < 0 ? 0 : 2;
+      case 'calm': return favorite < 0 ? 2 + (nervous ? 1 : 0) : favorite === 0 ? 1 : nervous ? 1 : -1;
+      case 'motivate': return favorite === 1 ? (tough === 1 ? 1 : 0) : nervous ? (favorite < 0 ? -1 : 0) : 2;
       case 'praise': return favorite === 1 ? 2 : favorite === 0 ? 1 : 0;
       case 'criticize': return tough === 1 ? 2 : tough === -1 ? -3 : -1;
     }
@@ -435,7 +435,11 @@ function talkScore(player: PlayerRecord, situation: TalkSituation, tone: TalkTon
   if (moment === 'half') {
     switch (tone) {
       case 'calm': return state === 'ahead' ? 2 : state === 'level' ? 1 : nervous || goalDiff === -1 ? 2 : 0;
-      case 'motivate': return state === 'ahead' ? 1 : nervous && state === 'level' ? 1 : 3;
+      case 'motivate':
+        // 鼓舞は、気の強い選手には響くが、プレッシャーに弱い選手は大差で負けていると萎縮する
+        if (state === 'ahead') return tough === 1 ? 1 : 0;
+        if (state === 'level') return nervous ? 0 : tough === 1 ? 3 : 2;
+        return nervous ? (goalDiff <= -2 ? -2 : 0) : tough === 1 ? 3 : 2;
       case 'praise': return state === 'ahead' ? (goalDiff === 1 ? 1 : 2) : state === 'level' ? 0 : -2;
       case 'criticize':
         if (state === 'ahead') return tough === 1 ? -1 : -3;
