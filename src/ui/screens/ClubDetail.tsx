@@ -16,8 +16,9 @@ export function ClubDetail({ id }: { id: string }) {
   if (!club) return <div className="page"><p>クラブが見つかりません。</p></div>;
   const row = standingsOf(game).find((r) => r.clubId === id);
   const columns = playerColumns(game);
-  const keys = COLUMN_PRESETS[0]?.keys.filter((k) => k !== 'status') ?? [];
   const mine = id === game.manager.clubId;
+  const keys = COLUMN_PRESETS[0]?.keys.filter((k) => mine || !['status', 'cond', 'morale'].includes(k)) ?? [];
+  const relation = game.managerRelations[id];
 
   return (
     <div className="page">
@@ -40,6 +41,7 @@ export function ClubDetail({ id }: { id: string }) {
             <dt>ライバル</dt><dd>{club.rivalId && <ClubLink game={game} clubId={club.rivalId} />}</dd>
             <dt>フォーメーション</dt><dd>{club.tactics.formation}</dd>
             <dt>評判</dt><dd>{club.reputation}</dd>
+            {!mine && <><dt>監督との関係</dt><dd>{relation === undefined || relation === 0 ? '普通' : relation > 20 ? '良好' : relation > 0 ? 'やや良い' : relation < -20 ? '険悪' : 'やや悪い'}</dd></>}
           </dl>
         </Panel>
         <Panel title="結果">

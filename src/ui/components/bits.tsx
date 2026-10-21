@@ -1,7 +1,8 @@
 // 小さな表示部品：直近の成績、スタミナのバー、クラブ名、能力値など
 
 import type { ReactNode } from 'react';
-import type { GameState } from '../../game/types';
+import { injuryName, isCarryingInjury, moraleLabel, moraleTone } from '../../game/condition';
+import type { GameState, PlayerRecord } from '../../game/types';
 import { formatView, type AttributeView } from '../../game/knowledge';
 import { store } from '../store';
 import { attributeTone, ratingTone } from '../format';
@@ -66,4 +67,48 @@ export function Panel({ title, children, actions }: { title?: ReactNode; childre
 export function ResultChip({ goalsFor, goalsAgainst }: { goalsFor: number; goalsAgainst: number }) {
   const r = goalsFor > goalsAgainst ? 'W' : goalsFor === goalsAgainst ? 'D' : 'L';
   return <span className={`result-chip form-${r}`}>{goalsFor}-{goalsAgainst}</span>;
+}
+
+/** 0〜100の値のバー。high が良い値なら tone は高いほど緑 */
+export function Bar({ value, invert, title, width = 60 }: { value: number; invert?: boolean; title?: string; width?: number }) {
+  const good = invert ? 100 - value : value;
+  const tone = good >= 70 ? 'good' : good >= 50 ? 'mid' : 'low';
+  return (
+    <span className="stamina" style={{ width }} title={title ?? `${Math.round(value)}`}>
+      <span className={`stamina-fill stamina-${tone}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    </span>
+  );
+}
+
+export function Condition({ value }: { value: number }) {
+  const tone = value >= 90 ? 'tone-good' : value >= 75 ? 'tone-mid' : 'tone-low';
+  return <span className={tone} title="コンディション">{Math.round(value)}%</span>;
+}
+
+export function Fatigue({ value }: { value: number }) {
+  const tone = value >= 70 ? 'tone-low' : value >= 45 ? 'tone-mid' : 'tone-good';
+  const label = value >= 70 ? '限界' : value >= 45 ? '疲れ' : value >= 25 ? '普通' : '元気';
+  return <span className={tone} title={`蓄積疲労 ${Math.round(value)}`}>{label}</span>;
+}
+
+export function Morale({ value }: { value: number }) {
+  return <span className={`morale morale-${moraleTone(value)}`} title={`モラル ${Math.round(value)}`}>{moraleLabel(value)}</span>;
+}
+
+export function Stars({ count }: { count: number }) {
+  return <span className="stars" title={`コーチの評価：星${count}つ`}>{'★'.repeat(count)}<span className="muted">{'★'.repeat(5 - count)}</span></span>;
+}
+
+/** 出場停止とケガのしるし */
+export function StatusTags({ player }: { player: PlayerRecord }) {
+  const injury = player.status.injury;
+  return (
+    <>
+      {player.discipline.suspendedMatches > 0 && <span className="tag tag-bad">出場停止{player.discipline.suspendedMatches}</span>}
+      {injury && (isCarryingInjury(player)
+        ? <span className="tag tag-warn" title={injuryName(injury)}>完治前 残り{injury.daysLeft}日</span>
+        : <span className="tag tag-bad" title={injuryName(injury)}>ケガ 残り{injury.daysLeft}日</span>)}
+      {!injury && player.status.recurrence && <span className="tag" title={`${player.status.recurrence.part}を再び痛めやすい`}>再発注意</span>}
+    </>
+  );
 }

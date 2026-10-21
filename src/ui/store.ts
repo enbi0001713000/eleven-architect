@@ -2,6 +2,7 @@
 // ゲームの状態は update() の中で直接書き換え、書き換えたら画面を描き直す。変更は少し待ってから自動でセーブする。
 
 import { useSyncExternalStore } from 'react';
+import { advanceDay, advanceToNextEvent } from '../game/progress';
 import type { GameState } from '../game/types';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { writeSave } from './storage';
@@ -19,6 +20,11 @@ export type Screen =
   | { name: 'club'; id: string }
   | { name: 'match' }
   | { name: 'seasonEnd' }
+  | { name: 'inbox'; messageId?: string }
+  | { name: 'training' }
+  | { name: 'talk'; playerId: string; requestId?: string }
+  | { name: 'meeting' }
+  | { name: 'press'; fixtureId: string }
   | { name: 'later'; title: string; phase: number };
 
 class Store {
@@ -92,6 +98,25 @@ class Store {
     change(this.game);
     this.emit();
     this.scheduleSave();
+  }
+
+  /** 「次の出来事まで進める」。大事な知らせが届いたら受信箱を、試合の日ならホームを開く */
+  advance(): void {
+    if (!this.game || this.locked) return;
+    let reason = 'match';
+    this.update((g) => {
+      reason = advanceToNextEvent(g).reason;
+    });
+    this.open(reason === 'message' ? { name: 'inbox' } : { name: 'home' });
+  }
+
+  /** 1日だけ進める */
+  advanceOneDay(): void {
+    if (!this.game || this.locked) return;
+    const before = this.game.nextMessageNumber;
+    this.update((g) => advanceDay(g));
+    const important = this.game.inbox.some((m) => Number(m.id.slice(1)) >= before && m.important);
+    if (important) this.open({ name: 'inbox' });
   }
 
   updateSettings(change: Partial<Settings>): void {

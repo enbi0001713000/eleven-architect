@@ -9,7 +9,7 @@ import { POSITION_LABEL } from '../format';
 import { topAssists, topRated, topScorers } from '../queries';
 import { store, useGame } from '../store';
 
-type Tab = 'table' | 'scorers' | 'assists' | 'rated';
+type Tab = 'table' | 'scorers' | 'assists' | 'rated' | 'history';
 
 export function League() {
   const game = useGame();
@@ -27,7 +27,28 @@ export function League() {
         <button type="button" className={tab === 'scorers' ? 'active' : ''} onClick={() => setTab('scorers')}>得点ランキング</button>
         <button type="button" className={tab === 'assists' ? 'active' : ''} onClick={() => setTab('assists')}>アシストランキング</button>
         <button type="button" className={tab === 'rated' ? 'active' : ''} onClick={() => setTab('rated')}>平均評価点</button>
+        <button type="button" className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>過去のシーズン</button>
       </div>
+
+      {tab === 'history' && (
+        game.history.length === 0 ? <p className="muted">まだ終わったシーズンはありません（シーズンの記録は12月10日に残ります）。</p> : (
+          <table className="data-table">
+            <thead><tr><th>年</th><th>優勝</th><th className="num">勝ち点</th><th>あなたのクラブ</th><th>得点王</th><th>平均評価点トップ</th></tr></thead>
+            <tbody>
+              {[...game.history].reverse().map((h) => (
+                <tr key={h.year}>
+                  <td>{h.year}</td>
+                  <td><ClubLink game={game} clubId={h.championId} /></td>
+                  <td className="num">{h.table[0]?.points}</td>
+                  <td>{game.clubs[h.manager.clubId]?.shortName} {h.manager.position}位</td>
+                  <td>{h.topScorer ? `${h.topScorer.name}（${h.topScorer.goals}点）` : '-'}</td>
+                  <td>{h.bestPlayer ? `${h.bestPlayer.name}（${h.bestPlayer.rating.toFixed(2)}）` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      )}
 
       {tab === 'table' && (
         <table className="data-table standings">
@@ -59,7 +80,7 @@ export function League() {
         </table>
       )}
 
-      {tab !== 'table' && (
+      {tab !== 'table' && tab !== 'history' && (
         players.length === 0 ? <p className="muted">まだ記録がありません。</p> : (
           <DataTable rows={players} rowKey={(p) => p.id} onRowClick={(p) => store.navigate({ name: 'player', id: p.id })}
             highlight={(p) => p.clubId === myId}

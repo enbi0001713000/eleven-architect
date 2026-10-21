@@ -104,4 +104,26 @@ export const ENGINE_CONFIG = {
 
   /** 1分あたりのスタミナの減り方の基準 */
   staminaDrainPerMinute: 0.42,
+
+  /** 試合中のケガ（フェーズ2） */
+  injury: {
+    /** ファウルを受けたときにケガをする確率 */
+    onFoul: 0.01,
+    /** タックルを受けたときにケガをする確率 */
+    onTackle: 0.0015,
+    /** 接触のないケガ（肉離れなど）の、1分あたりの確率 */
+    nonContactPerMinute: 0.00004,
+    /** ケガをしたまま出ている選手の能力の倍率 */
+    playingHurt: 0.75,
+    /** 完治前に出場させたときのケガのしやすさの倍率 */
+    carryingMultiplier: 3,
+  },
+  /** モラル1ポイントあたりの、その日の出来への影響（60が基準） */
+  moralePerPoint: 0.001,
+  /** 蓄積疲労がこの値を超えると能力が下がり始める */
+  fatigueThreshold: 35,
+  /** 蓄積疲労が100のときの能力の低下 */
+  fatigueMaxPenalty: 0.1,
+  /** 戦術の熟成度が0のときの、判断力とポジショニングの低下 */
+  familiarityWeight: 0.12,
 } as const;

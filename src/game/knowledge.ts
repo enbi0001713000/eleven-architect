@@ -39,3 +39,13 @@ export function viewAttribute(value: number, knowledge: number, key: string): At
 export function formatView(view: AttributeView): string {
   return view.exact ? `${view.low}` : `${view.low}〜${view.high}`;
 }
+
+/** コーチによる伸びしろの評価（星1〜5）。自分のクラブの選手だけに見せる目安 */
+export function potentialStars(player: PlayerRecord): number {
+  const p = player.hidden.potential;
+  if (p >= 17.5) return 5;
+  if (p >= 16) return 4;
+  if (p >= 14.5) return 3;
+  if (p >= 13) return 2;
+  return 1;
+}

@@ -104,10 +104,26 @@ export interface Tactics {
   setPieces?: { penalty?: string; freeKick?: string; corner?: string };
 }
 
+/** 試合前の選手の状態（フェーズ2）。省略した選手は万全として扱う。 */
+export interface MatchReadiness {
+  /** コンディション（短期の体力、0〜100）。試合開始時のスタミナになる */
+  condition: number;
+  /** 蓄積疲労（0〜100）。高いと能力が下がり、ケガをしやすい */
+  fatigue: number;
+  /** モラル（0〜100、60が普通） */
+  morale: number;
+  /** 戦術の熟成度（0〜1）。低いと判断力とポジショニングが下がる */
+  familiarity: number;
+  /** ケガが完治していないのに出場させている（再発しやすい） */
+  carryingInjury?: boolean;
+}
+
 export interface Team {
   id: string;
   name: string;
   players: Player[];
+  /** 選手ごとの試合前の状態 */
+  readiness?: Record<string, MatchReadiness>;
   /** 先発11人の選手ID。フォーメーションの枠の順に並べる（先頭はGK）。 */
   lineup: string[];
   /** 控えの選手ID（最大9人） */
@@ -162,7 +178,7 @@ export type MatchEventType =
   | 'goal' | 'penaltyGoal' | 'shotSaved' | 'shotOff' | 'shotBlocked'
   | 'penalty' | 'penaltyMissed' | 'corner' | 'freeKick'
   | 'foul' | 'yellowCard' | 'redCard' | 'offside'
-  | 'substitution' | 'tactics'
+  | 'substitution' | 'tactics' | 'injury' | 'teamTalk'
   | 'buildUp';
 
 export interface MatchEvent {
@@ -189,6 +205,10 @@ export interface MatchPlayerLine {
   minuteOn: number | null;
   /** 途中交代した分（最後まで出ていたら null） */
   minuteOff: number | null;
+  /** 試合中にケガをした */
+  injured: boolean;
+  /** 試合終了時（または交代時）のスタミナ */
+  staminaEnd: number;
 }
 
 export interface MatchResult {

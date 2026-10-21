@@ -148,6 +148,44 @@ label.inline select, label.block select { color: var(--text); }
 .result-list, .notice-list, .event-list, .save-list, .bench-list, .commentary, .lineup-list { list-style: none; margin: 0; padding: 0; }
 .result-list li, .notice-list li { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid #222a33; }
 
+/* フェーズ2：状態、受信箱、練習、面談 */
+.morale { font-weight: 600; }
+.morale-good { color: var(--win); }
+.morale-ok { color: var(--text); }
+.morale-warn { color: var(--draw); }
+.morale-bad { color: var(--loss); }
+.stars { color: #e8c547; letter-spacing: 1px; white-space: nowrap; }
+.menu-badge { background: var(--accent-strong); color: #fff; border-radius: 10px; font-size: 0.72rem; padding: 0 7px; }
+.inbox { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 14px; align-items: start; }
+.inbox-list { list-style: none; margin: 0; padding: 0; max-height: 75vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.inbox-item { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid #222a33; border-radius: 0; padding: 8px 12px; }
+.inbox-item:hover { background: var(--panel-2); }
+.inbox-item.selected { background: #1c3550; }
+.inbox-item.unread .inbox-subject { font-weight: 700; color: var(--text); }
+.inbox-subject { color: #b8c4d2; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-meta { display: flex; gap: 8px; align-items: center; font-size: 0.8rem; color: var(--muted); margin-bottom: 2px; }
+.inbox-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.inbox-dot.important { background: var(--loss); }
+.message-body { white-space: pre-wrap; line-height: 1.7; }
+.option-cards { display: grid; gap: 8px; }
+.option-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: var(--panel-2); padding: 10px 12px; }
+.option-card.active { border-color: var(--accent); background: #1c3550; }
+.option-card:disabled { opacity: 0.5; }
+.outcome { border-radius: 8px; padding: 12px 14px; margin: 10px 0; border: 1px solid var(--border); }
+.outcome.positive { border-color: var(--win); background: #15291d; }
+.outcome.negative { border-color: var(--loss); background: #2c1818; }
+.reactions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.reaction-group h3 { margin: 0 0 6px; font-size: 0.9rem; }
+.reaction-group.positive h3 { color: var(--win); }
+.reaction-group.negative h3 { color: var(--loss); }
+.reaction-group ul { list-style: none; margin: 0; padding: 0; font-size: 0.9em; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.fam-row { display: grid; grid-template-columns: 110px 1fr 48px; gap: 10px; align-items: center; margin: 6px 0; }
+.fam-row .stamina { width: 100% !important; }
+.talk-panel { border-color: var(--accent); }
+.notice-list li.clickable { cursor: pointer; }
+.notice-list li.clickable:hover { background: var(--panel-2); }
+button.link:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+
 /* タイトルと新しいゲーム */
 .title-screen { display: flex; justify-content: center; padding: 40px 16px; }
 .title-card { width: min(760px, 100%); }
@@ -224,7 +262,7 @@ label.inline select, label.block select { color: var(--text); }
 .round-picker { display: inline-flex; align-items: center; gap: 10px; }
 
 @media (max-width: 1000px) {
-  .grid-2, .tactics-grid, .live-grid { grid-template-columns: 1fr; }
+  .grid-2, .tactics-grid, .live-grid, .inbox, .reactions { grid-template-columns: 1fr; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; }
 }

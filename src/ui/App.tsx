@@ -4,16 +4,21 @@ import { Layout } from './components/Layout';
 import { ClubDetail } from './screens/ClubDetail';
 import { Fixtures } from './screens/Fixtures';
 import { Home } from './screens/Home';
+import { Inbox } from './screens/Inbox';
 import { Later } from './screens/Later';
 import { League } from './screens/League';
 import { MatchDay } from './screens/MatchDay';
+import { Meeting } from './screens/Meeting';
 import { NewGame } from './screens/NewGame';
 import { PlayerDetail } from './screens/PlayerDetail';
+import { Press } from './screens/Press';
 import { SeasonEnd } from './screens/SeasonEnd';
 import { Settings } from './screens/Settings';
 import { Squad } from './screens/Squad';
 import { Tactics } from './screens/Tactics';
+import { Talk } from './screens/Talk';
 import { Title } from './screens/Title';
+import { Training } from './screens/Training';
 import { useStore } from './store';
 
 export function App() {
@@ -36,6 +41,12 @@ export function App() {
     case 'club': content = <ClubDetail key={screen.id} id={screen.id} />; break;
     case 'match': content = <MatchDay />; break;
     case 'seasonEnd': content = <SeasonEnd />; break;
+    // 新しい知らせが届いたら選び直す（受信箱を開いたまま進めたとき）
+    case 'inbox': content = <Inbox key={screen.messageId ?? s.game.inbox[0]?.id ?? 'inbox'} initialId={screen.messageId} />; break;
+    case 'training': content = <Training />; break;
+    case 'talk': content = <Talk key={`${screen.playerId}-${screen.requestId ?? ''}`} playerId={screen.playerId} requestId={screen.requestId} />; break;
+    case 'meeting': content = <Meeting />; break;
+    case 'press': content = <Press key={screen.fixtureId} fixtureId={screen.fixtureId} />; break;
     case 'later': content = <Later key={screen.title} title={screen.title} phase={screen.phase} />; break;
   }
   return <Layout>{content}</Layout>;

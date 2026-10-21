@@ -1,6 +1,11 @@
 // セーブデータの形と、ファイルへの書き出し・読み込み。要件定義書「非機能要件」の「セーブの互換性」に対応する。
 // セーブデータには版番号を持たせ、古い形のデータは新しい形に直してから読み込む。
 
+import { overallRating } from '../engine/ratings';
+import { createRng } from '../engine/rng';
+import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
+import { potentialFor } from './development';
+import { addMessage } from './inbox';
 import type { GameState } from './types';
 import { STATE_VERSION } from './world';
 
@@ -19,10 +24,49 @@ export function toSaveFile(state: GameState): SaveFile {
 function migrate(state: GameState, fromVersion: number): GameState {
   let current = state;
   for (let v = fromVersion; v < STATE_VERSION; v++) {
-    // 例：if (v === 1) current = migrateV1toV2(current);
+    if (v === 1) current = migrateV1toV2(current);
     current = { ...current, version: v + 1 };
   }
   return current;
+}
+
+/** フェーズ1（版1）→ フェーズ2（版2）：選手の状態、練習、熟成度、受信箱などを足す */
+function migrateV1toV2(state: GameState): GameState {
+  // 版1の潜在能力は総合力と目盛りが違ったので、今の総合力と年齢から決め直す
+  const rng = createRng(state.seed ^ 0x5a17);
+  for (const player of Object.values(state.players)) {
+    player.hidden.potential = potentialFor(rng, overallRating(player), player.age);
+    const fields = playerPhase2Fields();
+    player.status ??= fields.status;
+    player.trainingFocus ??= null;
+    player.injuryHistory ??= [];
+    player.career ??= [];
+    player.lastTalk ??= null;
+    if (player.contract && !player.contract.role) player.contract.role = 'backup';
+  }
+  for (const club of Object.values(state.clubs)) {
+    club.training ??= defaultClubTraining();
+    club.familiarity ??= defaultFamiliarity(club.tactics.formation, club.tactics.instructions);
+  }
+  const next: GameState = {
+    ...state,
+    inbox: state.inbox ?? [],
+    nextMessageNumber: state.nextMessageNumber ?? 1,
+    requests: state.requests ?? [],
+    promises: state.promises ?? [],
+    history: state.history ?? [],
+    fanMood: state.fanMood ?? 50,
+    managerRelations: state.managerRelations ?? {},
+    lastTeamMeeting: state.lastTeamMeeting ?? null,
+  };
+  for (const id of Object.keys(next.clubs)) assignSquadRoles(next, id);
+  addMessage(next, {
+    category: 'club', from: 'アシスタントコーチ', important: false,
+    subject: 'フェーズ2の機能が使えるようになりました',
+    body: '受信箱、練習、選手の状態（コンディション、疲労、モラル、ケガ）、面談、記者会見、試合の声かけが加わりました。\n'
+      + 'これからは「次の出来事まで進める」で1日ずつ時間が進みます。',
+  });
+  return next;
 }
 
 export function parseSaveFile(text: string): GameState {
