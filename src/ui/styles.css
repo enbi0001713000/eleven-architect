@@ -266,3 +266,39 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; }
 }
+
+/* 財務（フェーズ3） */
+.stat-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.stat-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.stat-tile strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.data-table tr.table-section td { color: var(--muted); font-weight: 600; background: var(--panel); padding-top: 10px; }
+.data-table tr.table-total td { font-weight: 700; border-top: 1px solid var(--border); }
+.price-input { display: inline-flex; align-items: center; gap: 6px; }
+.price-input strong { min-width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; padding: 0; margin-top: 6px; }
+details summary { cursor: pointer; margin: 8px 0 4px; }
+
+/* グラフ。色は役目ごとの名前で決めておく（線は1本なので、色は1つ） */
+.chart-wrap {
+  --chart-series: #3987e5;
+  --chart-grid: #2a323d;
+  --chart-zero: #4a5563;
+  position: relative;
+}
+.chart { width: 100%; height: auto; display: block; outline: none; }
+.chart:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 4px; }
+.chart-grid { stroke: var(--chart-grid); stroke-width: 1; }
+.chart-zero { stroke: var(--chart-zero); stroke-width: 1; }
+.chart-axis { fill: var(--muted); font-size: 11px; }
+.chart-label { fill: var(--text); font-size: 12px; font-weight: 600; }
+.chart-line { fill: none; stroke: var(--chart-series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--chart-series); stroke: var(--panel); stroke-width: 2; }
+.chart-crosshair { stroke: var(--muted); stroke-width: 1; }
+.chart-tooltip {
+  position: absolute; top: 4px; transform: translateX(-50%); pointer-events: none;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+  display: flex; flex-direction: column; align-items: center; white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

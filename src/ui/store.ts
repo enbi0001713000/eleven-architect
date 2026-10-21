@@ -25,6 +25,7 @@ export type Screen =
   | { name: 'talk'; playerId: string; requestId?: string }
   | { name: 'meeting' }
   | { name: 'press'; fixtureId: string }
+  | { name: 'finance' }
   | { name: 'later'; title: string; phase: number };
 
 class Store {

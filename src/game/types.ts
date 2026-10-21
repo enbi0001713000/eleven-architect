@@ -29,7 +29,7 @@ export interface Club {
   reputation: number;
   stadium: { name: string; capacity: number };
   fans: number;
-  /** 年間の売上の目安（円） */
+  /** 年間の売上（円）。最初は規模から決めた目安、2年目からは前年の実績 */
   revenue: number;
   colors: { primary: string; secondary: string };
   emblem: EmblemSpec;
@@ -47,6 +47,105 @@ export interface Club {
     instructions: number;
     instructionsRef: TeamInstructions;
   };
+  /** お金（フェーズ3） */
+  finance: ClubFinance;
+}
+
+// ---- フェーズ3：財務 ----
+
+export type IncomeKind = 'tickets' | 'broadcast' | 'sponsor' | 'merchandise' | 'prize' | 'transfers';
+export type ExpenseKind = 'wages' | 'operations' | 'matchday' | 'merchandiseCost' | 'interest' | 'transfers' | 'agentFees';
+
+/** 収支の集計。income と expense が損益で、financing は借り入れなどお金の出入りだけのもの */
+export interface Ledger {
+  income: Record<IncomeKind, number>;
+  expense: Record<ExpenseKind, number>;
+  financing: {
+    /** 借りたお金 */
+    borrowed: number;
+    /** 返した元金 */
+    repaid: number;
+    /** オーナーが入れたお金 */
+    owner: number;
+  };
+}
+
+/** スタジアムの席の種類 */
+export type SeatKind = 'goal' | 'back' | 'main' | 'vip';
+
+export interface Loan {
+  id: string;
+  /** 借りた額と、残り */
+  amount: number;
+  remaining: number;
+  /** 年利 */
+  rate: number;
+  /** 毎月返す元金 */
+  monthly: number;
+  /** 借りた月と、最後に返す月（'YYYY-MM'） */
+  startMonth: string;
+  endMonth: string;
+  /** お金が足りなくなって、自動で借りたもの */
+  emergency: boolean;
+}
+
+export interface FinanceMonth {
+  /** 'YYYY-MM' */
+  month: string;
+  ledger: Ledger;
+  /** 月末の手元のお金と、借り入れの残り */
+  balance: number;
+  debt: number;
+}
+
+export interface FinanceYear {
+  year: number;
+  ledger: Ledger;
+  balance: number;
+  debt: number;
+  /** その年のリーグの順位 */
+  position: number | null;
+  averageAttendance: number | null;
+  /** 月末の手元のお金（締めた月の順） */
+  balances: { month: string; balance: number }[];
+}
+
+export interface Budget {
+  year: number;
+  /** オーナーが決めた総予算（年俸と移籍に使える額） */
+  total: number;
+  /** 年俸予算（1年分の年俸の合計の上限） */
+  wages: number;
+  /** 移籍予算（この年に移籍金に使える額） */
+  transfers: number;
+  /** 移籍予算のうち使った額（フェーズ4） */
+  transfersSpent: number;
+}
+
+export interface ClubFinance {
+  /** 手元のお金 */
+  balance: number;
+  /** 今月の収支（月が変わると months に移る） */
+  current: Ledger;
+  /** 今年の、締めた月の収支 */
+  months: FinanceMonth[];
+  /** 過去の年度（1月〜12月）の決算 */
+  history: FinanceYear[];
+  sponsor: { name: string; annual: number; endYear: number };
+  /** 地元企業の力（0.85〜1.15）。スポンサー収入に効く */
+  localStrength: number;
+  /** 今年のリーグからの配分（年額） */
+  broadcast: number;
+  /** クラブの運営費（年額）。スタッフ、育成、遠征、事務など、試合と年俸以外の費用 */
+  operations: number;
+  /** 見込みの収入に対する運営費の割合（クラブごとに、最初に決める） */
+  operationsRate: number;
+  /** チケットの値段（席の種類ごと） */
+  ticketPrices: Record<SeatKind, number>;
+  budget: Budget;
+  loans: Loan[];
+  /** これまでに借りた回数（借り入れの番号に使う） */
+  loanCount: number;
 }
 
 export type TrainingFocus = 'balanced' | 'physical' | 'technical' | 'tactical' | 'recovery';
@@ -149,6 +248,8 @@ export interface FixtureResult {
   ratings: Record<string, number>;
   /** 先発の選手ID */
   lineups: [string[], string[]];
+  /** 観客数（フェーズ3。それより前の試合にはない） */
+  attendance?: number;
 }
 
 export interface Fixture {
@@ -161,7 +262,7 @@ export interface Fixture {
   result: FixtureResult | null;
 }
 
-export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'media' | 'training' | 'league' | 'club';
+export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'media' | 'training' | 'league' | 'club' | 'finance';
 
 export type InboxAction =
   | { kind: 'playerRequest'; requestId: string }

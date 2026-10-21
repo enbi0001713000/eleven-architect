@@ -15,6 +15,7 @@ import { BALANCE } from './balance';
 import { monthDay, yearOf } from './dates';
 import { assignSquadRoles, defaultStatus, playerPhase2Fields, roleByRank } from './defaults';
 import { decideRetirement, potentialFor } from './development';
+import { renewalFactor, seasonEndMoney } from './finance';
 import { addMessage } from './inbox';
 import { HOME_NATIONALITY, LEAGUE_RULES } from './rules';
 import { makeSchedule, seasonDates } from './schedule';
@@ -64,6 +65,7 @@ export function seasonReview(state: GameState): void {
     bestPlayer: best ? { playerId: best.id, name: best.name, clubId: best.clubId, rating: averageRating(best.season) ?? 0 } : null,
     manager: { clubId: myId, position: mine?.position ?? 0 },
   });
+  seasonEndMoney(state, table);
   const club = (id: string | null | undefined) => (id ? state.clubs[id]?.name ?? '' : '');
   addMessage(state, {
     category: 'league', from: 'リーグ事務局', important: true,
@@ -93,13 +95,16 @@ export function retirementsAndContracts(state: GameState, rng: Rng): void {
   }
 
   // 契約が切れる選手は、自動で更新する（交渉はフェーズ4）。
-  // AIのクラブは、序列の低いベテランとは更新せず、退団させる（自分のクラブは全員と更新する）
+  // AIのクラブは、序列の低いベテランとは更新せず、退団させる（自分のクラブは全員と更新する）。
+  // 更新するときの年俸は、年俸予算に収まらなければ相場より下げる
   const renewed: PlayerRecord[] = [];
   const left: PlayerRecord[] = [];
+  let myFactor = 1;
   for (const club of Object.values(state.clubs)) {
     const ranked = club.playerIds.map((id) => state.players[id]).filter((p): p is PlayerRecord => p !== undefined && !p.retiring)
       .sort((a, b) => overallRating(b) - overallRating(a));
     let remaining = ranked.length;
+    const renewing: { player: PlayerRecord; rank: number }[] = [];
     ranked.forEach((player, rank) => {
       if (!player.contract || player.contract.endYear > year) return;
       if (club.id !== myId && releases(rank, player.age) && remaining > RELEASE_MIN_SQUAD) {
@@ -107,13 +112,20 @@ export function retirementsAndContracts(state: GameState, rng: Rng): void {
         remaining--;
         return;
       }
+      renewing.push({ player, rank });
+    });
+    const market = (p: PlayerRecord): number => salaryFor(overallRating(p), SIZE_PROFILE[club.size].salary);
+    const continuing = ranked.filter((p) => p.contract && p.contract.endYear > year).reduce((n, p) => n + (p.contract?.salary ?? 0), 0);
+    const factor = renewalFactor(club, continuing, renewing.reduce((n, r) => n + market(r.player), 0));
+    for (const { player, rank } of renewing) {
       player.contract = {
-        salary: salaryFor(overallRating(player), SIZE_PROFILE[club.size].salary),
+        salary: Math.max(480e4, Math.round(market(player) * factor / 1e5) * 1e5),
         endYear: year + (player.age >= 31 ? 1 : rng.int(1, 3)),
         role: roleByRank(rank, player.age + 1),
       };
       if (club.id === myId) renewed.push(player);
-    });
+    }
+    if (club.id === myId) myFactor = factor;
     if (club.id !== myId) left.push(...ranked.filter((p) => p.leaving));
   }
 
@@ -127,6 +139,9 @@ export function retirementsAndContracts(state: GameState, rng: Rng): void {
       famous.length > 0 ? `他クラブの主な引退：${famous.slice(0, 6).map((p) => `${p.name}（${state.clubs[p.clubId ?? '']?.shortName ?? ''}、${p.age}歳）`).join('、')}` : '',
       renewed.length > 0
         ? `契約が切れる${renewed.length}人と、自動で契約を更新しました：${renewed.map((p) => p.name).join('、')}`
+        : '',
+      renewed.length > 0 && myFactor < 0.99
+        ? `年俸予算に収めるため、相場より${Math.round((1 - myFactor) * 100)}%低い年俸で更新しました。`
         : '',
       left.length > 0 ? `他クラブでは${left.length}人が契約満了で退団します。` : '',
       '（契約の交渉と、契約を更新しない選択は、フェーズ4で追加します）',

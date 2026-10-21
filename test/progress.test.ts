@@ -344,16 +344,19 @@ describe('古いセーブデータ', () => {
     for (const c of Object.values(v1.clubs as Record<string, Record<string, unknown>>)) {
       delete c.training;
       delete c.familiarity;
+      delete c.finance;
     }
     v1.version = 1;
     const file = { ...toSaveFile(state), version: 1, state: v1 };
     const loaded = parseSaveFile(JSON.stringify(file));
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(3);
     const player = Object.values(loaded.players).find((p) => p.clubId)!;
     expect(player.status.condition).toBe(100);
     expect(player.contract?.role).toBeDefined();
     expect(loaded.clubs[loaded.manager.clubId]!.training.focus).toBe('balanced');
-    expect(loaded.inbox.length).toBe(1);
+    // フェーズ2の知らせと、フェーズ3-Aの知らせ
+    expect(loaded.inbox.map((m) => m.category)).toEqual(['finance', 'club']);
+    expect(loaded.clubs[loaded.manager.clubId]!.finance.budget.total).toBeGreaterThan(0);
     // 変換したデータでそのまま遊べる
     while (!todaysFixture(loaded)) advanceDay(loaded);
     playToday(loaded);

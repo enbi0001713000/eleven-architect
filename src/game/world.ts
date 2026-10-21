@@ -9,13 +9,14 @@ import type { FormationName, Position, TeamInstructions } from '../engine/types'
 import { CLUB_SEEDS, type ClubSeed } from './clubData';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
+import { emptyFinance, firstBudgetMessage, initFinances } from './finance';
 import { addMessage } from './inbox';
 import { makeSchedule, seasonDates } from './schedule';
 import { autoSelect } from './selection';
 import type { Club, ClubSize, EmblemSpec, GameState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -39,10 +40,14 @@ const FORMATION_CHOICES: FormationName[] = ['4-4-2', '4-3-3', '4-2-3-1'];
 
 const between = (rng: Rng, [lo, hi]: [number, number]): number => lo + rng.next() * (hi - lo);
 
-/** 総合力から年俸（円）の目安を決める。要件定義書「金額の目安」の年俸の区分に合わせた折れ線 */
+/**
+ * 総合力から年俸（円）の目安を決める。要件定義書「金額の目安」の年俸の区分に合わせた折れ線。
+ * クラブの年俸の合計が、規模ごとのチーム人件費の目安（大28〜33億円、中18〜28億円、小5〜18億円）からスタッフの分を引いた額に近くなるようにしている。
+ */
 export function salaryFor(overall: number, factor: number): number {
   const points: [number, number][] = [
-    [8, 480e4], [10, 1200e4], [11, 2500e4], [12, 4000e4], [13, 7000e4], [14, 1e8], [15, 1.5e8], [16, 2.2e8], [17, 3e8],
+    [8, 480e4], [10, 1100e4], [11, 1800e4], [12, 3000e4], [13, 4800e4], [14, 7000e4], [15, 9500e4],
+    [16, 1.3e8], [17, 1.8e8], [18, 2.5e8], [19, 3.2e8],
   ];
   const first = points[0] as [number, number];
   const lastPoint = points[points.length - 1] as [number, number];
@@ -160,6 +165,7 @@ export function createWorld(seed: number): GameState {
       selection: null,
       training: defaultClubTraining(),
       familiarity: defaultFamiliarity(tactics.formation, tactics.instructions),
+      finance: emptyFinance(),
     };
   });
 
@@ -222,6 +228,7 @@ export function createWorld(seed: number): GameState {
     lastTeamMeeting: null,
   };
   for (const id of ids) assignSquadRoles(state, id);
+  initFinances(state, rng, START_YEAR, true);
   return state;
 }
 
@@ -239,6 +246,7 @@ export function startNewGame(world: GameState, managerName: string, clubId: stri
       + '開幕まで1週間あります。練習の方針と戦術を決めて、チームミーティングで目標を共有しておいてください。\n'
       + '画面右上の「次の出来事まで進める」で時間が進みます。試合の日や、大事な知らせが届いた日に止まります。',
   });
+  firstBudgetMessage(state);
   return state;
 }
 

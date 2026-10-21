@@ -2,9 +2,11 @@
 
 import type { MatchResult, Team } from '../engine/types';
 import { clubReadiness } from './condition';
+import { settleHomeMatch } from './finance';
 import { afterMatches } from './progress';
 import { LEAGUE_RULES } from './rules';
 import { autoSelect, clubPlayers, validateSelection } from './selection';
+import { standingsOf } from './standings';
 import type { Fixture, GameState } from './types';
 
 export interface MatchdayFixture {
@@ -72,6 +74,8 @@ export function applyMatchday(state: GameState, results: Record<string, MatchRes
   const fixtures = fixturesOfRound(state, state.season.round);
   const missing = fixtures.filter((f) => !results[f.id]);
   if (missing.length > 0) throw new Error(`結果が足りません：${missing.map((f) => f.id).join(', ')}`);
+  // 観客は、この節の前の順位で決まる
+  const tableBefore = standingsOf(state);
 
   // この節を出場停止で休んだ選手は、残りの試合数を1つ減らす（全クラブが毎節試合をする）
   const playing = new Set(fixtures.flatMap((f) => [f.homeId, f.awayId]));
@@ -124,6 +128,7 @@ export function applyMatchday(state: GameState, results: Record<string, MatchRes
         result.players.filter((l) => l.side === 1 && l.started).map((l) => l.player.id),
       ],
     };
+    fixture.result.attendance = settleHomeMatch(state, fixture, tableBefore);
   }
 
   state.date = fixtures[0]?.date ?? state.date;

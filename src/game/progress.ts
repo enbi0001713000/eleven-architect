@@ -3,6 +3,7 @@
 //
 // 毎日：ケガの回復、疲労の増減、コンディションの回復、練習（疲労、ケガ、熟成度）、モラルの変化
 // 毎週（月曜日）：成長と衰え、練習のレポート、選手からの申し出
+// 毎月1日：前の月のお金を締める。1月1日は年度も締めて、新しい年の予算を決める（finance.ts）
 // 試合の日：記者会見の知らせ。「次の出来事まで進める」は、試合の日と大事な知らせが届いた日に止まる
 
 import { overallRating } from '../engine/ratings';
@@ -12,6 +13,7 @@ import { BALANCE, TRAINING_FOCUS, TRAINING_INTENSITY } from './balance';
 import { applyInjury, canPlay, createInjury, injuryName } from './condition';
 import { addDays, daySeed, weekday } from './dates';
 import { developWeek } from './development';
+import { financeAfterEvents, financeBeforeEvents } from './finance';
 import { addMessage } from './inbox';
 import { afterMatchMorale, checkPromises, dailyMorale, maybePlayerRequest } from './morale';
 import { seasonEvents } from './offseason';
@@ -193,7 +195,9 @@ export function advanceDay(state: GameState): void {
   if (todaysFixture(state)) throw new Error('今日の試合がまだ終わっていません');
   state.date = addDays(state.date, 1);
   const rng = createRng(daySeed(state.seed, state.date, 'day'));
+  financeBeforeEvents(state);
   seasonEvents(state, rng);
+  financeAfterEvents(state, rng);
   const matchDates = new Set(state.fixtures.filter((f) => f.result === null).map((f) => f.date));
   const ctx: DayContext = {
     rng,

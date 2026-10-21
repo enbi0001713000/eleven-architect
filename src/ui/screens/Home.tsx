@@ -3,6 +3,7 @@
 import { overallRating } from '../../engine/ratings';
 import { injuryName, moraleLabel, teamFamiliarity } from '../../game/condition';
 import { daysBetween } from '../../game/dates';
+import { debtOf, netResult, payrollOf, yearToDate, yenText } from '../../game/finance';
 import { pendingActions } from '../../game/inbox';
 import { todaysFixture } from '../../game/progress';
 import { averageRating, isSeasonOver, nextFixtureOf } from '../../game/season';
@@ -178,17 +179,23 @@ export function Home() {
           {topScorers(game, 1, myId).length === 0 && <p className="muted">まだ得点がありません。</p>}
         </Panel>
 
-        <Panel title="クラブ">
-          {club && (
-            <dl className="facts">
-              <dt>本拠地</dt><dd>{club.hometown}</dd>
-              <dt>スタジアム</dt><dd>{club.stadium.name}（{club.stadium.capacity.toLocaleString('ja-JP')}人）</dd>
-              <dt>ライバル</dt><dd>{club.rivalId && <ClubLink game={game} clubId={club.rivalId} />}</dd>
-              <dt>フォーメーション</dt><dd>{club.tactics.formation}</dd>
-              <dt>選手の平均総合力</dt>
-              <dd>{(squad.reduce((n, p) => n + overallRating(p), 0) / Math.max(1, club.playerIds.length)).toFixed(1)}</dd>
-            </dl>
-          )}
+        <Panel title="クラブとお金" actions={<button type="button" className="link" onClick={() => store.open({ name: 'finance' })}>財務へ</button>}>
+          {club && (() => {
+            const fin = club.finance;
+            const net = netResult(yearToDate(fin));
+            const payroll = payrollOf(game, myId);
+            return (
+              <dl className="facts">
+                <dt>スタジアム</dt><dd>{club.stadium.name}（{club.stadium.capacity.toLocaleString('ja-JP')}人）</dd>
+                <dt>ライバル</dt><dd>{club.rivalId && <ClubLink game={game} clubId={club.rivalId} />}</dd>
+                <dt>選手の平均総合力</dt>
+                <dd>{(squad.reduce((n, p) => n + overallRating(p), 0) / Math.max(1, club.playerIds.length)).toFixed(1)}</dd>
+                <dt>手元のお金</dt><dd className={fin.balance < 0 ? 'tone-low' : ''}>{yenText(fin.balance)}{debtOf(fin) > 0 ? `（借り入れの残り ${yenText(debtOf(fin))}）` : ''}</dd>
+                <dt>今年の差し引き</dt><dd className={net < 0 ? 'tone-low' : ''}>{yenText(net)}（{net >= 0 ? '黒字' : '赤字'}）</dd>
+                <dt>年俸 ／ 年俸予算</dt><dd className={payroll > fin.budget.wages ? 'tone-low' : ''}>{yenText(payroll)} ／ {yenText(fin.budget.wages)}</dd>
+              </dl>
+            );
+          })()}
         </Panel>
       </div>
     </div>
