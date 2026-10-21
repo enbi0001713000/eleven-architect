@@ -1,6 +1,7 @@
 // フォーメーションと、攻撃時・守備時の選手の立ち位置。
 // 座標はそのチームから見た向きで、x は 0（自陣ゴール）〜 6（相手ゴール）、y は 0（左サイド）〜 5（右サイド）。
 
+import type { RoleProfile } from './roles';
 import type { FormationName, Position, TeamInstructions } from './types';
 
 export interface Slot {
@@ -57,21 +58,25 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.m
 
 export type Phase = 'attack' | 'defend';
 
-/** チーム指示を反映した、攻撃時または守備時の立ち位置 */
-export function shapePoint(slot: Slot, ins: TeamInstructions, phase: Phase): { x: number; y: number } {
+/** チーム指示と役割を反映した、攻撃時または守備時の立ち位置 */
+export function shapePoint(slot: Slot, ins: TeamInstructions, phase: Phase, role?: RoleProfile): { x: number; y: number } {
   if (slot.position === 'GK') {
-    return { x: phase === 'attack' ? 0.5 + 0.1 * ins.defensiveLine : 0.3, y: 2.5 };
+    const x = phase === 'attack' ? 0.5 + 0.1 * ins.defensiveLine + (role?.attackX ?? 0) : 0.3 + (role?.defendX ?? 0);
+    return { x, y: 2.5 };
   }
   const isDefender = slot.position === 'CB' || slot.position === 'SB';
   let x = slot.x + ins.defensiveLine * (isDefender ? 0.3 : 0.18);
   let y = slot.y;
   if (phase === 'attack') {
-    x += ATTACK_PUSH[slot.position] + ins.mentality * (slot.position === 'CB' ? 0.08 : 0.22);
+    x += ATTACK_PUSH[slot.position] + ins.mentality * (slot.position === 'CB' ? 0.08 : 0.22) + (role?.attackX ?? 0);
     y = 2.5 + (y - 2.5) * (1 + ins.width * 0.12);
+    // 役割による横の動き：＋ならサイドへ、−なら中央へ
+    if (role && role.attackY !== 0) y += Math.sign(y - 2.5 || 1) * role.attackY;
   } else {
     // プレスが強いと前線と中盤が前に出る。最終ラインの高さは守備ラインの指示だけで決まる
     const isFront = slot.position === 'FW' || slot.position === 'AM' || slot.position === 'W';
     if (!isDefender) x += ins.pressing * (isFront ? 0.25 : 0.1);
+    x += role?.defendX ?? 0;
     y = 2.5 + (y - 2.5) * 0.9;
   }
   return { x: clamp(x, 0.2, 5.8), y: clamp(y, 0.2, 4.8) };

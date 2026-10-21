@@ -101,6 +101,7 @@ export function generateTeam(rng: Rng, options: TeamOptions): Team {
     name: options.name,
     players: [...starters, ...bench],
     lineup: starters.map((p) => p.id),
+    bench: bench.map((p) => p.id),
     tactics: { formation, instructions: { ...NEUTRAL_INSTRUCTIONS, ...options.instructions } },
   };
 }
