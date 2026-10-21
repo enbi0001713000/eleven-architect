@@ -181,7 +181,32 @@ export type MatchEventType =
   | 'substitution' | 'tactics' | 'injury' | 'teamTalk'
   | 'buildUp';
 
-export interface MatchEvent {
+/**
+ * ピッチ上の位置。ピッチを縦6×横5のマスに分けたときの座標で、マスの中心は 0.5 刻み。
+ * x はホームのゴール側が0、アウェイのゴール側が6。y はホームから見て右側が0、左側が5。
+ */
+export interface PitchPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * 出来事の中身（実況の文章とは別に持つ）。将来、ピッチを上から見た2Dの表示や、試合の分析に使う。
+ * どの出来事にどの項目が入るかは、試合エンジンの say() の呼び出しを見る。
+ */
+export interface MatchEventDetail {
+  /** プレーした選手（パスの出し手、シューター、タックルやファウルをした選手、交代で下がる選手など） */
+  playerId?: string;
+  /** 相手役の選手（パスの受け手、GK、ファウルを受けた選手、交代で入る選手、アシストした選手など） */
+  otherId?: string;
+  /** ボールがあった位置と、動いた先 */
+  from?: PitchPoint;
+  to?: PitchPoint;
+  /** シュートのxG（決定機の大きさ） */
+  xg?: number;
+}
+
+export interface MatchEvent extends MatchEventDetail {
   /** 試合開始からの秒数（後半は45分=2700秒から数える） */
   clock: number;
   /** 表示用の時間（例：「23'」「45+2'」） */

@@ -14,8 +14,8 @@ import { positionFit, positionRating } from './ratings';
 import { createRng, type Rng } from './rng';
 import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot, type RoleProfile } from './roles';
 import type {
-  AttributeKey, FormationName, MatchEvent, MatchEventType, MatchPlayerLine, MatchReadiness, MatchResult, Player,
-  PlayerMatchStats, Position, Role, Side, Tactics, Team, TeamInstructions, TeamStats,
+  AttributeKey, FormationName, MatchEvent, MatchEventDetail, MatchEventType, MatchPlayerLine, MatchReadiness, MatchResult, Player,
+  PitchPoint, PlayerMatchStats, Position, Role, Side, Tactics, Team, TeamInstructions, TeamStats,
 } from './types';
 
 const ROWS = 6;
@@ -346,7 +346,8 @@ export class LiveMatch {
     benchEntry.used = true;
     state.subsUsed++;
     if (this.side === side && this.holder === index) this.lastPasser = null;
-    this.say('substitution', side, 2, { team: state.team.name, p: incoming.player.name, q: outgoing.player.name });
+    this.say('substitution', side, 2, { team: state.team.name, p: incoming.player.name, q: outgoing.player.name },
+      { playerId: outgoing.player.id, otherId: incoming.player.id });
     this.updateInfluence(state, side);
     this.stepId++;
     return { ok: true };
@@ -562,7 +563,7 @@ export class LiveMatch {
     if (op.injured || op.sentOff) return;
     op.injured = true;
     op.stats.rating -= 0.2;
-    this.say('injury', side, 3, { p: op.player.name });
+    this.say('injury', side, 3, { p: op.player.name }, { playerId: op.player.id });
     this.stepId++;
   }
 
@@ -833,7 +834,8 @@ export class LiveMatch {
     defender.stats.rating += 0.05;
     this.sides[def].stats.tackles++;
     carrier.stats.rating -= 0.03;
-    this.say('tackle', def, 1, { p: carrier.player.name, q: defender.player.name });
+    this.say('tackle', def, 1, { p: carrier.player.name, q: defender.player.name },
+      { playerId: defender.player.id, otherId: carrier.player.id, from: this.point(this.zone) });
     this.maybeInjure(att, carrier, C.injury.onTackle);
     this.turnover(def, defenderIndex, this.zone, true);
     return true;
@@ -868,6 +870,7 @@ export class LiveMatch {
   private doPass(att: Side, def: Side, f: Frame, presHere: number): void {
     const state = this.sides[att];
     const ins = state.ins;
+    const fromZone = this.zone;
     const defIns = this.sides[def].ins;
     const passerIndex = this.holder;
     const passer = this.op(att, passerIndex);
@@ -911,7 +914,8 @@ export class LiveMatch {
     if (tf.r >= 4 && dr >= 2 &&
       this.rng.chance(Math.max(0.01, C.offside.base + C.offside.perLineStep * defIns.defensiveLine) * receiver.profile.offside)) {
       state.stats.offsides++;
-      this.say('offside', att, 1, { p: receiver.player.name });
+      this.say('offside', att, 1, { p: receiver.player.name },
+        { playerId: receiver.player.id, otherId: passer.player.id, from: this.point(fromZone), to: this.point(tz) });
       this.stoppage += 15;
       this.turnover(def, this.pickDefender(def, tz, false), tz, false);
       return;
@@ -951,9 +955,11 @@ export class LiveMatch {
       const runChance = clamp((paceEdge * space + 0.1 * lineHeight) * C.behind.breakawayRate, 0, C.behind.breakawayMax);
       if (behind && tf.r === ROWS - 1 && runChance > 0 && this.rng.chance(runChance)) {
         this.breakaway = true;
-        this.say('breakaway', att, 2, { p: passer.player.name, q: receiver.player.name });
+        this.say('breakaway', att, 2, { p: passer.player.name, q: receiver.player.name },
+          { playerId: passer.player.id, otherId: receiver.player.id, from: this.point(fromZone), to: this.point(tz) });
       } else if (dr >= 2 && tf.r >= 3) {
-        this.say('throughBall', att, 1, { p: passer.player.name, q: receiver.player.name });
+        this.say('throughBall', att, 1, { p: passer.player.name, q: receiver.player.name },
+          { playerId: passer.player.id, otherId: receiver.player.id, from: this.point(fromZone), to: this.point(tz) });
       }
       return;
     }
@@ -972,7 +978,8 @@ export class LiveMatch {
       cutter.stats.interceptions++;
       cutter.stats.rating += 0.04;
       this.sides[def].stats.interceptions++;
-      this.say('interception', def, 1, { q: cutter.player.name });
+      this.say('interception', def, 1, { q: cutter.player.name },
+        { playerId: cutter.player.id, otherId: passer.player.id, from: this.point(fromZone), to: this.point(cutZone) });
     }
     this.turnover(def, interceptor, cutZone, true);
   }
@@ -1007,7 +1014,8 @@ export class LiveMatch {
     if (this.rng.chance(success)) {
       carrier.stats.dribblesWon++;
       carrier.stats.rating += 0.05;
-      this.say('dribble', att, 1, { p: carrier.player.name });
+      this.say('dribble', att, 1, { p: carrier.player.name },
+        { playerId: carrier.player.id, otherId: defender.player.id, from: this.point(this.zone), to: this.point(tz) });
       this.zone = tz;
       this.lastPasser = null;
       return;
@@ -1016,7 +1024,8 @@ export class LiveMatch {
     defender.stats.rating += 0.05;
     this.sides[def].stats.tackles++;
     carrier.stats.rating -= 0.03;
-    this.say('tackle', def, 1, { p: carrier.player.name, q: defender.player.name });
+    this.say('tackle', def, 1, { p: carrier.player.name, q: defender.player.name },
+      { playerId: defender.player.id, otherId: carrier.player.id, from: this.point(this.zone), to: this.point(tz) });
     this.maybeInjure(att, carrier, C.injury.onTackle);
     this.turnover(def, defenderIndex, tz, true);
   }
@@ -1056,10 +1065,13 @@ export class LiveMatch {
     this.creditKeyPass(att, shooterIndex);
 
     const names: CommentaryNames = { p: shooter.player.name, gk: keeper?.player.name ?? '' };
+    const shot: MatchEventDetail = {
+      playerId: shooter.player.id, otherId: keeper?.player.id, from: this.point(this.zone), xg: Math.round(xg * 1000) / 1000,
+    };
     const u = this.rng.next();
     if (u < pGoal) {
       const key: CommentaryKey = kind === 'header' ? 'headerGoal' : kind === 'freeKick' ? 'freeKickGoal' : 'goal';
-      this.scoreGoal(att, shooterIndex, key);
+      this.scoreGoal(att, shooterIndex, key, shot);
       return;
     }
 
@@ -1071,7 +1083,7 @@ export class LiveMatch {
         keeper.stats.saves++;
         keeper.stats.rating += 0.25;
       }
-      this.say(kind === 'header' ? 'headerSaved' : 'shotSaved', att, 2, names);
+      this.say(kind === 'header' ? 'headerSaved' : 'shotSaved', att, 2, names, shot);
       if (this.rng.chance(0.35)) {
         this.corner(att, def);
       } else {
@@ -1083,7 +1095,7 @@ export class LiveMatch {
     if (u < pGoal + pSaved + pBlocked) {
       const blockerIndex = this.pickDefender(def, this.zone, false);
       this.op(def, blockerIndex).stats.rating += 0.05;
-      this.say('shotBlocked', att, 2, names);
+      this.say('shotBlocked', att, 2, names, { ...shot, otherId: this.op(def, blockerIndex).player.id });
       const roll = this.rng.next();
       if (roll < 0.3) this.corner(att, def);
       else if (roll < 0.75) this.turnover(def, blockerIndex, this.zone, false);
@@ -1092,7 +1104,7 @@ export class LiveMatch {
     }
 
     shooter.stats.rating -= 0.05;
-    this.say(kind === 'header' ? 'headerOff' : 'shotOff', att, 2, names);
+    this.say(kind === 'header' ? 'headerOff' : 'shotOff', att, 2, names, shot);
     this.stoppage += 15;
     this.turnover(def, keeperIndex ?? 0, this.toZone(def, 0, 2), false);
   }
@@ -1105,7 +1117,7 @@ export class LiveMatch {
     const crosserIndex = this.holder;
     const crosser = this.op(att, crosserIndex);
     const tz = this.toZone(att, ROWS - 1, this.rng.weighted([1, 2, 3], (c) => (c === 2 ? 2 : 1)));
-    this.say('cross', att, 1, { p: crosser.player.name });
+    this.say('cross', att, 1, { p: crosser.player.name }, { playerId: crosser.player.id, from: this.point(this.zone), to: this.point(tz) });
 
     const state = this.sides[att];
     const targets = this.active(att, (op, i) => i !== crosserIndex && op.position !== 'GK');
@@ -1150,7 +1162,7 @@ export class LiveMatch {
     const state = this.sides[att];
     state.stats.corners++;
     this.stoppage += 25;
-    this.say('corner', att, 1, { team: state.team.name });
+    this.say('corner', att, 1, { team: state.team.name }, { from: this.point(this.zone) });
 
     const field = this.active(att, (op) => op.position !== 'GK');
     const takerIndex = this.setPieceTaker(att, 'corner');
@@ -1189,7 +1201,8 @@ export class LiveMatch {
     defState.stats.fouls++;
     this.stoppage += 20;
     const names: CommentaryNames = { p: victim.player.name, q: fouler.player.name };
-    this.say('foul', def, 1, names);
+    const foul: MatchEventDetail = { playerId: fouler.player.id, otherId: victim.player.id, from: this.point(zone) };
+    this.say('foul', def, 1, names, foul);
     this.maybeInjure(att, victim, C.injury.onFoul);
 
     const f = this.frame(att, zone);
@@ -1205,7 +1218,7 @@ export class LiveMatch {
         fouler.stats.yellowCards++;
         fouler.stats.rating -= 0.3;
         defState.stats.yellowCards++;
-        this.say('yellowCard', def, 2, names);
+        this.say('yellowCard', def, 2, names, foul);
       }
     }
 
@@ -1219,7 +1232,7 @@ export class LiveMatch {
     this.zone = zone;
     this.lastPasser = null;
     if (f.r === ROWS - 2 && central) {
-      this.say('freeKick', att, 2, { team: this.sides[att].team.name });
+      this.say('freeKick', att, 2, { team: this.sides[att].team.name }, { playerId: victim.player.id, from: this.point(zone) });
       if (this.rng.chance(0.5)) {
         this.doShot(att, def, f, 'freeKick', this.setPieceTaker(att, 'freeKick'), C.freeKickXg, 0.8);
       } else {
@@ -1235,7 +1248,7 @@ export class LiveMatch {
     op.stats.redCards++;
     op.stats.rating -= 1.5;
     this.sides[side].stats.redCards++;
-    this.say(key, side, 3, { q: op.player.name });
+    this.say(key, side, 3, { q: op.player.name }, { playerId: op.player.id });
     this.updateInfluence(this.sides[side], side);
     this.stepId++;
   }
@@ -1243,7 +1256,7 @@ export class LiveMatch {
   private penalty(att: Side, def: Side, victimIndex: number): void {
     const state = this.sides[att];
     this.stoppage += 60;
-    this.say('penalty', att, 3, { p: this.op(att, victimIndex).player.name });
+    this.say('penalty', att, 3, { p: this.op(att, victimIndex).player.name }, { playerId: this.op(att, victimIndex).player.id, from: this.point(this.zone) });
     const takerIndex = this.setPieceTaker(att, 'penalty');
     const taker = this.op(att, takerIndex);
     const keeperIndex = this.goalkeeper(def);
@@ -1256,8 +1269,11 @@ export class LiveMatch {
     state.stats.shots++;
     state.stats.xg += C.penaltyXg;
     this.lastPasser = null;
+    const kick: MatchEventDetail = {
+      playerId: taker.player.id, otherId: keeper?.player.id, from: this.point(this.toZone(att, ROWS - 1, 2)), xg: C.penaltyXg,
+    };
     if (this.rng.chance(pGoal)) {
-      this.scoreGoal(att, takerIndex, 'penaltyGoal');
+      this.scoreGoal(att, takerIndex, 'penaltyGoal', kick);
       return;
     }
     const saved = keeper !== null && this.rng.chance(0.7);
@@ -1268,11 +1284,12 @@ export class LiveMatch {
       keeper.stats.rating += 0.8;
     }
     taker.stats.rating -= 0.5;
-    this.say(saved ? 'penaltyMissed' : 'penaltyWide', att, 3, { p: taker.player.name, gk: keeper?.player.name ?? '' });
+    this.say(saved ? 'penaltyMissed' : 'penaltyWide', att, 3, { p: taker.player.name, gk: keeper?.player.name ?? '' }, kick);
     this.turnover(def, keeperIndex ?? 0, this.toZone(def, 0, 2), false);
   }
 
-  private scoreGoal(att: Side, scorerIndex: number, key: CommentaryKey): void {
+  /** detail はシュートの中身。得点の出来事では otherId をアシストした選手にする */
+  private scoreGoal(att: Side, scorerIndex: number, key: CommentaryKey, detail: MatchEventDetail): void {
     const def = other(att);
     const state = this.sides[att];
     const scorer = this.op(att, scorerIndex);
@@ -1284,14 +1301,16 @@ export class LiveMatch {
     scorer.stats.rating += 1.0;
 
     let text = commentary(this.rng, key, { p: scorer.player.name });
+    let assistId: string | undefined;
     if (this.lastPasser !== null && this.lastPasser !== scorerIndex) {
       const assister = this.op(att, this.lastPasser);
       assister.stats.assists++;
       assister.stats.rating += 0.5;
+      assistId = assister.player.id;
       text += `（アシスト：${assister.player.name}）`;
     }
     text += `　${this.goals[0]}-${this.goals[1]}`;
-    this.pushEvent(EVENT_TYPE[key], att, 3, text);
+    this.pushEvent(EVENT_TYPE[key], att, 3, text, { ...detail, otherId: assistId });
 
     for (const op of this.sides[def].players) {
       if (op.position === 'GK') op.stats.rating -= 0.3;
@@ -1368,13 +1387,18 @@ export class LiveMatch {
     return `${Math.floor(this.time / 60) + 1}'`;
   }
 
-  private say(key: CommentaryKey, side: Side | null, importance: 1 | 2 | 3, names: CommentaryNames): void {
+  private say(key: CommentaryKey, side: Side | null, importance: 1 | 2 | 3, names: CommentaryNames, detail: MatchEventDetail = {}): void {
     if (importance === 1 && !this.detailed) return;
-    this.pushEvent(EVENT_TYPE[key], side, importance, commentary(this.rng, key, names));
+    this.pushEvent(EVENT_TYPE[key], side, importance, commentary(this.rng, key, names), detail);
   }
 
-  private pushEvent(type: MatchEventType, side: Side | null, importance: 1 | 2 | 3, text: string): void {
-    this.eventList.push({ clock: this.time, minute: this.minuteLabel(), side, type, importance, text });
+  private pushEvent(type: MatchEventType, side: Side | null, importance: 1 | 2 | 3, text: string, detail: MatchEventDetail = {}): void {
+    this.eventList.push({ clock: this.time, minute: this.minuteLabel(), side, type, importance, text, ...detail });
+  }
+
+  /** マスの中心の位置 */
+  private point(zone: number): PitchPoint {
+    return { x: Math.floor(zone / COLS) + 0.5, y: (zone % COLS) + 0.5 };
   }
 
   // ---- 試合終了 ----
