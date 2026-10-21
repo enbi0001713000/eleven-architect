@@ -14,7 +14,7 @@ import { positionFit, positionRating } from './ratings';
 import { createRng, type Rng } from './rng';
 import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot, type RoleProfile } from './roles';
 import type {
-  AttributeKey, FormationName, MatchEvent, MatchEventType, MatchPlayerLine, MatchResult, Player,
+  AttributeKey, FormationName, MatchEvent, MatchEventType, MatchPlayerLine, MatchReadiness, MatchResult, Player,
   PlayerMatchStats, Position, Role, Side, Tactics, Team, TeamInstructions, TeamStats,
 } from './types';
 
@@ -61,6 +61,7 @@ export interface LivePlayer {
   role: Role;
   stamina: number;
   sentOff: boolean;
+  injured: boolean;
   stats: PlayerMatchStats;
 }
 
@@ -99,6 +100,13 @@ interface OnPitch {
   stamina: number;
   /** その日の出来（1.0 が普段どおり） */
   form: number;
+  /** 蓄積疲労による能力の倍率 */
+  fatigueFactor: number;
+  /** 戦術の熟成度（0〜1） */
+  familiarity: number;
+  /** ケガのしやすさの倍率（隠れ能力、蓄積疲労、完治前の出場） */
+  injuryRisk: number;
+  injured: boolean;
   sentOff: boolean;
   started: boolean;
   /** 結果に並べる順（先発は枠の順、途中出場は出た順） */
@@ -165,7 +173,7 @@ const EVENT_TYPE: Record<CommentaryKey, MatchEventType> = {
   shotBlocked: 'shotBlocked', penalty: 'penalty', penaltyMissed: 'penaltyMissed', penaltyWide: 'penaltyMissed',
   corner: 'corner', freeKick: 'freeKick', foul: 'foul', yellowCard: 'yellowCard',
   secondYellow: 'redCard', redCard: 'redCard', offside: 'offside',
-  substitution: 'substitution', tacticsAttack: 'tactics', tacticsDefend: 'tactics', tacticsChange: 'tactics',
+  substitution: 'substitution', tacticsAttack: 'tactics', tacticsDefend: 'tactics', tacticsChange: 'tactics', injury: 'injury',
   throughBall: 'buildUp', dribble: 'buildUp', tackle: 'buildUp', interception: 'buildUp', cross: 'buildUp',
 };
 
@@ -327,7 +335,7 @@ export class LiveMatch {
     const minute = this.currentMinute();
     outgoing.minuteOff = minute;
     state.subbedOff.push(outgoing);
-    const incoming = this.createOnPitch(benchEntry.player, outgoing.slot, outgoing.role, false);
+    const incoming = this.createOnPitch(benchEntry.player, outgoing.slot, outgoing.role, false, state.team.readiness?.[inId]);
     incoming.minuteOn = minute;
     incoming.order = 100 + state.subsUsed;
     state.players[index] = incoming;
@@ -388,7 +396,7 @@ export class LiveMatch {
       tactics: state.tactics,
       onPitch: state.players.map((op) => ({
         player: op.player, position: op.position, role: op.role, stamina: op.stamina,
-        sentOff: op.sentOff, stats: { ...op.stats },
+        sentOff: op.sentOff, injured: op.injured, stats: { ...op.stats },
       })),
       bench: state.bench.map((b) => ({ ...b })),
       subsUsed: state.subsUsed,
@@ -418,7 +426,7 @@ export class LiveMatch {
     };
     const players = team.lineup.map((id, i): OnPitch => {
       const slot = slots[i] as Slot;
-      const op = this.createOnPitch(findPlayer(id), slot, roleForSlot(team.tactics, i, slot.position), true);
+      const op = this.createOnPitch(findPlayer(id), slot, roleForSlot(team.tactics, i, slot.position), true, team.readiness?.[id]);
       op.order = i;
       return op;
     });
@@ -445,16 +453,33 @@ export class LiveMatch {
     return state;
   }
 
-  private createOnPitch(player: Player, slot: Slot, role: Role, started: boolean): OnPitch {
-    // 安定感が低いほど、その日の出来のブレが大きい。重要な試合では勝負強さが効く。
+  private createOnPitch(player: Player, slot: Slot, role: Role, started: boolean, readiness?: MatchReadiness): OnPitch {
+    // 安定感が低いほど、その日の出来のブレが大きい。重要な試合では勝負強さが効く。モラルも出来に響く。
     const spread = 0.02 + 0.08 * (1 - player.hidden.consistency / 20);
     const bigMatch = this.important ? 1 + (player.hidden.bigMatch - 10) * 0.005 : 1;
+    const morale = 1 + ((readiness?.morale ?? 60) - 60) * C.moralePerPoint;
+    const fatigue = readiness?.fatigue ?? 0;
     return {
       player, position: slot.position, slot, role, profile: ROLE_PROFILES[role],
-      fit: positionFit(player.position, slot.position), stamina: 100,
-      form: clamp(this.rng.normal(1, spread), 0.8, 1.2) * bigMatch, sentOff: false,
+      fit: positionFit(player.position, slot.position), stamina: clamp(readiness?.condition ?? 100, 20, 100),
+      form: clamp(this.rng.normal(1, spread), 0.8, 1.2) * bigMatch * morale,
+      fatigueFactor: 1 - (Math.max(0, fatigue - C.fatigueThreshold) / (100 - C.fatigueThreshold)) * C.fatigueMaxPenalty,
+      familiarity: clamp(readiness?.familiarity ?? 1, 0, 1),
+      injuryRisk: (0.5 + player.hidden.injuryProneness / 20) * (1 + fatigue / 60)
+        * (readiness?.carryingInjury ? C.injury.carryingMultiplier : 1),
+      injured: false, sentOff: false,
       started, order: 0, minuteOn: null, minuteOff: null, stats: emptyPlayerStats(),
     };
+  }
+
+  /** 声かけなどで、選手のその日の出来を変える（delta は +0.03 なら3%良くなる）。note があれば実況に残す */
+  boostForm(side: Side, deltas: Record<string, number>, note?: string): void {
+    for (const op of this.sides[side].players) {
+      const delta = deltas[op.player.id];
+      if (delta !== undefined) op.form = clamp(op.form * (1 + delta), 0.75, 1.3);
+    }
+    if (note) this.pushEvent('teamTalk', side, 2, note);
+    this.stepId++;
   }
 
   /** 新しいフォーメーションの枠に、ピッチ上の選手を適性の高い順に割り当てる */
@@ -506,10 +531,39 @@ export class LiveMatch {
     const minute = Math.floor(this.time / 60);
     for (const side of [0, 1] as const) {
       const state = this.sides[side];
-      if (!state.ai || this.half === 1) continue;
+      if (!state.ai) continue;
+      this.aiInjurySubstitution(side, state);
+      if (this.half === 1) continue;
       this.aiTactics(side, state, minute);
       this.aiSubstitutions(side, state, minute);
     }
+  }
+
+  /** ケガをした選手は、交代できるならすぐに代える */
+  private aiInjurySubstitution(side: Side, state: SideState): void {
+    for (const op of state.players) {
+      if (!op.injured || op.sentOff) continue;
+      const keeper = op.position === 'GK';
+      const available = state.bench.filter((b) => !b.used && (b.player.position === 'GK') === keeper);
+      const pool = available.length > 0 ? available : state.bench.filter((b) => !b.used);
+      if (pool.length === 0) return;
+      const best = pool.reduce((a, b) =>
+        positionRating(b.player, op.position) > positionRating(a.player, op.position) ? b : a);
+      this.substitute(side, op.player.id, best.player.id);
+    }
+  }
+
+  /** 選手がケガをする。プレーは続けられるが、能力は大きく下がる */
+  private injure(side: Side, op: OnPitch): void {
+    if (op.injured || op.sentOff) return;
+    op.injured = true;
+    op.stats.rating -= 0.2;
+    this.say('injury', side, 3, { p: op.player.name });
+    this.stepId++;
+  }
+
+  private maybeInjure(side: Side, op: OnPitch, chance: number): void {
+    if (!op.injured && this.rng.chance(chance * op.injuryRisk)) this.injure(side, op);
   }
 
   private aiTactics(side: Side, state: SideState, minute: number): void {
@@ -585,7 +639,10 @@ export class LiveMatch {
     // 能力の差がそのまま出すぎないよう、平均からの差を少し縮める（番狂わせが起きる余地を残す）
     const raw = op.player.attributes[key];
     const value = C.attributeCenter + (raw - C.attributeCenter) * C.attributeSpread;
-    return value * home * op.form * (0.72 + 0.28 * (op.stamina / 100)) * (0.85 + 0.15 * op.fit);
+    // 戦術の熟成度が低いと、判断力とポジショニングが下がる
+    const familiar = key === 'decisions' || key === 'positioning' || key === 'offTheBall' ? 1 - C.familiarityWeight * (1 - op.familiarity) : 1;
+    return value * home * op.form * (0.72 + 0.28 * (op.stamina / 100)) * (0.85 + 0.15 * op.fit)
+      * op.fatigueFactor * familiar * (op.injured ? C.injury.playingHurt : 1);
   }
 
   private defendScore(side: Side, op: OnPitch): number {
@@ -726,6 +783,7 @@ export class LiveMatch {
     this.sides[def].stats.tackles++;
     carrier.stats.rating -= 0.03;
     this.say('tackle', def, 1, { p: carrier.player.name, q: defender.player.name });
+    this.maybeInjure(att, carrier, C.injury.onTackle);
     this.turnover(def, defenderIndex, this.zone, true);
     return true;
   }
@@ -891,6 +949,7 @@ export class LiveMatch {
     this.sides[def].stats.tackles++;
     carrier.stats.rating -= 0.03;
     this.say('tackle', def, 1, { p: carrier.player.name, q: defender.player.name });
+    this.maybeInjure(att, carrier, C.injury.onTackle);
     this.turnover(def, defenderIndex, tz, true);
   }
 
@@ -1059,6 +1118,7 @@ export class LiveMatch {
     this.stoppage += 20;
     const names: CommentaryNames = { p: victim.player.name, q: fouler.player.name };
     this.say('foul', def, 1, names);
+    this.maybeInjure(att, victim, C.injury.onFoul);
 
     const f = this.frame(att, zone);
     if (this.rng.chance(C.fouls.straightRed)) {
@@ -1211,6 +1271,14 @@ export class LiveMatch {
         op.stamina = Math.max(0, op.stamina - drain * seconds / 60);
       }
     }
+    // 接触のないケガ（肉離れなど）。疲れているほど起きやすい
+    this.sides.forEach((state, sideIndex) => {
+      for (const op of state.players) {
+        if (op.sentOff || op.injured) continue;
+        const chance = C.injury.nonContactPerMinute * (seconds / 60) * (1 + (100 - op.stamina) / 60);
+        this.maybeInjure(sideIndex as Side, op, chance);
+      }
+    });
   }
 
   // ---- 実況 ----
@@ -1256,6 +1324,7 @@ export class LiveMatch {
         lines.push({
           side, player: op.player, position: op.position, role: op.role, stats: op.stats,
           started: op.started, minuteOn: op.minuteOn, minuteOff: op.minuteOff,
+          injured: op.injured, staminaEnd: Math.round(op.stamina),
         });
       }
     });
