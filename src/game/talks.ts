@@ -122,10 +122,11 @@ export function answerRequest(state: GameState, requestId: string, reply: Reques
 
 export type ManagerTalk = 'praise' | 'criticize' | 'expect';
 
-export const MANAGER_TALKS: { id: ManagerTalk; label: string; description: string }[] = [
-  { id: 'praise', label: '最近のプレーを褒める', description: '調子の良い選手に効く。悪いときに褒めても響かない' },
-  { id: 'criticize', label: '最近のプレーについて注意する', description: '気の強い選手は奮起するが、そうでない選手は落ち込む' },
-  { id: 'expect', label: '期待していると伝える', description: 'プレッシャーに強い選手ほど意気に感じる' },
+/** say は会話画面で監督が話すセリフ */
+export const MANAGER_TALKS: { id: ManagerTalk; label: string; description: string; say: string }[] = [
+  { id: 'praise', label: '最近のプレーを褒める', description: '調子の良い選手に効く。悪いときに褒めても響かない', say: '最近のプレー、とても良いぞ。この調子で頼む。' },
+  { id: 'criticize', label: '最近のプレーについて注意する', description: '気の強い選手は奮起するが、そうでない選手は落ち込む', say: '最近のプレーには満足していない。もっとできるはずだ。' },
+  { id: 'expect', label: '期待していると伝える', description: 'プレッシャーに強い選手ほど意気に感じる', say: '君には大いに期待している。チームを引っ張ってほしい。' },
 ];
 
 export function talkCooldownLeft(state: GameState, player: PlayerRecord): number {

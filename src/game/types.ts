@@ -73,6 +73,36 @@ export interface Ledger {
 /** スタジアムの席の種類 */
 export type SeatKind = 'goal' | 'back' | 'main' | 'vip';
 
+/** スポンサーの枠（ユニフォームの胸、背中、袖、パンツ、スタジアムの命名権、オフィシャルパートナー） */
+export type SponsorSlot = 'shirt' | 'back' | 'sleeve' | 'shorts' | 'stadium' | 'partners';
+/** スポンサー契約の種類（長期、標準、1年の高額、成績連動） */
+export type SponsorDealKind = 'long' | 'standard' | 'short' | 'performance';
+
+export interface SponsorDeal {
+  slot: SponsorSlot;
+  company: string;
+  kind: SponsorDealKind;
+  /** 年額 */
+  annual: number;
+  /** この年の12月まで */
+  endYear: number;
+  /** 成績連動の契約：3位以内に入った年に、別にもらえる額 */
+  bonus: number;
+  /** 次の年から始まる、もう結んだ契約 */
+  next?: SponsorDeal;
+}
+
+/** 契約が切れる枠に届いた提案（自分のクラブだけ） */
+export interface SponsorOffer {
+  id: string;
+  slot: SponsorSlot;
+  company: string;
+  kind: SponsorDealKind;
+  annual: number;
+  years: number;
+  bonus: number;
+}
+
 export interface Loan {
   id: string;
   /** 借りた額と、残り */
@@ -120,6 +150,8 @@ export interface Budget {
   transfers: number;
   /** 移籍予算のうち使った額（フェーズ4） */
   transfersSpent: number;
+  /** オーナーに頼んで、手元のお金から増やしてもらった額 */
+  extra: number;
 }
 
 export interface ClubFinance {
@@ -131,7 +163,10 @@ export interface ClubFinance {
   months: FinanceMonth[];
   /** 過去の年度（1月〜12月）の決算 */
   history: FinanceYear[];
-  sponsor: { name: string; annual: number; endYear: number };
+  /** スポンサー契約（枠ごとに1社） */
+  sponsors: SponsorDeal[];
+  /** 契約が切れる枠への提案（自分のクラブだけ。12月1日に届き、選ぶと消える） */
+  sponsorOffers: SponsorOffer[];
   /** 地元企業の力（0.85〜1.15）。スポンサー収入に効く */
   localStrength: number;
   /** 今年のリーグからの配分（年額） */
@@ -266,7 +301,8 @@ export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'med
 
 export type InboxAction =
   | { kind: 'playerRequest'; requestId: string }
-  | { kind: 'press'; fixtureId: string };
+  | { kind: 'press'; fixtureId: string }
+  | { kind: 'sponsorOffer' };
 
 /** 受信箱の知らせ（要件定義書「時間の進め方」） */
 export interface InboxMessage {
@@ -286,7 +322,14 @@ export interface InboxMessage {
   action?: InboxAction;
   /** 返事をした（または期限が過ぎた） */
   resolved?: boolean;
+  /** 会話画面で、差出人が話すセリフ（なければ本文を1行ずつ話す） */
+  lines?: string[];
+  /** 会話画面で、話のあとに出す返事の種類 */
+  topic?: MessageTopic;
 }
+
+/** 会話画面で開く知らせの種類（オーナーの予算、お金が足りない、スポンサーの提案） */
+export type MessageTopic = 'budget' | 'shortfall' | 'sponsorOffer';
 
 /** 選手からの申し出（フェーズ2は出場機会への不満。契約と移籍の希望はフェーズ4） */
 export interface PlayerRequest {

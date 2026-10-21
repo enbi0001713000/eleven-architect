@@ -1,21 +1,23 @@
-// 財務：収支、予算の配分、チケットの値段、借り入れ、過去の決算（要件定義書「フェーズ3：財務とオーナー」）
+// 財務：収支、予算の配分、スポンサー、チケットの値段、借り入れ、過去の決算（要件定義書「フェーズ3：財務とオーナー」）
+// オーナーへの相談（予算の増額、借り入れ）とスポンサーの提案は、会話画面で行う。
 
 import { useState } from 'react';
 import {
-  clampTicketPrice, debtOf, expectedGate, listPrice, loanDecision, netResult, payrollOf, priceLevel, repayLoan, requestLoan,
-  setWageBudget, totalExpense, totalIncome, yearToDate, yenText, type LoanAnswer,
+  budgetIncreaseRoom, clampTicketPrice, debtOf, expectedGate, listPrice, loanDecision, netResult, payrollOf, priceLevel, repayLoan,
+  requestLoan, setWageBudget, sponsorIncome, totalExpense, totalIncome, yearToDate, yenText,
 } from '../../game/finance';
-import { EXPENSE_LABEL, FINANCE, INCOME_LABEL, SEAT_KINDS, SEATS } from '../../game/financeBalance';
+import { EXPENSE_LABEL, FINANCE, INCOME_LABEL, SEAT_KINDS, SEATS, SPONSOR_DEALS, SPONSOR_SLOTS } from '../../game/financeBalance';
 import type { Club, ExpenseKind, GameState, IncomeKind, Ledger, SeatKind } from '../../game/types';
 import { BalanceChart, type BalancePoint } from '../components/BalanceChart';
 import { ClubLink, Panel } from '../components/bits';
 import { formatDate } from '../format';
 import { store, useGame } from '../store';
 
-type Tab = 'overview' | 'budget' | 'tickets' | 'loans' | 'history';
+type Tab = 'overview' | 'budget' | 'sponsors' | 'tickets' | 'loans' | 'history';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: '収支' },
   { key: 'budget', label: '予算' },
+  { key: 'sponsors', label: 'スポンサー' },
   { key: 'tickets', label: 'チケット' },
   { key: 'loans', label: '借り入れ' },
   { key: 'history', label: '過去の決算' },
@@ -29,9 +31,9 @@ const LATER: ReadonlySet<string> = new Set(['income.transfers', 'expense.transfe
 const Signed = ({ yen }: { yen: number }) => <span className={yen < 0 ? 'tone-low' : ''}>{yenText(yen)}</span>;
 const monthText = (month: string): string => `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
 
-export function Finance() {
+export function Finance({ initialTab }: { initialTab?: Tab }) {
   const game = useGame();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
   const club = game.clubs[game.manager.clubId];
   if (!club) return null;
   return (
@@ -47,6 +49,7 @@ export function Finance() {
       <Summary game={game} club={club} />
       {tab === 'overview' && <Overview game={game} club={club} />}
       {tab === 'budget' && <BudgetPanel game={game} club={club} />}
+      {tab === 'sponsors' && <Sponsors game={game} club={club} />}
       {tab === 'tickets' && <Tickets game={game} club={club} />}
       {tab === 'loans' && <Loans club={club} />}
       {tab === 'history' && <History club={club} />}
@@ -149,14 +152,14 @@ function Overview({ game, club }: { game: GameState; club: Club }) {
         </Panel>
         <Panel title="収入のもと">
           <dl className="facts">
-            <dt>スポンサー</dt><dd>{fin.sponsor.name}（年額{yenText(fin.sponsor.annual)}、{fin.sponsor.endYear}年まで）</dd>
+            <dt>スポンサー</dt><dd>{fin.sponsors.length}社、年額の合計{yenText(sponsorIncome(fin))}（スポンサーのタブで見られる）</dd>
             <dt>リーグからの配分</dt><dd>年額{yenText(fin.broadcast)}（前年の順位で決まる）</dd>
             <dt>クラブの運営費</dt><dd>年額{yenText(fin.operations)}</dd>
             <dt>クラブの評判</dt><dd>{club.reputation}（高いほど、スポンサーの条件と観客が良くなる）</dd>
             <dt>ファンの数</dt><dd>約{club.fans.toLocaleString('ja-JP')}人</dd>
           </dl>
           <p className="muted small">
-            スポンサーの契約は、終わると新しい年の1月1日に、その時の評判で結び直します。
+            スポンサーは枠ごとに契約し、切れる枠には12月1日に提案が届きます。
             優勝すると賞金{yenText(FINANCE.prize[0] ?? 0)}、2位{yenText(FINANCE.prize[1] ?? 0)}、3位{yenText(FINANCE.prize[2] ?? 0)}。
           </p>
         </Panel>
@@ -191,6 +194,7 @@ function RecentGates({ game, club }: { game: GameState; club: Club }) {
 function BudgetPanel({ game, club }: { game: GameState; club: Club }) {
   const budget = club.finance.budget;
   const payroll = payrollOf(game, club.id);
+  const room = budgetIncreaseRoom(game, club);
   const top = club.playerIds.map((id) => game.players[id]).filter((p) => p !== undefined)
     .sort((a, b) => (b.contract?.salary ?? 0) - (a.contract?.salary ?? 0)).slice(0, 10);
   const change = (wages: number) => store.update((g) => {
@@ -210,6 +214,15 @@ function BudgetPanel({ game, club }: { game: GameState; club: Club }) {
           <button type="button" className="secondary small" onClick={() => change(budget.wages - 1e8)}>年俸予算を1億円減らす</button>
           <button type="button" className="secondary small" onClick={() => change(budget.wages + 1e8)}>年俸予算を1億円増やす</button>
         </div>
+        <div className="button-row">
+          <button type="button" className="primary" onClick={() => store.navigate({ name: 'conversation', topic: 'budgetIncrease' })}>
+            オーナーに予算の増額を頼む
+          </button>
+          <span className="muted small">
+            {room > 0 ? `貯めたお金から、今年はあと${yenText(room)}まで足してもらえます。` : '今は手元のお金に余裕がないので、増やしてもらえません。'}
+            {budget.extra > 0 ? `（今年はもう${yenText(budget.extra)}足してもらった）` : ''}
+          </span>
+        </div>
         <dl className="facts" style={{ marginTop: 12 }}>
           <dt>今の年俸の合計</dt><dd>{yenText(payroll)}（年俸予算の{budget.wages > 0 ? Math.round(payroll / budget.wages * 100) : 0}%）</dd>
           <dt>年俸予算の残り</dt><dd><Signed yen={budget.wages - payroll} /></dd>
@@ -219,6 +232,7 @@ function BudgetPanel({ game, club }: { game: GameState; club: Club }) {
         <p className="muted small">
           年俸予算を超える契約は結べません。移籍予算は、フェーズ4で選手を獲るときの移籍金に使います。
           予算は毎年1月1日に、見込みの収支と手元のお金からオーナーが決め直します。
+          黒字を貯めておけば、オーナーに頼んで予算を増やしてもらい、他クラブの主力に高い年俸を出すこともできます（フェーズ4）。
         </p>
       </Panel>
       <Panel title="年俸の高い選手">
@@ -308,15 +322,18 @@ function Loans({ club }: { club: Club }) {
   const choices = Array.from({ length: Math.floor(room / 1e8) }, (_, i) => (i + 1) * 1e8);
   const [amount, setAmount] = useState<number>(choices[0] ?? 0);
   const [months, setMonths] = useState<number>(FINANCE.loanTerms[1] ?? 24);
-  const [answer, setAnswer] = useState<LoanAnswer | null>(null);
   const rate = FINANCE.loanRate[club.size];
   const preview = amount > 0 ? loanDecision(club, amount) : null;
+  /** 申請すると、オーナーとの会話で返事を聞く */
   const apply = () => {
-    let result: LoanAnswer | null = null;
+    let result = { approved: false, reason: '' };
     store.update((g) => {
       result = requestLoan(g, club.id, amount, months);
     });
-    setAnswer(result);
+    store.navigate({
+      name: 'conversation', topic: 'loan', amount, months, approved: result.approved, reason: result.reason,
+      rate, monthly: Math.ceil(amount / months),
+    });
   };
   const repay = (id: string) => store.update((g) => {
     repayLoan(g, club.id, id);
@@ -352,12 +369,12 @@ function Loans({ club }: { club: Club }) {
           <>
             <div className="toolbar">
               <label className="inline">借りる額
-                <select value={amount} onChange={(e) => { setAmount(Number(e.target.value)); setAnswer(null); }}>
+                <select value={amount} onChange={(e) => setAmount(Number(e.target.value))}>
                   {choices.map((c) => <option key={c} value={c}>{yenText(c)}</option>)}
                 </select>
               </label>
               <label className="inline">返す期間
-                <select value={months} onChange={(e) => { setMonths(Number(e.target.value)); setAnswer(null); }}>
+                <select value={months} onChange={(e) => setMonths(Number(e.target.value))}>
                   {FINANCE.loanTerms.map((m) => <option key={m} value={m}>{m}か月</option>)}
                 </select>
               </label>
@@ -369,16 +386,47 @@ function Loans({ club }: { club: Club }) {
             </dl>
             {preview && !preview.approved && <div className="warning small">{preview.reason}</div>}
             <div className="button-row">
-              <button type="button" className="primary" disabled={!preview?.approved} onClick={apply}>申請する</button>
+              <button type="button" className="primary" disabled={!preview?.approved} onClick={apply}>オーナーに申請する</button>
             </div>
           </>
         )}
-        {answer && (answer.approved
-          ? <p className="notice">オーナーが借り入れを認めました。手元のお金に入りました。</p>
-          : <p className="error">認められませんでした：{answer.reason}</p>)}
         <p className="muted small">借りられる額の上限は、クラブの規模で決まります（このクラブは{yenText(limit)}）。前の年が赤字だと、上限の半分までしか認められません。</p>
       </Panel>
     </div>
+  );
+}
+
+function Sponsors({ game, club }: { game: GameState; club: Club }) {
+  const fin = club.finance;
+  const pending = fin.sponsorOffers.length > 0;
+  return (
+    <Panel title={`スポンサー（${fin.sponsors.length}社、年額の合計${yenText(sponsorIncome(fin))}）`}
+      actions={pending ? <button type="button" className="primary small" onClick={() => store.navigate({ name: 'conversation', topic: 'sponsor' })}>営業担当と話す（提案を選ぶ）</button> : undefined}>
+      {pending && <div className="warning small">来年からの提案が届いています。12月31日までに選んでください（選ばなければ、標準の契約になります）。</div>}
+      <table className="data-table compact">
+        <thead>
+          <tr><th>枠</th><th>会社</th><th>契約</th><th className="num">年額</th><th>期限</th><th className="num">3位以内の上乗せ</th><th>来年から</th></tr>
+        </thead>
+        <tbody>
+          {fin.sponsors.map((d) => (
+            <tr key={d.slot}>
+              <td>{SPONSOR_SLOTS[d.slot].label}</td>
+              <td>{d.company}</td>
+              <td>{SPONSOR_DEALS[d.kind].label}</td>
+              <td className="num">{yenText(d.annual)}</td>
+              <td>{d.endYear}年まで{d.endYear === Number(game.date.slice(0, 4)) && !d.next ? <span className="tag tag-warn" style={{ marginLeft: 6 }}>今年まで</span> : null}</td>
+              <td className="num">{d.bonus > 0 ? yenText(d.bonus) : '—'}</td>
+              <td>{d.next ? `${d.next.company}（${SPONSOR_DEALS[d.next.kind].label}、年額${yenText(d.next.annual)}）` : ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small">
+        年額は、クラブの評判が高いほど大きくなります。契約が切れる枠には、12月1日に営業担当から提案が届きます。
+        1年の高額契約は年額が高いけれど毎年結び直し、長期の契約は年額が少し低い代わりに、評判が下がっても3年は変わりません。
+        成績連動の契約は、3位以内に入った年に上乗せがあります。オフィシャルパートナーは、まとめて自動で結び直します。
+      </p>
+    </Panel>
   );
 }
 

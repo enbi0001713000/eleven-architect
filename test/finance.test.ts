@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { simulateMatch } from '../src/engine/match';
 import type { MatchResult } from '../src/engine/types';
 import {
-  debtOf, expectedGate, gateFor, listPrice, loanDecision, netResult, payrollOf, renewalFactor, repayLoan, requestLoan,
-  setWageBudget, totalIncome, yearToDate,
+  budgetIncreaseRoom, chooseSponsorOffer, debtOf, expectedGate, gateFor, listPrice, loanDecision, netResult, payrollOf, renewalFactor,
+  repayLoan, requestBudgetIncrease, requestLoan, seasonEndMoney, setWageBudget, sponsorIncome, totalIncome, yearToDate,
 } from '../src/game/finance';
 import { FINANCE, SEAT_KINDS } from '../src/game/financeBalance';
 import { advanceDay, todaysFixture } from '../src/game/progress';
@@ -33,7 +33,8 @@ describe('新しいゲームのお金', () => {
     for (const club of Object.values(state.clubs)) {
       const fin = club.finance;
       expect(fin.balance).toBeGreaterThan(0);
-      expect(fin.sponsor.annual).toBeGreaterThan(0);
+      expect(fin.sponsors.map((d) => d.slot)).toEqual(['shirt', 'back', 'sleeve', 'shorts', 'stadium', 'partners']);
+      expect(new Set(fin.sponsors.map((d) => d.company)).size).toBe(6);
       expect(fin.broadcast).toBeGreaterThanOrEqual(FINANCE.broadcastBase);
       expect(fin.months.map((m) => m.month)).toEqual(['2027-01']);
       expect(fin.budget.year).toBe(2027);
@@ -44,7 +45,7 @@ describe('新しいゲームのお金', () => {
     // 規模が大きいほど、スポンサーと観客が多い
     const bySize = (size: string) => Object.values(state.clubs).filter((c) => c.size === size);
     const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
-    expect(mean(bySize('large').map((c) => c.finance.sponsor.annual))).toBeGreaterThan(mean(bySize('small').map((c) => c.finance.sponsor.annual)) * 2);
+    expect(mean(bySize('large').map((c) => sponsorIncome(c.finance)))).toBeGreaterThan(mean(bySize('small').map((c) => sponsorIncome(c.finance))) * 2);
     expect(mean(bySize('large').map((c) => expectedGate(c).total))).toBeGreaterThan(mean(bySize('small').map((c) => expectedGate(c).total)) * 1.8);
     // オーナーからの予算の知らせが届いている
     expect(state.inbox.some((m) => m.category === 'finance' && m.subject.includes('予算'))).toBe(true);
@@ -95,7 +96,7 @@ describe('月と年度の締め', () => {
     const fin = state.clubs[state.manager.clubId]!.finance;
     expect(fin.months.map((m) => m.month)).toEqual(['2027-01', '2027-02']);
     const feb = fin.months[1]!.ledger;
-    expect(feb.income.sponsor).toBeCloseTo(fin.sponsor.annual / 12, -1);
+    expect(feb.income.sponsor).toBeCloseTo(sponsorIncome(fin) / 12, -1);
     expect(feb.expense.operations).toBeCloseTo(fin.operations / 12, -1);
     expect(state.inbox.some((m) => m.subject.startsWith('2月の収支'))).toBe(true);
     expect(totalIncome(yearToDate(fin))).toBeGreaterThan(totalIncome(feb));
@@ -135,6 +136,66 @@ describe('予算', () => {
     expect(renewalFactor(club, 9e8, 2e8)).toBeCloseTo(FINANCE.renewalFactorRange[0]);
     expect(renewalFactor(club, 8.5e8, 1.5e8)).toBeCloseTo(1);
     expect(renewalFactor(club, 2e8, 1e8)).toBe(1);
+  });
+});
+
+describe('スポンサー', () => {
+  it('12月1日に、今年で切れる枠へ提案が届く。選んだ契約は1月から始まり、選ばなかった枠は標準の契約になる', () => {
+    const state = newGame();
+    const club = state.clubs[state.manager.clubId]!;
+    const fin = club.finance;
+    // 胸と背中を今年で切れるようにする
+    for (const d of fin.sponsors) d.endYear = d.slot === 'shirt' || d.slot === 'back' ? 2027 : 2029;
+    state.date = '2027-11-30';
+    advanceDay(state);
+    expect(new Set(fin.sponsorOffers.map((o) => o.slot))).toEqual(new Set(['shirt', 'back']));
+    expect(fin.sponsorOffers.filter((o) => o.slot === 'shirt')).toHaveLength(3);
+    const message = state.inbox.find((m) => m.topic === 'sponsorOffer');
+    expect(message?.important).toBe(true);
+    const pick = fin.sponsorOffers.find((o) => o.slot === 'shirt')!;
+    const signed = chooseSponsorOffer(state, pick.id)!;
+    expect(signed.company).toBe(pick.company);
+    expect(signed.endYear).toBe(2027 + pick.years);
+    expect(fin.sponsorOffers.every((o) => o.slot === 'back')).toBe(true);
+    state.date = '2027-12-31';
+    advanceDay(state);
+    const shirt = fin.sponsors.find((d) => d.slot === 'shirt')!;
+    const back = fin.sponsors.find((d) => d.slot === 'back')!;
+    expect(shirt.company).toBe(pick.company);
+    expect(back.kind).toBe('standard');
+    expect(back.endYear).toBe(2029);
+    expect(fin.sponsorOffers).toEqual([]);
+    expect(message?.resolved).toBe(true);
+  });
+
+  it('成績連動の契約は、3位以内に入った年に上乗せがある', () => {
+    const state = newGame();
+    const club = state.clubs[state.manager.clubId]!;
+    const deal = club.finance.sponsors[0]!;
+    deal.kind = 'performance';
+    deal.bonus = 2e8;
+    const before = club.finance.current.income.sponsor;
+    seasonEndMoney(state, [{ clubId: club.id, position: 2 }]);
+    expect(club.finance.current.income.sponsor).toBe(before + 2e8);
+  });
+});
+
+describe('予算の増額', () => {
+  it('手元のお金に余裕があれば、オーナーが年俸予算や移籍予算を増やしてくれる。余裕を超える額は断られる', () => {
+    const state = newGame();
+    const club = state.clubs[state.manager.clubId]!;
+    club.finance.balance = 50e8;
+    const room = budgetIncreaseRoom(state, club);
+    expect(room).toBeGreaterThan(0);
+    expect(requestBudgetIncrease(state, club.id, room + 1e8, 'wages').approved).toBe(false);
+    const wages = club.finance.budget.wages;
+    const total = club.finance.budget.total;
+    expect(requestBudgetIncrease(state, club.id, 2e8, 'wages').approved).toBe(true);
+    expect(club.finance.budget.wages).toBe(wages + 2e8);
+    expect(club.finance.budget.total).toBe(total + 2e8);
+    expect(budgetIncreaseRoom(state, club)).toBe(room - 2e8);
+    club.finance.balance = 0;
+    expect(requestBudgetIncrease(state, club.id, 1e8, 'transfers').approved).toBe(false);
   });
 });
 

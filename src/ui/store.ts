@@ -3,7 +3,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { advanceDay, advanceToNextEvent } from '../game/progress';
-import type { GameState } from '../game/types';
+import type { GameState, InboxMessage } from '../game/types';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { writeSave } from './storage';
 
@@ -25,7 +25,21 @@ export type Screen =
   | { name: 'talk'; playerId: string; requestId?: string }
   | { name: 'meeting' }
   | { name: 'press'; fixtureId: string }
-  | { name: 'finance' }
+  | { name: 'finance'; tab?: 'overview' | 'budget' | 'sponsors' | 'tickets' | 'loans' | 'history' }
+  | {
+    name: 'conversation';
+    /** 受信箱の知らせを会話で見る */
+    messageId?: string;
+    /** 財務の画面からの相談 */
+    topic?: 'budgetIncrease' | 'loan' | 'sponsor';
+    /** 借り入れの相談の中身と、オーナーの返事 */
+    amount?: number;
+    months?: number;
+    approved?: boolean;
+    reason?: string;
+    rate?: number;
+    monthly?: number;
+  }
   | { name: 'later'; title: string; phase: number };
 
 class Store {
@@ -101,14 +115,36 @@ class Store {
     this.scheduleSave();
   }
 
-  /** 「次の出来事まで進める」。大事な知らせが届いたら受信箱を、試合の日ならホームを開く */
+  /**
+   * 大事な知らせのうち、会話画面で開くもの（オーナーの予算、お金が足りない、スポンサーの提案、選手からの申し出）。
+   * 設定で切ってあれば null
+   */
+  conversationFor(message: InboxMessage | undefined): Screen | null {
+    if (!message || !this.settings.conversations) return null;
+    if (message.action?.kind === 'playerRequest' && !message.resolved && message.playerId) {
+      return { name: 'talk', playerId: message.playerId, requestId: message.action.requestId };
+    }
+    return message.topic ? { name: 'conversation', messageId: message.id } : null;
+  }
+
+  /** 届いた大事な知らせを開く。会話で見る知らせがあれば会話画面を（戻ると受信箱）、なければ受信箱を */
+  private openArrived(since: number): void {
+    const arrived = (this.game?.inbox ?? []).filter((m) => Number(m.id.slice(1)) >= since && m.important);
+    const talk = arrived.map((m) => ({ m, screen: this.conversationFor(m) })).find((t) => t.screen !== null);
+    this.open({ name: 'inbox', messageId: talk?.m.id });
+    if (talk?.screen) this.navigate(talk.screen);
+  }
+
+  /** 「次の出来事まで進める」。大事な知らせが届いたら受信箱（か会話画面）を、試合の日ならホームを開く */
   advance(): void {
     if (!this.game || this.locked) return;
+    const before = this.game.nextMessageNumber;
     let reason = 'match';
     this.update((g) => {
       reason = advanceToNextEvent(g).reason;
     });
-    this.open(reason === 'message' ? { name: 'inbox' } : { name: 'home' });
+    if (reason === 'message') this.openArrived(before);
+    else this.open({ name: 'home' });
   }
 
   /** 1日だけ進める */
@@ -117,7 +153,7 @@ class Store {
     const before = this.game.nextMessageNumber;
     this.update((g) => advanceDay(g));
     const important = this.game.inbox.some((m) => Number(m.id.slice(1)) >= before && m.important);
-    if (important) this.open({ name: 'inbox' });
+    if (important) this.openArrived(before);
   }
 
   updateSettings(change: Partial<Settings>): void {

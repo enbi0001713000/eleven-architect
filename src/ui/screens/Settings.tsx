@@ -1,4 +1,4 @@
-// 設定：観戦の速さ、実況の表示（遊ぶ人ごとにブラウザへ保存）
+// 設定：観戦の速さ、実況の表示、会話画面（遊ぶ人ごとにブラウザへ保存）
 
 import type { CommentaryMode, MatchSpeed } from '../settings';
 import { store, useStore } from '../store';
@@ -27,6 +27,10 @@ export function Settings() {
               <option value="key">主な場面だけ</option>
               <option value="all">すべて</option>
             </select>
+          </label>
+          <label className="inline">
+            <input type="checkbox" checked={s.settings.conversations} onChange={(e) => store.updateSettings({ conversations: e.target.checked })} />
+            大事な出来事（オーナーの予算、スポンサーの提案、選手の申し出など）を会話画面で開く
           </label>
         </div>
       </section>

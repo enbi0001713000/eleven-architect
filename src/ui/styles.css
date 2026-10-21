@@ -302,3 +302,26 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 @media (max-width: 1100px) {
   .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* 会話画面 */
+.conversation { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; max-width: 860px; }
+.conv-header { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.conv-skip { margin-left: auto; }
+.conv-log { padding: 14px; display: flex; flex-direction: column; gap: 10px; min-height: 200px; max-height: 56vh; overflow-y: auto; cursor: pointer; }
+.conv-line { display: flex; gap: 10px; align-items: flex-start; max-width: 85%; }
+.conv-them { align-self: flex-start; }
+.conv-me { align-self: flex-end; flex-direction: row-reverse; }
+.conv-bubble { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; line-height: 1.6; }
+.conv-me .conv-bubble { background: #1c3550; border-color: var(--accent-strong); }
+.conv-name { font-size: 0.75rem; color: var(--muted); }
+.conv-note { align-self: center; color: var(--muted); font-size: 0.9em; margin: 2px 0; text-align: center; max-width: 85%; }
+.conv-caret { opacity: 0.6; margin-left: 1px; }
+.conv-hint { align-self: center; margin: 0; }
+.conv-choices { padding: 0 14px 14px; }
+.conversation .button-row { padding: 0 14px 14px; margin-top: 0; }
+.avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; flex: none; color: #fff; font-weight: 700; background: #4a5563; border: 2px solid var(--panel); }
+.avatar-owner { background: #9a7b2f; }
+.avatar-staff { background: #2f7f7a; }
+.avatar-press { background: #5b6472; }
+.conv-continued { margin-top: -4px; }
+.avatar-space { width: 32px; flex: none; }
