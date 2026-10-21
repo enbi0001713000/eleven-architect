@@ -121,7 +121,7 @@ export const ENGINE_CONFIG = {
   /** モラル1ポイントあたりの、その日の出来への影響（60が基準） */
   moralePerPoint: 0.001,
   /** 蓄積疲労がこの値を超えると能力が下がり始める */
-  fatigueThreshold: 40,
+  fatigueThreshold: 35,
   /** 蓄積疲労が100のときの能力の低下 */
   fatigueMaxPenalty: 0.1,
   /** 戦術の熟成度が0のときの、判断力とポジショニングの低下 */

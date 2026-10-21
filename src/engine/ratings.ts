@@ -38,6 +38,11 @@ export function positionRating(player: Player, position: Position): number {
   return Math.round(total * positionFit(player.position, position) * 10) / 10;
 }
 
+/** そのポジションの総合力に効く能力と、その重み */
+export function positionWeights(position: Position): Partial<Record<AttributeKey, number>> {
+  return WEIGHTS[position];
+}
+
 /** 本来のポジションでの総合力 */
 export function overallRating(player: Player): number {
   return positionRating(player, player.position);

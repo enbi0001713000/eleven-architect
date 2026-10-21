@@ -7,20 +7,22 @@ import { overallRating } from '../engine/ratings';
 import { createRng, type Rng } from '../engine/rng';
 import type { FormationName, Position, TeamInstructions } from '../engine/types';
 import { CLUB_SEEDS, type ClubSeed } from './clubData';
+import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
+import { addMessage } from './inbox';
 import { makeSchedule, seasonDates } from './schedule';
 import { autoSelect } from './selection';
 import type { Club, ClubSize, EmblemSpec, GameState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 /** 1クラブ28人の内訳 */
-const SQUAD_TEMPLATE: [Position, number][] = [
+export const SQUAD_TEMPLATE: [Position, number][] = [
   ['GK', 3], ['CB', 5], ['SB', 4], ['DM', 2], ['CM', 4], ['AM', 2], ['WM', 2], ['W', 3], ['FW', 3],
 ];
 
 /** 規模ごとの数値。売上の幅は要件定義書「金額の目安」の案に合わせている */
-const SIZE_PROFILE: Record<ClubSize, {
+export const SIZE_PROFILE: Record<ClubSize, {
   level: [number, number]; reputation: [number, number]; capacity: [number, number];
   fans: [number, number]; revenue: [number, number]; salary: number;
 }> = {
@@ -55,7 +57,7 @@ export function salaryFor(overall: number, factor: number): number {
   return Math.max(480e4, Math.round((yen * factor) / 1e5) * 1e5);
 }
 
-function emptySeason(): PlayerRecord['season'] {
+export function emptySeason(): PlayerRecord['season'] {
   return { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, ratingTotal: 0, ratingCount: 0 };
 }
 
@@ -124,15 +126,17 @@ export function createWorld(seed: number): GameState {
           ...base,
           clubId: clubSeed.id,
           squadNumber: squadNumber++,
-          contract: { salary: salaryFor(overallRating(base), profile.salary), endYear: START_YEAR + rng.int(0, 3) },
+          contract: { salary: salaryFor(overallRating(base), profile.salary), endYear: START_YEAR + rng.int(0, 3), role: 'backup' },
           season: emptySeason(),
           discipline: { yellowAccumulation: 0, suspendedMatches: 0 },
+          ...playerPhase2Fields(),
         };
         players[record.id] = record;
         playerIds.push(record.id);
       }
     }
     const stadiumSuffix = rng.pick(['スタジアム', 'フットボールパーク', '総合運動公園競技場']);
+    const tactics = { formation: rng.pick(FORMATION_CHOICES), instructions: randomInstructions(rng, size) };
     clubs[clubSeed.id] = {
       id: clubSeed.id,
       name: clubSeed.name,
@@ -150,8 +154,10 @@ export function createWorld(seed: number): GameState {
       rivalId: null,
       managerName: `${rng.pick(SURNAMES)} ${rng.pick(GIVEN_NAMES)}`,
       playerIds,
-      tactics: { formation: rng.pick(FORMATION_CHOICES), instructions: randomInstructions(rng, size) },
+      tactics,
       selection: null,
+      training: defaultClubTraining(),
+      familiarity: defaultFamiliarity(tactics.formation, tactics.instructions),
     };
   });
 
@@ -182,7 +188,7 @@ export function createWorld(seed: number): GameState {
     base.name = uniqueName(base.name, base.nationality);
     players[base.id] = {
       ...base, clubId: null, squadNumber: null, contract: null, season: emptySeason(),
-      discipline: { yellowAccumulation: 0, suspendedMatches: 0 },
+      discipline: { yellowAccumulation: 0, suspendedMatches: 0 }, ...playerPhase2Fields(),
     };
     overseasPool.push(base.id);
   }
@@ -191,7 +197,7 @@ export function createWorld(seed: number): GameState {
   const start = new Date(`${firstMatch}T00:00:00Z`);
   start.setUTCDate(start.getUTCDate() - 7);
 
-  return {
+  const state: GameState = {
     version: STATE_VERSION,
     seed,
     createdAt: new Date().toISOString(),
@@ -203,7 +209,17 @@ export function createWorld(seed: number): GameState {
     overseasPool,
     fixtures: makeSchedule(ids, rng, START_YEAR),
     nextPlayerNumber: counter + 1,
+    inbox: [],
+    nextMessageNumber: 1,
+    requests: [],
+    promises: [],
+    history: [],
+    fanMood: 50,
+    managerRelations: {},
+    lastTeamMeeting: null,
   };
+  for (const id of ids) assignSquadRoles(state, id);
+  return state;
 }
 
 /** 監督の名前と担当するクラブを決めて、ゲームを始められる状態にする */
@@ -212,7 +228,15 @@ export function startNewGame(world: GameState, managerName: string, clubId: stri
   if (!club) throw new Error(`クラブ ${clubId} がありません`);
   club.managerName = managerName;
   club.selection = autoSelect(world, clubId, club.tactics.formation);
-  return { ...world, manager: { name: managerName, clubId } };
+  const state: GameState = { ...world, manager: { name: managerName, clubId } };
+  addMessage(state, {
+    category: 'club', from: 'クラブ会長', important: false,
+    subject: `${club.name}へようこそ`,
+    body: `${managerName}監督、${club.name}へようこそ。今シーズンの目標は「${expectationOf(club)}」です。\n`
+      + '開幕まで1週間あります。練習の方針と戦術を決めて、チームミーティングで目標を共有しておいてください。\n'
+      + '画面右上の「次の出来事まで進める」で時間が進みます。試合の日や、大事な知らせが届いた日に止まります。',
+  });
+  return state;
 }
 
 /** 新しいゲームの画面で使う、クラブの前評判 */

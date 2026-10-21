@@ -1,6 +1,8 @@
 // 節ごとの進行：試合の準備、結果の記録、選手の記録と出場停止の更新。
 
 import type { MatchResult, Team } from '../engine/types';
+import { clubReadiness } from './condition';
+import { afterMatches } from './progress';
 import { LEAGUE_RULES } from './rules';
 import { autoSelect, clubPlayers, validateSelection } from './selection';
 import type { Fixture, GameState } from './types';
@@ -43,6 +45,7 @@ export function buildTeam(state: GameState, clubId: string): Team {
     id: club.id,
     name: club.name,
     players: clubPlayers(state, clubId),
+    readiness: clubReadiness(state, clubId),
     lineup: selection.lineup,
     bench: selection.bench,
     tactics: club.tactics,
@@ -124,6 +127,7 @@ export function applyMatchday(state: GameState, results: Record<string, MatchRes
   }
 
   state.date = fixtures[0]?.date ?? state.date;
+  afterMatches(state, fixtures, results);
   state.season.round++;
 }
 

@@ -10,6 +10,7 @@ import { computeStandings, standingsOf } from '../src/game/standings';
 import type { Fixture, GameState } from '../src/game/types';
 import { createWorld, startNewGame } from '../src/game/world';
 import { parseSaveFile, toSaveFile } from '../src/game/save';
+import { advanceDay, todaysFixture } from '../src/game/progress';
 
 describe('世界の生成', () => {
   it('18クラブ、各28人、規模は大4・中10・小4、海外の選手プールもある', () => {
@@ -147,6 +148,8 @@ describe('1シーズン', () => {
     let state: GameState = startNewGame(world, 'テスト監督', clubId);
     let suspensionsSeen = 0;
     while (!isSeasonOver(state)) {
+      // 試合の日まで1日ずつ進める（ケガの回復や練習もここで起きる）
+      while (!todaysFixture(state)) advanceDay(state);
       const matchday = prepareMatchday(state);
       for (const m of matchday) {
         for (const id of [...m.home.lineup, ...(m.home.bench ?? []), ...m.away.lineup, ...(m.away.bench ?? [])]) {

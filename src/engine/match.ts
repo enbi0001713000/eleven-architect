@@ -465,7 +465,7 @@ export class LiveMatch {
       form: clamp(this.rng.normal(1, spread), 0.8, 1.2) * bigMatch * morale,
       fatigueFactor: 1 - (Math.max(0, fatigue - C.fatigueThreshold) / (100 - C.fatigueThreshold)) * C.fatigueMaxPenalty,
       familiarity: clamp(readiness?.familiarity ?? 1, 0, 1),
-      injuryRisk: (0.5 + player.hidden.injuryProneness / 20) * (1 + fatigue / 60)
+      injuryRisk: (0.5 + player.hidden.injuryProneness / 20) * (0.75 + fatigue / 100)
         * (readiness?.carryingInjury ? C.injury.carryingMultiplier : 1),
       injured: false, sentOff: false,
       started, order: 0, minuteOn: null, minuteOff: null, stats: emptyPlayerStats(),
