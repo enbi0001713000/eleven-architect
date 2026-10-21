@@ -1,5 +1,6 @@
 // クラブの詳細（他クラブを含む）：基本情報、選手、結果
 
+import { yearPlan, yenText } from '../../game/finance';
 import { clubPlayers } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
 import { ClubLink, FormBadges, Panel, ResultChip } from '../components/bits';
@@ -41,6 +42,10 @@ export function ClubDetail({ id }: { id: string }) {
             <dt>ライバル</dt><dd>{club.rivalId && <ClubLink game={game} clubId={club.rivalId} />}</dd>
             <dt>フォーメーション</dt><dd>{club.tactics.formation}</dd>
             <dt>評判</dt><dd>{club.reputation}</dd>
+            {club.finance.history.length > 0
+              ? <><dt>前年の売上</dt><dd>{yenText(club.revenue)}</dd></>
+              : <><dt>今年の売上の見込み</dt><dd>{yenText(yearPlan(game, club).income)}</dd></>}
+            {club.finance.history.at(-1)?.averageAttendance && <><dt>前年の平均の観客</dt><dd>{club.finance.history.at(-1)?.averageAttendance?.toLocaleString('ja-JP')}人</dd></>}
             {!mine && <><dt>監督との関係</dt><dd>{relation === undefined || relation === 0 ? '普通' : relation > 20 ? '良好' : relation > 0 ? 'やや良い' : relation < -20 ? '険悪' : 'やや悪い'}</dd></>}
           </dl>
         </Panel>

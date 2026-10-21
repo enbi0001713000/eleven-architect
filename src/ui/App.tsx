@@ -2,6 +2,7 @@
 
 import { Layout } from './components/Layout';
 import { ClubDetail } from './screens/ClubDetail';
+import { Finance } from './screens/Finance';
 import { Fixtures } from './screens/Fixtures';
 import { Home } from './screens/Home';
 import { Inbox } from './screens/Inbox';
@@ -47,6 +48,7 @@ export function App() {
     case 'talk': content = <Talk key={`${screen.playerId}-${screen.requestId ?? ''}`} playerId={screen.playerId} requestId={screen.requestId} />; break;
     case 'meeting': content = <Meeting />; break;
     case 'press': content = <Press key={screen.fixtureId} fixtureId={screen.fixtureId} />; break;
+    case 'finance': content = <Finance />; break;
     case 'later': content = <Later key={screen.title} title={screen.title} phase={screen.phase} />; break;
   }
   return <Layout>{content}</Layout>;

@@ -8,6 +8,7 @@ import { createRng } from '../../engine/rng';
 import { positionRating } from '../../engine/ratings';
 import { ROLE_OPTIONS, ROLE_PROFILES } from '../../engine/roles';
 import type { FormationName, MatchResult, Role, Side, TeamInstructions } from '../../engine/types';
+import { matchGate } from '../../game/finance';
 import { applyMatchday, isSeasonOver, nextFixtureOf, prepareMatchday } from '../../game/season';
 import { autoSelect, repairSelection, selectionWarnings, validateSelection } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
@@ -161,11 +162,13 @@ export function MatchDay() {
     const opponent = game.clubs[opponentId];
     const table = standingsOf(game);
     const rowOf = (id: string) => table.find((r) => r.clubId === id);
+    const gate = matchGate(game, fixture, table);
+    const venue = game.clubs[fixture.homeId]?.stadium.name ?? '';
     return (
       <div className="page">
         <h1>第{fixture.round}節　{formatDate(fixture.date)}</h1>
         <ScoreHeader game={game} homeId={fixture.homeId} awayId={fixture.awayId} homeGoals={null} awayGoals={null}
-          sub={`${home ? 'ホーム' : 'アウェイ'}　${club?.rivalId === opponentId ? 'ダービー' : ''}`} />
+          sub={`${home ? 'ホーム' : 'アウェイ'}${club?.rivalId === opponentId ? '　ダービー' : ''}　${venue}　観客の見込み 約${(Math.round(gate.total / 100) * 100).toLocaleString('ja-JP')}人`} />
         <div className="grid-2">
           <Panel title="相手">
             {opponent && (
@@ -262,11 +265,13 @@ export function MatchDay() {
 
   if (stage === 'report' && finished) {
     const result = m.live.result();
+    const attendance = matchGate(game, m.fixture, standingsOf(game)).total;
     return (
       <div className="page">
         <h1>試合後のレポート</h1>
         <ScoreHeader game={game} homeId={m.fixture.homeId} awayId={m.fixture.awayId}
-          homeGoals={result.score[0]} awayGoals={result.score[1]} sub={`第${m.fixture.round}節　試合終了`} />
+          homeGoals={result.score[0]} awayGoals={result.score[1]}
+          sub={`第${m.fixture.round}節　試合終了　${game.clubs[m.fixture.homeId]?.stadium.name ?? ''}　観客 ${attendance.toLocaleString('ja-JP')}人`} />
         <div className="grid-2">
           <Panel title="主な出来事"><KeyEvents events={result.events.filter((e) => e.importance >= 2)} /></Panel>
           <Panel title="スタッツ">

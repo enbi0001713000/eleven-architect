@@ -5,9 +5,10 @@ import { overallRating } from '../engine/ratings';
 import { createRng } from '../engine/rng';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
+import { initFinances } from './finance';
 import { addMessage } from './inbox';
 import type { GameState } from './types';
-import { STATE_VERSION } from './world';
+import { salaryFor, SIZE_PROFILE, STATE_VERSION } from './world';
 
 export interface SaveFile {
   app: 'soccer-manager';
@@ -25,6 +26,7 @@ function migrate(state: GameState, fromVersion: number): GameState {
   let current = state;
   for (let v = fromVersion; v < STATE_VERSION; v++) {
     if (v === 1) current = migrateV1toV2(current);
+    if (v === 2) current = migrateV2toV3(current);
     current = { ...current, version: v + 1 };
   }
   return current;
@@ -67,6 +69,23 @@ function migrateV1toV2(state: GameState): GameState {
       + 'これからは「次の出来事まで進める」で1日ずつ時間が進みます。',
   });
   return next;
+}
+
+/** フェーズ2（版2）→ フェーズ3-A（版3）：クラブのお金を足し、年俸を新しい水準で計算し直す */
+function migrateV2toV3(state: GameState): GameState {
+  for (const player of Object.values(state.players)) {
+    const club = player.clubId ? state.clubs[player.clubId] : undefined;
+    if (player.contract && club) player.contract.salary = salaryFor(overallRating(player), SIZE_PROFILE[club.size].salary);
+  }
+  // 年の途中から始めるので、今年の収支はこの日から数える
+  initFinances(state, createRng(state.seed ^ 0x3f1a), state.season.year, false);
+  addMessage(state, {
+    category: 'finance', from: '経理担当', important: false,
+    subject: 'フェーズ3-Aの機能（お金）が使えるようになりました',
+    body: '入場料、スポンサー、グッズ、年俸などのお金の出入りと、予算、借り入れ、チケットの値段が加わりました。財務の画面で見られます。\n'
+      + '年俸の水準を見直したため、全選手の年俸を計算し直しました。今年の収支は、今日から数えます。',
+  });
+  return state;
 }
 
 export function parseSaveFile(text: string): GameState {

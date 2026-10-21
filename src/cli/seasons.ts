@@ -1,4 +1,4 @@
-// 何シーズンも続けて回して、進行の数値（ケガ、疲労、成長と衰え、引退と新人）が釣り合っているかを確かめる。
+// 何シーズンも続けて回して、進行の数値（ケガ、疲労、成長と衰え、引退と新人）と、クラブのお金が釣り合っているかを確かめる。
 //   npm run seasons                       … 1つの世界で3シーズン
 //   npm run seasons -- --years=8          … シーズン数を変える
 //   npm run seasons -- --worlds=4 --quiet … 違うシードの世界をいくつも回して、最後に比べる（--quiet で途中の表示を省く）
@@ -6,12 +6,13 @@
 import { simulateMatch } from '../engine/match';
 import { overallRating } from '../engine/ratings';
 import type { MatchResult } from '../engine/types';
+import { debtOf, netResult, payrollOf, totalIncome } from '../game/finance';
 import { advanceDay, todaysFixture } from '../game/progress';
 import { applyMatchday, isSeasonOver, prepareMatchday } from '../game/season';
 import { autoSelect } from '../game/selection';
 import { standingsOf } from '../game/standings';
 import { answerRequest } from '../game/talks';
-import type { GameState, PlayerRecord } from '../game/types';
+import type { ClubSize, GameState, PlayerRecord } from '../game/types';
 import { createWorld, startNewGame } from '../game/world';
 import { numberArg, readArgs } from './args';
 
@@ -42,6 +43,34 @@ function snapshot(s: GameState, label: string): { age: number; strength: number 
   return { age: avg(ages), strength: avg(strengths) };
 }
 
+const oku = (yen: number): string => (yen / 1e8).toFixed(1);
+const SIZES: ClubSize[] = ['large', 'medium', 'small'];
+const SIZE_NAME: Record<ClubSize, string> = { large: '大', medium: '中', small: '小' };
+
+/** 締めた年度のお金を、規模ごとにまとめて表示する */
+function financeReport(s: GameState, year: number): { deficits: number; ownerFunded: number; minBalance: number } {
+  let deficits = 0;
+  let ownerFunded = 0;
+  let minBalance = Infinity;
+  for (const size of SIZES) {
+    const clubs = Object.values(s.clubs).filter((c) => c.size === size);
+    const years = clubs.map((c) => c.finance.history.find((h) => h.year === year)).filter((h) => h !== undefined);
+    if (years.length === 0) continue;
+    const mean = (f: (h: (typeof years)[number]) => number) => avg(years.map(f));
+    const income = mean((h) => totalIncome(h.ledger));
+    const share = (k: keyof (typeof years)[number]['ledger']['income']) => `${Math.round(mean((h) => h.ledger.income[k]) / income * 100)}%`;
+    const nets = years.map((h) => netResult(h.ledger));
+    deficits += nets.filter((n) => n < 0).length;
+    ownerFunded += years.filter((h) => h.ledger.financing.owner > 0).length;
+    minBalance = Math.min(minBalance, ...years.map((h) => h.balance));
+    log(`  お金（${SIZE_NAME[size]}）：収入 ${oku(income)}億（入場料${share('tickets')} スポンサー${share('sponsor')} グッズ${share('merchandise')} 配分${share('broadcast')} 賞金${share('prize')}）`
+      + `  年俸 ${oku(mean((h) => h.ledger.expense.wages))}億  差し引き ${oku(avg(nets))}億（${oku(Math.min(...nets))}〜${oku(Math.max(...nets))}）`
+      + `  手元 ${oku(mean((h) => h.balance))}億  借り入れ ${oku(mean((h) => h.debt))}億  観客 ${Math.round(mean((h) => h.averageAttendance ?? 0)).toLocaleString('ja-JP')}人`);
+  }
+  log(`  赤字のクラブ ${deficits}  オーナーが穴埋めしたクラブ ${ownerFunded}  手元のお金の最低 ${oku(minBalance)}億`);
+  return { deficits, ownerFunded, minBalance };
+}
+
 interface WorldSummary {
   seed: number;
   goals: number[];
@@ -49,13 +78,35 @@ interface WorldSummary {
   championPoints: number[];
   start: { age: number; strength: number };
   end: { age: number; strength: number };
+  deficits: number[];
+  ownerFunded: number;
+  /** 規模ごとの手元のお金と借り入れ（最初と最後） */
+  money: Record<ClubSize, { start: number; end: number; debt: number; payrollStart: number; payrollEnd: number }>;
+}
+
+function moneyBySize(s: GameState): Record<ClubSize, { balance: number; debt: number; payroll: number }> {
+  const out = {} as Record<ClubSize, { balance: number; debt: number; payroll: number }>;
+  for (const size of SIZES) {
+    const clubs = Object.values(s.clubs).filter((c) => c.size === size);
+    out[size] = {
+      balance: avg(clubs.map((c) => c.finance.balance)),
+      debt: avg(clubs.map((c) => debtOf(c.finance))),
+      payroll: avg(clubs.map((c) => payrollOf(s, c.id))),
+    };
+  }
+  return out;
 }
 
 function runWorld(seed: number): WorldSummary {
 const world = createWorld(seed);
 const myId = Object.keys(world.clubs)[0] as string;
 const state: GameState = startNewGame(world, 'テスト', myId);
-const summary: WorldSummary = { seed, goals: [], champions: [], championPoints: [], start: snapshot(state, `世界${seed} 開始時`), end: { age: 0, strength: 0 } };
+const startMoney = moneyBySize(state);
+const summary: WorldSummary = {
+  seed, goals: [], champions: [], championPoints: [], start: snapshot(state, `世界${seed} 開始時`), end: { age: 0, strength: 0 },
+  deficits: [], ownerFunded: 0,
+  money: Object.fromEntries(SIZES.map((size) => [size, { start: startMoney[size].balance, end: 0, debt: 0, payrollStart: startMoney[size].payroll, payrollEnd: 0 }])) as WorldSummary['money'],
+};
 for (let year = 0; year < years; year++) {
   let injuries = 0;
   let injuryDays = 0;
@@ -136,7 +187,16 @@ for (let year = 0; year < years; year++) {
   log(`  先発の状態：コンディション ${avg(conditionAtKickoff).toFixed(1)}  疲労 ${avg(fatigueAtKickoff).toFixed(1)}（70以上 ${(fatigueAtKickoff.filter((f) => f >= 70).length / fatigueAtKickoff.length * 100).toFixed(1)}%）`);
   log(`  モラル 平均 ${avg(morale).toFixed(1)}（35未満 ${(morale.filter((m) => m < 35).length / morale.length * 100).toFixed(1)}%）  申し出 ${requests}件`);
   log(`  オフ：引退 ${retiring}人、契約満了で退団 ${leaving}人、新人 ${joined}人 → ${leaguePlayers(state).length}人`);
+  const money = financeReport(state, seasonYear);
+  summary.deficits.push(money.deficits);
+  summary.ownerFunded += money.ownerFunded;
   summary.end = snapshot(state, `  ${state.season.year}年の開幕前`);
+}
+const endMoney = moneyBySize(state);
+for (const size of SIZES) {
+  summary.money[size].end = endMoney[size].balance;
+  summary.money[size].debt = endMoney[size].debt;
+  summary.money[size].payrollEnd = endMoney[size].payroll;
 }
 return summary;
 }
@@ -151,6 +211,11 @@ if (worlds > 1 || quiet) {
     const most = Math.max(...counts.values());
     console.log(`  世界${w.seed}：ゴール ${avg(w.goals).toFixed(2)}（${Math.min(...w.goals).toFixed(2)}〜${Math.max(...w.goals).toFixed(2)}）  優勝 ${counts.size}クラブ（最多${most}回、勝ち点 ${Math.min(...w.championPoints)}〜${Math.max(...w.championPoints)}）`
       + `  平均年齢 ${w.start.age.toFixed(1)}→${w.end.age.toFixed(1)}  強さ ${w.start.strength.toFixed(2)}→${w.end.strength.toFixed(2)}`);
+    console.log(`    お金：赤字のクラブ（1年あたり）${avg(w.deficits).toFixed(1)}  オーナーの穴埋め ${w.ownerFunded}回  `
+      + SIZES.map((size) => {
+        const m = w.money[size];
+        return `${SIZE_NAME[size]} 手元${oku(m.start)}→${oku(m.end)}億 借入${oku(m.debt)}億 年俸${oku(m.payrollStart)}→${oku(m.payrollEnd)}億`;
+      }).join('  '));
   }
   console.log(`  全体のゴール ${avg(summaries.flatMap((w) => w.goals)).toFixed(2)}（目標 2.6〜2.9）`);
 }
