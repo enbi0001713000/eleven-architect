@@ -1,7 +1,7 @@
 // 新しいゲームを始めるときの世界の自動生成。要件定義書「リーグと日程」の「選手と世界の自動生成」に対応する。
 // 同じシードなら、同じ世界（クラブ、選手、日程）ができる。
 
-import { generatePlayer } from '../data/generate';
+import { generatePlayer, playerName } from '../data/generate';
 import { FOREIGN_NAMES, GIVEN_NAMES, SURNAMES } from '../data/names';
 import { overallRating } from '../engine/ratings';
 import { createRng, type Rng } from '../engine/rng';
@@ -87,6 +87,14 @@ export function createWorld(seed: number): GameState {
   const rng = createRng(seed);
   let counter = 0;
   const nextId = () => `p${String(++counter).padStart(4, '0')}`;
+  // 同じ名前の選手が出ないようにする
+  const usedNames = new Set<string>();
+  const uniqueName = (name: string, nationality: string): string => {
+    let candidate = name;
+    for (let tries = 0; usedNames.has(candidate) && tries < 50; tries++) candidate = playerName(rng, nationality);
+    usedNames.add(candidate);
+    return candidate;
+  };
   const players: Record<string, PlayerRecord> = {};
   const clubs: Record<string, Club> = {};
 
@@ -110,6 +118,7 @@ export function createWorld(seed: number): GameState {
         // 1人目はレギュラー級、2人目は少し下、3人目以降は控え級。若手は能力が低いが伸びしろがある
         const playerLevel = youth ? level - 2.5 : k === 0 ? level + 0.3 : k === 1 ? level - 0.4 : level - 1.4;
         const base = generatePlayer(rng, position, playerLevel, { id: nextId(), age: youth ? rng.int(18, 20) : undefined });
+        base.name = uniqueName(base.name, base.nationality);
         if (youth) base.hidden.potential = Math.min(20, Math.round((level + rng.next() * 3) * 10) / 10);
         const record: PlayerRecord = {
           ...base,
@@ -170,6 +179,7 @@ export function createWorld(seed: number): GameState {
     const base = generatePlayer(rng, rng.pick(positions), 9 + rng.next() * 5, {
       id: nextId(), age: rng.int(19, 31), nationality: rng.pick(nationalities),
     });
+    base.name = uniqueName(base.name, base.nationality);
     players[base.id] = {
       ...base, clubId: null, squadNumber: null, contract: null, season: emptySeason(),
       discipline: { yellowAccumulation: 0, suspendedMatches: 0 },

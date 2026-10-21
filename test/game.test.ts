@@ -23,6 +23,11 @@ describe('世界の生成', () => {
     expect(clubs.every((c) => c.rivalId && world.clubs[c.rivalId]?.rivalId === c.id)).toBe(true);
   });
 
+  it('同じ名前の選手はいない', () => {
+    const names = Object.values(createWorld(9).players).map((p) => p.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
   it('同じシードなら同じ世界になる', () => {
     const a = createWorld(42);
     const b = createWorld(42);

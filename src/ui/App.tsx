@@ -1,0 +1,42 @@
+// 今の画面を切り替える
+
+import { Layout } from './components/Layout';
+import { ClubDetail } from './screens/ClubDetail';
+import { Fixtures } from './screens/Fixtures';
+import { Home } from './screens/Home';
+import { Later } from './screens/Later';
+import { League } from './screens/League';
+import { MatchDay } from './screens/MatchDay';
+import { NewGame } from './screens/NewGame';
+import { PlayerDetail } from './screens/PlayerDetail';
+import { SeasonEnd } from './screens/SeasonEnd';
+import { Settings } from './screens/Settings';
+import { Squad } from './screens/Squad';
+import { Tactics } from './screens/Tactics';
+import { Title } from './screens/Title';
+import { useStore } from './store';
+
+export function App() {
+  const s = useStore();
+  const screen = s.screen;
+
+  if (screen.name === 'title') return <Title />;
+  if (screen.name === 'newGame') return <NewGame />;
+  if (screen.name === 'settings') return <Settings />;
+  if (!s.game) return <Title />;
+
+  let content;
+  switch (screen.name) {
+    case 'home': content = <Home />; break;
+    case 'squad': content = <Squad />; break;
+    case 'player': content = <PlayerDetail key={screen.id} id={screen.id} />; break;
+    case 'tactics': content = <Tactics />; break;
+    case 'fixtures': content = <Fixtures initialRound={screen.round} />; break;
+    case 'league': content = <League />; break;
+    case 'club': content = <ClubDetail key={screen.id} id={screen.id} />; break;
+    case 'match': content = <MatchDay />; break;
+    case 'seasonEnd': content = <SeasonEnd />; break;
+    case 'later': content = <Later key={screen.title} title={screen.title} phase={screen.phase} />; break;
+  }
+  return <Layout>{content}</Layout>;
+}

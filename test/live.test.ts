@@ -78,6 +78,17 @@ describe('交代', () => {
     expect(live.substitute(0, home.lineup[5] as string, benchIds[6] as string).ok).toBe(false);
   });
 
+  it('途中からAIに任せると、残りの交代をAIが行う', () => {
+    const live = new LiveMatch(home, away, { seed: 13, aiControl: manual });
+    live.advance(Number.POSITIVE_INFINITY);
+    live.startSecondHalf();
+    live.advance(50 * 60);
+    expect(live.snapshot().sides[0].subsUsed).toBe(0);
+    live.setAiControl(0, true);
+    const result = live.playToEnd();
+    expect(result.players.filter((l) => l.side === 0 && !l.started).length).toBeGreaterThan(0);
+  });
+
   it('AIのチームは後半に自分で交代する', () => {
     const results = Array.from({ length: 20 }, (_, i) => simulateMatch(home, away, { seed: 100 + i }));
     const subsPerTeam = results.reduce((n, r) => n + r.players.filter((l) => !l.started).length, 0) / (results.length * 2);

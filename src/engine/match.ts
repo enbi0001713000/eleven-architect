@@ -101,6 +101,8 @@ interface OnPitch {
   form: number;
   sentOff: boolean;
   started: boolean;
+  /** 結果に並べる順（先発は枠の順、途中出場は出た順） */
+  order: number;
   minuteOn: number | null;
   minuteOff: number | null;
   stats: PlayerMatchStats;
@@ -169,7 +171,7 @@ const EVENT_TYPE: Record<CommentaryKey, MatchEventType> = {
 
 function emptyPlayerStats(): PlayerMatchStats {
   return {
-    rating: 6, passes: 0, passesCompleted: 0, keyPasses: 0, dribbles: 0, dribblesWon: 0,
+    rating: 6.3, passes: 0, passesCompleted: 0, keyPasses: 0, dribbles: 0, dribblesWon: 0,
     shots: 0, shotsOnTarget: 0, goals: 0, assists: 0, tackles: 0, interceptions: 0,
     fouls: 0, yellowCards: 0, redCards: 0, saves: 0,
   };
@@ -288,6 +290,15 @@ export class LiveMatch {
 
   // ---- 采配 ----
 
+  /** その側の交代と戦術の変更を、AIに任せるかどうか（「結果まで飛ばす」ときなど） */
+  setAiControl(side: Side, ai: boolean): void {
+    this.sides[side].ai = ai;
+  }
+
+  isAiControlled(side: Side): boolean {
+    return this.sides[side].ai;
+  }
+
   /** 選手交代。outId を下げて、控えの inId を入れる。 */
   substitute(side: Side, outId: string, inId: string): ChangeResult {
     if (this.matchPhase === 'finished') return { ok: false, message: '試合は終わっています' };
@@ -318,6 +329,7 @@ export class LiveMatch {
     state.subbedOff.push(outgoing);
     const incoming = this.createOnPitch(benchEntry.player, outgoing.slot, outgoing.role, false);
     incoming.minuteOn = minute;
+    incoming.order = 100 + state.subsUsed;
     state.players[index] = incoming;
     benchEntry.used = true;
     state.subsUsed++;
@@ -406,7 +418,9 @@ export class LiveMatch {
     };
     const players = team.lineup.map((id, i): OnPitch => {
       const slot = slots[i] as Slot;
-      return this.createOnPitch(findPlayer(id), slot, roleForSlot(team.tactics, i, slot.position), true);
+      const op = this.createOnPitch(findPlayer(id), slot, roleForSlot(team.tactics, i, slot.position), true);
+      op.order = i;
+      return op;
     });
     const ins = { ...team.tactics.instructions };
     const state: SideState = {
@@ -439,7 +453,7 @@ export class LiveMatch {
       player, position: slot.position, slot, role, profile: ROLE_PROFILES[role],
       fit: positionFit(player.position, slot.position), stamina: 100,
       form: clamp(this.rng.normal(1, spread), 0.8, 1.2) * bigMatch, sentOff: false,
-      started, minuteOn: null, minuteOff: null, stats: emptyPlayerStats(),
+      started, order: 0, minuteOn: null, minuteOff: null, stats: emptyPlayerStats(),
     };
   }
 
@@ -1232,8 +1246,8 @@ export class LiveMatch {
       state.stats.staminaAtEnd = onPitch.reduce((sum, op) => sum + op.stamina, 0) / Math.max(1, onPitch.length);
       state.stats.xg = Math.round(state.stats.xg * 100) / 100;
       const cleanSheet = this.goals[other(side)] === 0;
-      // 先発（途中で退いた選手を含む）→ 途中出場の順に並べる
-      const everyone = [...state.players.filter((op) => op.started), ...state.subbedOff, ...state.players.filter((op) => !op.started)];
+      // 先発（途中で退いた選手を含む）を枠の順に、そのあと途中出場を出た順に並べる
+      const everyone = [...state.players, ...state.subbedOff].sort((a, b) => a.order - b.order);
       for (const op of everyone) {
         if (cleanSheet && op.position === 'GK') op.stats.rating += 0.4;
         if (cleanSheet && (op.position === 'CB' || op.position === 'SB')) op.stats.rating += 0.25;

@@ -1,0 +1,31 @@
+// 遊ぶ人ごとの設定（ブラウザに保存）。使えない環境でも動くように、読み書きの失敗は無視する。
+
+export type MatchSpeed = 1 | 2 | 4;
+export type CommentaryMode = 'key' | 'all';
+
+export interface Settings {
+  matchSpeed: MatchSpeed;
+  commentary: CommentaryMode;
+  /** 選手一覧で自分で選んだ列 */
+  squadColumns: string[] | null;
+}
+
+const KEY = 'soccer-manager:settings';
+const DEFAULTS: Settings = { matchSpeed: 2, commentary: 'key', squadColumns: null };
+
+export function loadSettings(): Settings {
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) } : { ...DEFAULTS };
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+
+export function saveSettings(settings: Settings): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(settings));
+  } catch {
+    // 保存できなくても遊べる
+  }
+}

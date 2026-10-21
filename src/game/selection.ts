@@ -91,3 +91,20 @@ export function validateSelection(state: GameState, clubId: string, formation: F
   if (foreign > LEAGUE_RULES.foreignLimit) errors.push(`外国籍選手は${LEAGUE_RULES.foreignLimit}人までです（今は${foreign}人）`);
   return errors;
 }
+
+/** 新しいフォーメーションの枠に、今の先発11人を適性の高い順に並べ直す */
+export function arrangeForFormation(state: GameState, ids: readonly string[], formation: FormationName): string[] {
+  const slots = FORMATIONS[formation];
+  const players = ids.map((id) => state.players[id]).filter((p): p is PlayerRecord => p !== undefined);
+  const order: (string | null)[] = slots.map(() => null);
+  const used = new Set<string>();
+  const pairs = slots.flatMap((slot, i) => players.map((p) => ({ i, p, score: positionRating(p, slot.position) })))
+    .sort((a, b) => b.score - a.score);
+  for (const { i, p } of pairs) {
+    if (order[i] !== null || used.has(p.id)) continue;
+    order[i] = p.id;
+    used.add(p.id);
+  }
+  const rest = players.filter((p) => !used.has(p.id)).map((p) => p.id);
+  return order.map((id) => id ?? rest.shift() ?? '').filter((id) => id !== '');
+}

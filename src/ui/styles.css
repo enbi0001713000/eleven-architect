@@ -1,0 +1,230 @@
+/* 画面の見た目。PCのブラウザ向けで、表が多い画面を前提にした暗めの配色 */
+
+:root {
+  --bg: #11151b;
+  --panel: #1a2029;
+  --panel-2: #222a35;
+  --border: #2d3743;
+  --text: #e7eaef;
+  --muted: #95a0ae;
+  --accent: #3fa2f7;
+  --accent-strong: #1e7fd6;
+  --win: #36b768;
+  --draw: #c7a23a;
+  --loss: #df5a52;
+  --top: #4fd18b;
+  --good: #9ad66b;
+  --mid: #e7eaef;
+  --low: #e08a6c;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+h1 { font-size: 1.4rem; margin: 0 0 12px; }
+h2 { font-size: 1.05rem; margin: 18px 0 8px; }
+h3 { font-size: 0.95rem; margin: 4px 0 8px; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85em; }
+.big { font-size: 1.1rem; }
+.center { text-align: center; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.error { color: var(--loss); }
+.notice { color: var(--accent); }
+
+button {
+  font: inherit; color: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--panel-2); padding: 6px 12px;
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent); }
+button.secondary:hover:not(:disabled) { border-color: var(--accent); }
+button.danger { border-color: var(--loss); color: var(--loss); background: transparent; }
+button.large { padding: 10px 22px; font-size: 1.05rem; }
+button.small { padding: 3px 8px; font-size: 0.85em; }
+button.link { background: none; border: none; color: var(--accent); padding: 0 4px; }
+input, select {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+}
+label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+label.inline { flex-direction: row; align-items: center; gap: 8px; margin: 4px 0; }
+label.block { margin-bottom: 8px; }
+label.inline select, label.block select { color: var(--text); }
+
+/* 枠 */
+.layout { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; }
+.sidebar { background: var(--panel); border-right: 1px solid var(--border); padding: 12px 8px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.sidebar-club { display: flex; gap: 10px; align-items: center; padding: 4px 6px 14px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.sidebar-club-name { font-weight: 700; }
+.menu-item { display: flex; justify-content: space-between; width: 100%; text-align: left; background: none; border: none; padding: 9px 10px; margin: 1px 0; }
+.menu-item:hover:not(:disabled) { background: var(--panel-2); }
+.menu-item.active { background: var(--accent-strong); color: #fff; }
+.menu-item.later { color: var(--muted); }
+.menu-phase { font-size: 0.7rem; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.main { display: flex; flex-direction: column; min-width: 0; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--border); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+.topbar-date { display: flex; flex-direction: column; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.content { padding: 18px; }
+.page { max-width: 1400px; }
+.page-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.page-header h1 { margin: 0; }
+.page-footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: 18px 0; }
+.toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.toolbar h1 { margin: 0 12px 0 0; }
+.button-row { display: flex; gap: 10px; margin-top: 12px; }
+
+/* パネルと並べ方 */
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.panel-header h2 { margin: 0; font-size: 0.98rem; }
+.panel-body { padding: 12px 14px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.grid-4 { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; align-items: start; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+
+/* 表 */
+.table-wrap { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { color: var(--muted); font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
+.data-table th.sorted { color: var(--text); }
+.data-table td { padding: 6px 8px; border-bottom: 1px solid #222a33; white-space: nowrap; }
+.data-table.compact td, .data-table.compact th { padding: 4px 6px; }
+.data-table tbody tr:nth-child(even) { background: #161c24; }
+.data-table tr.clickable { cursor: pointer; }
+.data-table tr.clickable:hover { background: #26303c; }
+.data-table tr.highlight, .attr-table tr.highlight { background: #1c3550 !important; }
+.data-table tr.sent-off { opacity: 0.45; }
+.standings td { padding: 7px 8px; }
+.attr-table { width: 100%; border-collapse: collapse; }
+.attr-table td { padding: 3px 4px; border-bottom: 1px solid #222a33; }
+.column-picker { position: relative; }
+.column-picker-menu { position: absolute; z-index: 10; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: grid; grid-template-columns: repeat(3, max-content); gap: 4px 14px; max-height: 360px; overflow-y: auto; }
+.column-picker-menu label { flex-direction: row; align-items: center; color: var(--text); }
+
+/* 能力値と評価点の色 */
+.attr { display: inline-block; min-width: 2.2em; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.attr-range { font-weight: 400; min-width: 3.6em; }
+.tone-top { color: var(--top); }
+.tone-good { color: var(--good); }
+.tone-mid { color: var(--mid); }
+.tone-low { color: var(--low); }
+.rating { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 小さな部品 */
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segmented button { border: none; border-radius: 0; background: transparent; padding: 6px 12px; border-right: 1px solid var(--border); }
+.segmented button:last-child { border-right: none; }
+.segmented button.active { background: var(--accent-strong); color: #fff; }
+.segmented.small button { padding: 4px 8px; font-size: 0.85em; }
+.tabs { margin-bottom: 12px; }
+.form-badges { display: inline-flex; gap: 2px; }
+.form { display: inline-block; width: 20px; text-align: center; border-radius: 3px; font-size: 0.75rem; color: #fff; }
+.form-W { background: var(--win); }
+.form-D { background: var(--draw); }
+.form-L { background: var(--loss); }
+.result-chip { display: inline-block; min-width: 42px; text-align: center; border-radius: 4px; color: #fff; font-weight: 700; padding: 0 4px; }
+.tag { display: inline-block; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; font-size: 0.8em; margin-right: 6px; }
+.tag-good { border-color: var(--win); color: var(--win); }
+.tag-bad { border-color: var(--loss); color: var(--loss); }
+.tag-warn { border-color: var(--draw); color: var(--draw); }
+.pos-chip { display: inline-block; min-width: 30px; font-size: 0.8em; color: var(--muted); margin-right: 6px; }
+.club-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 0; text-align: left; }
+.club-link:hover span { text-decoration: underline; }
+.club-link.mine span { color: var(--accent); font-weight: 600; }
+.emblem { flex: none; }
+.stamina { display: inline-block; width: 60px; height: 8px; background: #2a323d; border-radius: 4px; overflow: hidden; vertical-align: middle; }
+.stamina-fill { display: block; height: 100%; }
+.stamina-good { background: var(--win); }
+.stamina-mid { background: var(--draw); }
+.stamina-low { background: var(--loss); }
+.warning { border: 1px solid var(--draw); background: #2b2614; color: #f1d98a; border-radius: 8px; padding: 10px 12px; margin: 10px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.result-list, .notice-list, .event-list, .save-list, .bench-list, .commentary, .lineup-list { list-style: none; margin: 0; padding: 0; }
+.result-list li, .notice-list li { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid #222a33; }
+
+/* タイトルと新しいゲーム */
+.title-screen { display: flex; justify-content: center; padding: 40px 16px; }
+.title-card { width: min(760px, 100%); }
+.title-card h1 { font-size: 2rem; }
+.title-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; }
+.save-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+.save-open { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: none; text-align: left; flex: 1; }
+.save-actions { display: flex; gap: 6px; }
+.new-game { padding: 18px; max-width: 1200px; margin: 0 auto; }
+.form-row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+.club-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.club-card { display: flex; gap: 12px; align-items: center; text-align: left; background: var(--panel); padding: 10px 12px; }
+.club-card.selected { border-color: var(--accent); background: #1c3550; }
+.club-card-text { display: flex; flex-direction: column; gap: 2px; }
+.settings { display: flex; gap: 20px; }
+
+/* ホーム */
+.next-match-vs { display: flex; align-items: center; gap: 14px; margin: 10px 0; }
+.vs-name { font-size: 1.25rem; font-weight: 700; }
+
+/* 選手の詳細 */
+.player-head { display: flex; align-items: center; gap: 16px; flex: 1; }
+.player-number { font-size: 2rem; font-weight: 800; color: var(--muted); min-width: 48px; text-align: center; }
+.player-overall { margin-left: auto; display: flex; flex-direction: column; align-items: center; font-size: 1.4rem; }
+
+/* 戦術 */
+.tactics-grid { display: grid; grid-template-columns: minmax(360px, 500px) 1fr; gap: 16px; align-items: start; }
+.pitch { position: relative; aspect-ratio: 68 / 90; background: linear-gradient(#1f5b34, #1a4f2d); border: 2px solid #3d7a50; border-radius: 8px; margin-bottom: 14px; }
+.pitch-lines { position: absolute; inset: 0; background:
+  linear-gradient(transparent calc(50% - 1px), #ffffff33 calc(50% - 1px), #ffffff33 calc(50% + 1px), transparent calc(50% + 1px)); }
+.pitch-slot { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: 84px; padding: 4px 4px; background: #0f1a24dd; border: 1px solid #ffffff44; line-height: 1.2; }
+.pitch-slot > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pitch-slot.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.pitch-slot.problem { border-color: var(--loss); }
+.slot-pos { font-size: 0.7rem; color: var(--muted); }
+.slot-name { font-weight: 700; }
+.slot-role { font-size: 0.68rem; color: #b8c4d2; }
+.slot-rating { font-size: 0.75rem; color: var(--good); }
+.bench-list li { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid #222a33; }
+.role-options { display: grid; gap: 6px; margin-bottom: 12px; }
+.role-option { flex-direction: row; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; color: var(--text); }
+.role-option.active { border-color: var(--accent); }
+.instruction { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0; }
+.instruction-label { color: var(--muted); }
+
+/* 試合 */
+.score-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin-bottom: 12px; }
+.score-team { display: flex; align-items: center; gap: 12px; font-size: 1.1rem; font-weight: 700; }
+.score-team.away { flex-direction: row-reverse; text-align: right; }
+.score-center { text-align: center; }
+.score-numbers { font-size: 2.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.live-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.live-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.commentary { max-height: 70vh; overflow-y: auto; }
+.event { display: flex; gap: 10px; padding: 5px 4px; border-bottom: 1px solid #222a33; }
+.event-minute { color: var(--muted); min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+.event.imp-1 { color: var(--muted); font-size: 0.92em; }
+.event.imp-3 { font-weight: 700; }
+.event.type-goal, .event.type-penaltyGoal { background: #183a26; }
+.event.type-redCard { background: #3a1c1c; }
+.event.side-0 { border-left: 3px solid var(--accent); }
+.event.side-1 { border-left: 3px solid #b48ef0; }
+.tactics-overlay { margin-bottom: 12px; }
+.tactics-overlay .panel { border-color: var(--accent); }
+.stats-table { width: 100%; border-collapse: collapse; }
+.stats-table td, .stats-table th { padding: 4px 6px; border-bottom: 1px solid #222a33; }
+.stats-table .stat-label { text-align: center; color: var(--muted); }
+.opponent { display: flex; align-items: center; gap: 12px; }
+.lineup-list li { padding: 2px 0; }
+
+/* シーズン終了 */
+.champion { display: flex; align-items: center; gap: 24px; background: linear-gradient(90deg, #2b2410, var(--panel)); border: 1px solid var(--draw); border-radius: 10px; padding: 18px 24px; margin-bottom: 16px; }
+.champion h1 { font-size: 2rem; margin: 4px 0; }
+.round-picker { display: inline-flex; align-items: center; gap: 10px; }
+
+@media (max-width: 1000px) {
+  .grid-2, .tactics-grid, .live-grid { grid-template-columns: 1fr; }
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+}

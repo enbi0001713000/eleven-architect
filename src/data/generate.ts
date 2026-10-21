@@ -35,7 +35,7 @@ export const NEUTRAL_INSTRUCTIONS: TeamInstructions = {
 
 let playerCounter = 0;
 
-function playerName(rng: Rng, nationality: string): string {
+export function playerName(rng: Rng, nationality: string): string {
   const foreign = FOREIGN_NAMES[nationality];
   if (foreign) return `${rng.pick(foreign.given)}・${rng.pick(foreign.family)}`;
   return `${rng.pick(SURNAMES)} ${rng.pick(GIVEN_NAMES)}`;
