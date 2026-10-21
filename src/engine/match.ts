@@ -705,6 +705,18 @@ export class LiveMatch {
     return result;
   }
 
+  /** GKが前に出て、裏へのボールやクロスを処理する力（0が平均的）。飛び出しが主で、前に出て守る型だと強くなる */
+  private keeperSweep(side: Side, aerial: boolean): number {
+    const index = this.goalkeeper(side);
+    if (index === null) return -0.5;
+    const keeper = this.op(side, index);
+    const a = (k: AttributeKey) => this.attr(side, keeper, k);
+    const value = aerial
+      ? 0.5 * a('rushingOut') + 0.3 * a('handling') + 0.2 * a('jumping')
+      : 0.7 * a('rushingOut') + 0.3 * a('pace');
+    return ((value - 12) / 8) * (keeper.role === 'sweeperKeeper' && !aerial ? 1.5 : 1);
+  }
+
   private goalkeeper(side: Side): number | null {
     const keepers = this.active(side, (op) => op.position === 'GK');
     if (keepers[0] !== undefined) return keepers[0];
@@ -873,7 +885,9 @@ export class LiveMatch {
         - C.pass.pressurePenalty * presHere - C.pass.pressureDistancePenalty * presHere * dist
         - 0.07 * (this.pressure(def, tz) - 0.8)
         - C.pass.forwardPenalty * Math.max(0, dr) + 0.004 * (this.attr(att, receiver, 'firstTouch') - 12)
-        - (tf.r === ROWS - 1 && f.r < ROWS - 1 ? C.pass.boxEntryPenalty : 0),
+        - (tf.r === ROWS - 1 && f.r < ROWS - 1 ? C.pass.boxEntryPenalty : 0)
+        // 裏へのボールは、GKの飛び出しで処理される
+        - (tf.r === ROWS - 1 && dr >= 2 ? C.keeper.sweepOnThroughBall * this.keeperSweep(def, false) : 0),
       0.35, 0.97,
     );
 
@@ -970,9 +984,13 @@ export class LiveMatch {
 
     const keeperIndex = this.goalkeeper(def);
     const keeper = keeperIndex === null ? null : this.op(def, keeperIndex);
-    const keeperQuality = keeper
-      ? 0.6 * this.attr(def, keeper, 'reflexes') + 0.2 * this.attr(def, keeper, 'oneOnOne') + 0.2 * this.attr(def, keeper, 'handling')
-      : 5;
+    // GKの力はシュートの種類で変わる：近くからは1対1と飛び出し（間合いを詰める）、遠くからはキャッチ
+    const k = (key: AttributeKey) => (keeper ? this.attr(def, keeper, key) : 5);
+    const closeRange = kind === 'open' && f.r === ROWS - 1;
+    const keeperQuality = !keeper ? 5
+      : closeRange ? 0.4 * k('reflexes') + 0.35 * k('oneOnOne') + 0.15 * k('rushingOut') + 0.1 * k('handling')
+        : kind === 'header' ? 0.6 * k('reflexes') + 0.25 * k('handling') + 0.15 * k('jumping')
+          : 0.6 * k('reflexes') + 0.3 * k('handling') + 0.1 * k('oneOnOne');
 
     const pGoal = clamp(xg * (0.7 + 0.6 * finishing / 20) * (1.3 - 0.6 * keeperQuality / 20), 0.001, 0.95);
     const pSaved = clamp(0.24 + 0.1 * (finishing - 12) / 8, 0.12, 0.4);
@@ -1046,7 +1064,7 @@ export class LiveMatch {
     const duel = this.aerial(att, target) - this.aerial(def, this.op(def, defenderIndex));
 
     const reach = clamp(C.cross.base + 0.02 * (this.attr(att, crosser, 'crossing') - 12)
-      + 0.025 * duel - 0.08 * (this.pressure(def, tz) - 1), 0.1, 0.55);
+      + 0.025 * duel - 0.08 * (this.pressure(def, tz) - 1) - C.keeper.claimCross * this.keeperSweep(def, true), 0.1, 0.55);
     if (this.rng.chance(reach)) {
       this.lastPasser = crosserIndex;
       this.holder = targetIndex;

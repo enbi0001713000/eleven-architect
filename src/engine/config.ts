@@ -105,6 +105,12 @@ export const ENGINE_CONFIG = {
   /** 1分あたりのスタミナの減り方の基準 */
   staminaDrainPerMinute: 0.42,
 
+  /** GKの飛び出し：裏へのボール（パスの成功率から引く）とクロス（届く確率から引く）。keeperSweep が+1のときの大きさ */
+  keeper: {
+    sweepOnThroughBall: 0.06,
+    claimCross: 0.04,
+  },
+
   /** 試合中のケガ（フェーズ2） */
   injury: {
     /** ファウルを受けたときにケガをする確率 */
