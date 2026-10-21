@@ -32,7 +32,7 @@ const MENU: MenuItem[] = [
 
 const MENU_SCREENS: Record<string, string> = {
   home: 'ホーム', squad: '選手', player: '選手', tactics: '戦術', fixtures: '日程と結果', league: 'リーグ', club: 'リーグ',
-  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', finance: '財務',
+  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', finance: '財務', conversation: '受信箱',
 };
 
 export function Layout({ children }: { children: ReactNode }) {

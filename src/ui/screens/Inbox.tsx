@@ -1,5 +1,5 @@
 // 受信箱：FMのようなメール形式の知らせ（要件定義書「時間の進め方」「画面の一覧」）
-// 返事が必要な知らせ（選手からの申し出、記者会見）は、ここから専用の画面を開く。
+// 返事が必要な知らせ（選手からの申し出、記者会見、スポンサーの提案）と、オーナーなどの話は、ここから会話画面を開く。
 
 import { useEffect, useState } from 'react';
 import { markAllRead, markRead } from '../../game/inbox';
@@ -66,6 +66,7 @@ function MessageView({ message }: { message: InboxMessage }) {
   const action = message.action;
   const pendingRequest = action?.kind === 'playerRequest' && !message.resolved && game.requests.some((r) => r.id === action.requestId);
   const pendingPress = action?.kind === 'press' && !message.resolved && fixture?.result === null;
+  const pendingSponsor = action?.kind === 'sponsorOffer' && !message.resolved && (game.clubs[game.manager.clubId]?.finance.sponsorOffers.length ?? 0) > 0;
 
   return (
     <Panel title={message.subject}>
@@ -82,7 +83,14 @@ function MessageView({ message }: { message: InboxMessage }) {
         {pendingPress && action?.kind === 'press' && (
           <button type="button" className="primary" onClick={() => store.navigate({ name: 'press', fixtureId: action.fixtureId })}>記者会見に出る</button>
         )}
+        {pendingSponsor && (
+          <button type="button" className="primary" onClick={() => store.navigate({ name: 'conversation', messageId: message.id })}>営業担当と話す（提案を選ぶ）</button>
+        )}
+        {message.topic && message.topic !== 'sponsorOffer' && (
+          <button type="button" className="primary" onClick={() => store.navigate({ name: 'conversation', messageId: message.id })}>{message.from}と話す</button>
+        )}
         {action && message.resolved && <span className="muted small">対応済み</span>}
+        {message.category === 'finance' && <button type="button" className="secondary" onClick={() => store.open({ name: 'finance' })}>財務の画面へ</button>}
         {player && <button type="button" className="secondary" onClick={() => store.navigate({ name: 'player', id: player.id })}>選手を見る</button>}
         {message.category === 'training' && <button type="button" className="secondary" onClick={() => store.open({ name: 'training' })}>練習の画面へ</button>}
         {message.category === 'medical' && <button type="button" className="secondary" onClick={() => store.open({ name: 'tactics' })}>メンバーを見直す</button>}

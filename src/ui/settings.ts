@@ -8,10 +8,12 @@ export interface Settings {
   commentary: CommentaryMode;
   /** 選手一覧で自分で選んだ列 */
   squadColumns: string[] | null;
+  /** 大事な出来事（オーナーの予算、スポンサーの提案、選手の申し出など）を会話画面で開く */
+  conversations: boolean;
 }
 
 const KEY = 'soccer-manager:settings';
-const DEFAULTS: Settings = { matchSpeed: 2, commentary: 'key', squadColumns: null };
+const DEFAULTS: Settings = { matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true };
 
 export function loadSettings(): Settings {
   try {

@@ -31,6 +31,10 @@ export function NewGame() {
     }
     store.setGame(state, id);
     store.open({ name: 'home' });
+    // 最初に、オーナーから今シーズンの予算の話を聞く
+    const budget = state.inbox.find((m) => m.topic === 'budget');
+    const talk = store.conversationFor(budget);
+    if (talk) store.navigate(talk);
   };
 
   return (

@@ -1,4 +1,4 @@
-// 選手との面談：選手からの申し出への返事と、監督からの個人面談（要件定義書「面談と声かけ」）
+// 選手との面談：選手からの申し出への返事と、監督からの個人面談（要件定義書「面談と声かけ」）。会話画面で話す。
 
 import { useState } from 'react';
 import { overallRating } from '../../engine/ratings';
@@ -9,31 +9,66 @@ import {
   type ManagerTalk, type RequestReply, type TalkOutcome,
 } from '../../game/talks';
 import { Morale, Panel } from '../components/bits';
+import { Conversation, type ConversationLine } from '../components/Conversation';
 import { POSITION_NAME } from '../format';
 import { store, useGame } from '../store';
 
+/** 「…」の中だけを、監督のセリフとして使う */
+const spoken = (label: string): string => label.match(/「(.+?)」/)?.[1] ?? label;
+
 export function Talk({ playerId, requestId }: { playerId: string; requestId?: string }) {
   const game = useGame();
+  const player = game.players[playerId];
+  const request = requestId ? game.requests.find((r) => r.id === requestId) : undefined;
+  const requestMessage = requestId ? game.inbox.find((m) => m.action?.kind === 'playerRequest' && m.action.requestId === requestId) : undefined;
+  const morale = player?.status.morale ?? 60;
+  const greeting = morale >= 60 ? 'はい、監督。何でしょうか。' : morale >= 40 ? '……はい。何でしょう。' : '……何ですか。';
+  const [lines, setLines] = useState<ConversationLine[]>(() => {
+    if (request && requestMessage) return requestMessage.body.split('\n').filter((l) => l.trim() !== '').map((text) => ({ who: 'them', text }));
+    return [{ who: 'me', text: `${player?.name.split(' ')[0] ?? ''}、少しいいか。` }, { who: 'them', text: greeting }];
+  });
   const [outcome, setOutcome] = useState<TalkOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const player = game.players[playerId];
   if (!player) return <div className="page"><p>選手が見つかりません。</p></div>;
-  const request = requestId ? game.requests.find((r) => r.id === requestId) : undefined;
   const promise = game.promises.find((p) => p.playerId === playerId);
   const form = recentForm(player);
   const cooldown = talkCooldownLeft(game, player);
   const role = player.contract?.role ?? 'backup';
+  const club = player.clubId ? game.clubs[player.clubId] : undefined;
 
-  const run = (action: () => TalkOutcome) => {
+  const run = (say: string, action: () => TalkOutcome) => {
     setError(null);
     try {
       let result: TalkOutcome | null = null;
       store.update(() => {
         result = action();
       });
-      setOutcome(result);
+      const done = result as TalkOutcome | null;
+      setOutcome(done);
+      if (done) {
+        setLines([...lines, { who: 'me', text: say }, { who: 'note', text: done.text },
+          { who: 'note', text: `モラル：${moraleLabel(store.game?.players[playerId]?.status.morale ?? morale)}（${done.morale >= 0 ? '+' : ''}${done.morale}）` }]);
+      }
     } catch (e) {
       setError((e as Error).message);
+    }
+  };
+
+  const mine = player.clubId === game.manager.clubId;
+  const choices = outcome ? undefined : request
+    ? REQUEST_REPLIES.map((r) => ({
+      id: r.id, label: r.label,
+      description: r.id === 'promise' && !canPromise(game) ? '今シーズンの残り試合では約束できません' : r.description,
+      disabled: r.id === 'promise' && !canPromise(game),
+    }))
+    : mine && cooldown === 0 ? MANAGER_TALKS.map((t) => ({ id: t.id, label: `「${t.say}」`, description: `${t.label}。${t.description}` })) : undefined;
+  const choose = (id: string) => {
+    if (request) {
+      const reply = REQUEST_REPLIES.find((r) => r.id === id);
+      if (reply) run(spoken(reply.label), () => answerRequest(store.game!, request.id, id as RequestReply));
+    } else {
+      const talk = MANAGER_TALKS.find((t) => t.id === id);
+      if (talk) run(talk.say, () => managerTalk(store.game!, player.id, id as ManagerTalk));
     }
   };
 
@@ -41,9 +76,20 @@ export function Talk({ playerId, requestId }: { playerId: string; requestId?: st
     <div className="page">
       <header className="page-header">
         <button type="button" className="secondary" onClick={() => store.back()}>← 戻る</button>
-        <h1>{player.name}との面談</h1>
+        <h1>{player.name}との面談{request ? '（出場機会についての申し出）' : ''}</h1>
       </header>
       <div className="grid-2">
+        <div>
+          {!request && !mine && <Panel><p className="muted">自分のクラブの選手とだけ面談できます。</p></Panel>}
+          {!request && !outcome && mine && cooldown > 0 && <Panel><p className="muted">最近話をしたばかりです。あと{cooldown}日たつと、また面談できます。</p></Panel>}
+          {(request || (mine && cooldown === 0) || outcome) && (
+            <Conversation
+              speaker={{ name: player.name, role: `${POSITION_NAME[player.position]}・${player.age}歳`, kind: 'player', color: club?.colors.primary }}
+              me={game.manager.name} lines={lines} choices={choices} onChoose={choose}
+              footer={outcome ? <div className="button-row"><button type="button" className="primary" onClick={() => store.back()}>戻る</button></div> : undefined} />
+          )}
+          {error && <p className="error">{error}</p>}
+        </div>
         <Panel title="選手の様子">
           <dl className="facts">
             <dt>ポジション</dt><dd>{POSITION_NAME[player.position]}（{player.age}歳、総合力 {overallRating(player).toFixed(1)}）</dd>
@@ -58,43 +104,6 @@ export function Talk({ playerId, requestId }: { playerId: string; requestId?: st
             <dt>今季の出場</dt><dd>{player.season.appearances}試合（先発{player.season.starts}）</dd>
             {promise && <><dt>約束</dt><dd>第{promise.untilRound}節までに先発{promise.target}試合（いま {promiseProgress(game, promise)}試合）</dd></>}
           </dl>
-        </Panel>
-
-        <Panel title={request ? '出場機会についての申し出' : '個人面談'}>
-          {outcome ? (
-            <>
-              <div className={`outcome ${outcome.tone}`}>{outcome.text}</div>
-              <p className="muted small">モラル：{moraleLabel(player.status.morale)}（{outcome.morale >= 0 ? '+' : ''}{outcome.morale}）</p>
-              <div className="button-row"><button type="button" className="primary" onClick={() => store.back()}>戻る</button></div>
-            </>
-          ) : request ? (
-            <>
-              <p>「{SQUAD_ROLE_LABEL[role]}として契約したのに、最近はほとんど試合に出られていません。」</p>
-              <div className="option-cards">
-                {REQUEST_REPLIES.map((r) => (
-                  <button key={r.id} type="button" className="option-card" disabled={r.id === 'promise' && !canPromise(game)}
-                    onClick={() => run(() => answerRequest(store.game!, request.id, r.id as RequestReply))}>
-                    <strong>{r.label}</strong>
-                    <span className="muted small">{r.id === 'promise' && !canPromise(game) ? '今シーズンの残り試合では約束できません' : r.description}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : player.clubId !== game.manager.clubId ? (
-            <p className="muted">自分のクラブの選手とだけ面談できます。</p>
-          ) : cooldown > 0 ? (
-            <p className="muted">最近話をしたばかりです。あと{cooldown}日たつと、また面談できます。</p>
-          ) : (
-            <div className="option-cards">
-              {MANAGER_TALKS.map((t) => (
-                <button key={t.id} type="button" className="option-card" onClick={() => run(() => managerTalk(store.game!, player.id, t.id as ManagerTalk))}>
-                  <strong>{t.label}</strong>
-                  <span className="muted small">{t.description}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {error && <p className="error">{error}</p>}
         </Panel>
       </div>
     </div>
