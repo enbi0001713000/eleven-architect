@@ -1,0 +1,19 @@
+{
+  "name": "soccer-manager",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "PCブラウザで遊ぶサッカークラブ経営シミュレーション（フェーズ0：試合エンジンの試作）",
+  "scripts": {
+    "match": "tsx src/cli/match.ts",
+    "simulate": "tsx src/cli/simulate.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
