@@ -6,6 +6,7 @@ import { attentionCount } from '../../game/inbox';
 import { todaysFixture } from '../../game/progress';
 import { isSeasonOver } from '../../game/season';
 import { formatDate } from '../format';
+import { downloadSave } from '../storage';
 import { store, useStore, type Screen } from '../store';
 import { Emblem } from './Emblem';
 import { TutorialOverlay } from './TutorialOverlay';
@@ -80,7 +81,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="muted">{game.season.year}年シーズン　{over ? '全日程終了（オフ）' : today ? `今日は第${game.season.round}節の試合の日` : `次は第${game.season.round}節`}</span>
           </div>
           <div className="topbar-actions">
-            <span className="muted small">{s.saving ? '保存中…' : s.lastSavedAt ? `自動保存 ${s.lastSavedAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+            <span className="muted small">{s.saving ? '保存中…' : s.saveError ? '保存できていません' : s.lastSavedAt ? `自動保存 ${s.lastSavedAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
             <button type="button" className="secondary" data-tutorial="help" disabled={!s.tutorialContext || s.tutorial !== null}
               title="この画面の説明をもう一度見る" aria-label="この画面の説明をもう一度見る" onClick={() => store.replayTutorial()}>？</button>
             <button type="button" className="secondary" disabled={s.locked} title="配色、観戦の速さなど" onClick={() => store.navigate({ name: 'settings' })}>設定</button>
@@ -101,6 +102,13 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
+        {s.saveError && (
+          <div className="save-error" role="alert">
+            <span>保存できませんでした（{s.saveError}）。ブラウザのプライベートモードや、空き容量の不足が考えられます。進めた分を失わないように、ファイルに書き出してください。</span>
+            <button type="button" className="secondary small" onClick={() => downloadSave(game)}>ファイルに書き出す</button>
+            <button type="button" className="secondary small" disabled={s.locked} onClick={() => void store.saveNow()}>もう一度保存する</button>
+          </div>
+        )}
         <main className="content">{children}</main>
       </div>
       <TutorialOverlay />
