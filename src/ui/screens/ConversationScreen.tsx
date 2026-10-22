@@ -450,6 +450,8 @@ function JobOfferTalk({ game, message }: { game: GameState; message: InboxMessag
     ...(!offer ? [note('このオファーには、もう返事をしたか、期限が過ぎました。')] : []),
   ]);
   const [result, setResult] = useState<'accepted' | 'declined' | 'later' | null>(offer ? null : 'later');
+  // 受けたあとはオファーが消えるので、すぐ就任する話だったかを覚えておく
+  const [startsNow, setStartsNow] = useState(false);
   const choose = (id: string) => {
     if (!offer || !club) return;
     if (id === 'accept') {
@@ -463,6 +465,7 @@ function JobOfferTalk({ game, message }: { game: GameState; message: InboxMessag
         ok ? them(offer.start === 'now' ? 'ありがとうございます！明日から、よろしくお願いします。まずは予算と目標の話をさせてください。' : 'ありがとうございます！来シーズンから、よろしくお願いします。')
           : them('申し訳ありません、この話はもう進められなくなりました。'),
       ]);
+      setStartsNow(ok && offer.start === 'now');
       setResult(ok ? 'accepted' : 'later');
       return;
     }
@@ -486,7 +489,7 @@ function JobOfferTalk({ game, message }: { game: GameState; message: InboxMessag
       onChoose={choose}
       footer={result !== null ? (
         <div className="button-row">
-          {result === 'accepted' && offer?.start === 'now' && budgetTalk
+          {result === 'accepted' && startsNow && budgetTalk
             ? <button type="button" className="primary" onClick={() => { store.open({ name: 'home' }); store.navigate({ name: 'conversation', messageId: budgetTalk.id }); }}>オーナーの話を聞く</button>
             : <button type="button" className="primary" onClick={() => store.open({ name: game.manager.clubId === '' ? 'manager' : 'home' })}>戻る</button>}
         </div>

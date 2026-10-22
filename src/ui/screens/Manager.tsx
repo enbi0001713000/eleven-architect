@@ -127,7 +127,7 @@ export function Manager() {
               {[...m.career].reverse().map((s, i) => (
                 <tr key={`${s.clubId}-${i}`}>
                   <td>{s.clubName}</td>
-                  <td>{formatDate(s.from)}〜{s.to ? formatDate(s.to) : '今'}</td>
+                  <td className="wrap small">{formatDate(s.from)}〜{s.to ? formatDate(s.to) : '今'}</td>
                   <td className="wrap small">
                     {s.seasons.length === 0 ? '—' : s.seasons.map((x) => `${x.year}年 ${x.position}位${x.partial ? '（途中まで）' : ''}${x.verdict ? `・${verdictLabel(x.verdict)}` : ''}`).join('　')}
                   </td>

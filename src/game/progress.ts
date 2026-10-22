@@ -24,6 +24,7 @@ import { afterMatchMorale, checkPromises, dailyMorale, maybePlayerRequest } from
 import { seasonEvents } from './offseason';
 import { ownerAfterEvents, ownerBeforeEvents } from './owner';
 import { LEAGUE_RULES } from './rules';
+import { playRoundWithoutManager } from './season';
 import { repairSelection, validateSelection } from './selection';
 import { closePress, schedulePress } from './talks';
 import type { Club, Fixture, GameState, PlayerRecord } from './types';
@@ -203,6 +204,8 @@ function weekly(state: GameState, rng: Rng): void {
 /** 1日進める（自分のクラブの試合が残っている日は進められない） */
 export function advanceDay(state: GameState): void {
   if (todaysFixture(state)) throw new Error('今日の試合がまだ終わっていません');
+  // 無職の間は、今日までの節の試合を計算してから日を進める
+  while (playRoundWithoutManager(state)) continue;
   state.date = addDays(state.date, 1);
   const rng = createRng(daySeed(state.seed, state.date, 'day'));
   financeBeforeEvents(state);

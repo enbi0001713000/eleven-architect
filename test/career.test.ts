@@ -91,6 +91,10 @@ describe('解任のあと', () => {
     // 無職でも日は進められる。前のクラブには応募できない
     expect(canApply(state, clubId).ok).toBe(false);
     expect(todaysFixture(state)).toBeUndefined();
+    // 無職の間も、リーグの試合は進む
+    const round = state.season.round;
+    for (let i = 0; i < 20; i++) advanceDay(state);
+    expect(state.season.round).toBeGreaterThan(round);
     let hired = false;
     for (let i = 0; i < 10 && !hired; i++) {
       advanceToNextEvent(state, 60);
