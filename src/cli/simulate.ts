@@ -109,18 +109,29 @@ const lines = [-2, 2].map((defensiveLine) => {
 });
 check('速いFWで増える失点の差（高い−低い）', (lines[1] ?? 0) - (lines[0] ?? 0), 0.15, 10, (v) => v.toFixed(2));
 
-console.log('  ポゼッション × カウンター');
-const possessionA = withTactics(teamA, undefined, { passingLength: -2, tempo: -1, mentality: 1, defensiveLine: 1 });
-const counterB = withTactics(teamB, undefined, { mentality: -1, tempo: 2, passingLength: 1, defensiveLine: -1, pressing: -1 });
-const pn = play(possessionA, teamB);
-const pc = play(possessionA, counterB);
+// 相性の差は1組だけだと試合の運に埋もれやすいので、フォーメーションの違う4組の平均で見る
+console.log('  ポゼッション × カウンター（4組。Aの勝率：ポゼッション/普通 が、Bを普通→カウンターにするとどう変わるか）');
+const possession = { passingLength: -2, tempo: -1, mentality: 1, defensiveLine: 1 } as const;
+const counter = { mentality: -1, tempo: 2, passingLength: 1, defensiveLine: -1, pressing: -1 } as const;
+const counterPairs: [Team, Team][] = [[teamA, teamB], ...([[11, '4-3-3', '4-4-2'], [77, '4-2-3-1', '4-2-3-1'], [5, '4-4-2', '4-4-2']] as const)
+  .map(([seed, fa, fb]): [Team, Team] => {
+    const r = createRng(seed);
+    return [generateTeam(r, { id: 'A', name: 'A', level: 12, formation: fa }), generateTeam(r, { id: 'B', name: 'B', level: 12, formation: fb })];
+  })];
+let counterGap = 0;
 const nn = play(teamA, teamB);
-const nc = play(teamA, counterB);
-show('ポゼッション 対 普通', pn);
-show('ポゼッション 対 カウンター', pc);
-show('普通 対 普通', nn);
-show('普通 対 カウンター', nc);
-check('カウンターで下がる勝率の差（ポゼ−普通）', (pn.win - pc.win) - (nn.win - nc.win), 0.01, 1, percent);
+for (const [a, b] of counterPairs) {
+  const possessionA = withTactics(a, undefined, possession);
+  const counterB = withTactics(b, undefined, counter);
+  const pn = play(possessionA, b);
+  const pc = play(possessionA, counterB);
+  const base = a === teamA ? nn : play(a, b);
+  const nc = play(a, counterB);
+  const gap = (pn.win - pc.win) - (base.win - nc.win);
+  counterGap += gap / counterPairs.length;
+  console.log(`    ${padDisplay(`${a.tactics.formation} 対 ${b.tactics.formation}`, 20)}ポゼッション ${percent(pn.win)} → ${percent(pc.win)}　普通 ${percent(base.win)} → ${percent(nc.win)}　差 ${percent(gap)}`);
+}
+check('カウンターで下がる勝率の差（ポゼ−普通）', counterGap, 0.01, 1, percent);
 
 console.log('  疲れ（コンディション70%で試合に入る）');
 const tiredA: Team = { ...teamA, readiness: Object.fromEntries(teamA.players.map((p) => [p.id, { condition: 70, fatigue: 50, morale: 60, familiarity: 1 }])) };
