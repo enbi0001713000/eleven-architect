@@ -99,7 +99,7 @@ export const CONTRACT = {
   /** AIクラブの誘いに選手が応じる確率（断る条件に当たらなければ） */
   aiAcceptChance: 0.7,
   /** AIクラブ（と強化部に任せた選手）で、選手が更新を断って出ていく確率（約束した役割ごと）。出場機会や新しい挑戦を求める */
-  declineChance: { key: 0.1, rotation: 0.25, backup: 0.35, youth: 0.2 } satisfies Record<SquadRole, number>,
+  declineChance: { key: 0.08, rotation: 0.2, backup: 0.3, youth: 0.15 } satisfies Record<SquadRole, number>,
   /** 新人は毎年この人数（登録がこの人数より少なければ、そこまで埋める） */
   newcomers: [2, 3] as [number, number],
   newcomerMinSquad: 24,

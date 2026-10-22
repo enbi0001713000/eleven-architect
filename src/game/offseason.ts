@@ -14,7 +14,7 @@ import type { Rng } from '../engine/rng';
 import type { Position } from '../engine/types';
 import { BALANCE } from './balance';
 import { monthDay, yearOf } from './dates';
-import { assignSquadRoles, defaultStatus, playerPhase2Fields, roleByRank } from './defaults';
+import { assignSquadRoles, defaultStatus, playerPhase2Fields } from './defaults';
 import { decideRetirement, potentialFor } from './development';
 import { CONTRACT } from './contractBalance';
 import { clauseFor, completeExpiries } from './contracts';
@@ -29,11 +29,6 @@ import type { GameState, PlayerRecord } from './types';
 import { emptySeason, salaryFor, SIZE_PROFILE, SQUAD_TEMPLATE } from './world';
 
 const isSeasonDone = (state: GameState): boolean => state.season.round > LEAGUE_RULES.rounds;
-
-/** AIのクラブが契約を更新しない選手：序列が20番目より下の24歳以上と、15番目より下の30歳以上 */
-const releases = (rank: number, age: number): boolean => (rank >= 20 && age >= 24) || (rank >= 15 && age >= 30);
-/** 退団させても、この人数は残す */
-const RELEASE_MIN_SQUAD = 24;
 
 /** 日付に合わせて、シーズンの切り替えの出来事を起こす（advanceDay が毎日呼ぶ） */
 export function seasonEvents(state: GameState, rng: Rng): void {
@@ -86,7 +81,6 @@ export function seasonReview(state: GameState): void {
 
 export function retirements(state: GameState, rng: Rng): void {
   const myId = state.manager.clubId;
-  const year = state.season.year;
   const myRetiring: PlayerRecord[] = [];
   const famous: PlayerRecord[] = [];
   for (const player of Object.values(state.players)) {

@@ -539,8 +539,8 @@ export function aiSigningRound(state: GameState, rng: Rng): void {
         return { p, ok: gap >= 1 || upgrade, score: overall + (gap >= 1 ? 1 : 0) - 0.1 * Math.max(0, p.age - 29) };
       })
       .filter((c) => c.ok)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+      .sort((a, b) => b.score - a.score);
+    // 評価の高い順に、断られず年俸予算に収まる選手を探す
     for (const { p } of scored) {
       const role = deservedRole(state, p, club.id);
       const years = Math.min(maxYears(p), CONTRACT.preferredYears(p.age));
