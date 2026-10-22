@@ -261,6 +261,7 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 
 /* タイトルと新しいゲーム */
 .title-screen { display: flex; justify-content: center; padding: 40px 16px; }
+.title-logo { color: var(--accent); font-weight: 700; font-size: 0.85rem; letter-spacing: 0.35em; }
 .title-card { width: min(760px, 100%); }
 .title-card h1 { font-size: 2rem; }
 .title-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; }

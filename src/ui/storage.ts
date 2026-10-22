@@ -63,7 +63,7 @@ export function downloadSave(state: GameState): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `soccer-manager_${club?.shortName ?? 'save'}_${state.date}.json`;
+  a.download = `xi-architect_${club?.shortName ?? 'save'}_${state.date}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
