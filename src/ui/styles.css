@@ -468,3 +468,9 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 .inline-form input[type="number"] { width: 90px; }
 .nowrap { white-space: nowrap; }
 .bid-row p { margin: 0; }
+
+/* スカウトの評価（フェーズ4-C） */
+.tag.grade-A { border-color: var(--win); color: var(--win); font-weight: 700; }
+.tag.grade-B { border-color: var(--accent); color: var(--accent); }
+.tag.grade-C { color: var(--muted); }
+.tag.grade-D { color: var(--muted); border-style: dashed; }

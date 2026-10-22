@@ -19,11 +19,12 @@ import { bookOpeningFees, createFanClub, emptyFanClub } from './fanClub';
 import { addMessage } from './inbox';
 import { goalLabel, placeholderOwner, positionGoalFor, startOwner } from './owner';
 import { makeSchedule, seasonDates } from './schedule';
+import { emptyScouting } from './scouting';
 import { autoSelect } from './selection';
 import type { Club, ClubSize, Difficulty, EmblemSpec, GameState, ManagerBackground, ManagerState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 8;
+export const STATE_VERSION = 9;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -248,6 +249,8 @@ export function createWorld(seed: number): GameState {
     bids: [],
     nextBidNumber: 1,
     transferHistory: [],
+    scouting: emptyScouting(),
+    prospects: [],
   };
   for (const player of Object.values(players)) {
     if (player.contract) player.contract.releaseClause = clauseFor(player, START_YEAR, CONTRACT.defaultClause);

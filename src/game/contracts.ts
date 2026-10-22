@@ -254,7 +254,7 @@ export function talkStatus(state: GameState, playerId: string): TalkCheck {
   if (player.joining) return no(player.joining.clubId === myId ? 'すでに仮の契約をしています。1月1日に加入します。' : `${state.clubs[player.joining.clubId]?.name ?? '他クラブ'}と仮の契約をしています。`);
   if (player.leaving && player.clubId && md.startsWith('12-')) return { ok: true, kind, reason: '' };
   if ((state.freeAgents ?? []).includes(playerId) && md <= CONTRACT.freeAgencyEnds) return { ok: true, kind, reason: '' };
-  if (player.clubId && acceptedBid(state, playerId, myId)) return { ok: true, kind, reason: '' };
+  if (acceptedBid(state, playerId, myId)) return { ok: true, kind, reason: '' };
   if (player.clubId && player.contract) return no('契約が残っている選手です。先にクラブと移籍の交渉（移籍金か違約金）をしてください。');
   return no('今は契約の話ができません。');
 }

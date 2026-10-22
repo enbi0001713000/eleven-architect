@@ -16,6 +16,8 @@ import { BALANCE, TRAINING_FOCUS, TRAINING_INTENSITY } from './balance';
 import { careerEvents } from './career';
 import { backgroundOf } from './careerBalance';
 import { contractEvents, payBonus } from './contracts';
+import { prospectEvents } from './prospects';
+import { scoutingEvents } from './scouting';
 import { transferEvents } from './transfers';
 import { applyInjury, canPlay, createInjury, injuryName } from './condition';
 import { addDays, daySeed, weekday } from './dates';
@@ -218,6 +220,8 @@ export function advanceDay(state: GameState): void {
   seasonEvents(state, rng);
   transferEvents(state, rng);
   contractEvents(state, rng);
+  scoutingEvents(state);
+  prospectEvents(state);
   careerEvents(state, rng);
   ownerAfterEvents(state, financeAfterEvents(state, rng));
   const matchDates = new Set(state.fixtures.filter((f) => f.result === null).map((f) => f.date));

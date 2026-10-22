@@ -6,7 +6,8 @@ export type TutorialId =
   | 'conversation' | 'start' | 'inbox' | 'squad' | 'tactics' | 'training' | 'fixtures' | 'league' | 'finance' | 'myClub' | 'fanClub'
   | 'match' | 'talk' | 'press' | 'monthClose' | 'sponsorOffer' | 'fanClubWindow' | 'ownerWarning' | 'thanksDay'
   | 'manager' | 'unemployed' | 'jobOffer'
-  | 'transfers' | 'contract' | 'renewalWindow' | 'transferMarket' | 'bid' | 'incomingBid';
+  | 'transfers' | 'contract' | 'renewalWindow' | 'transferMarket' | 'bid' | 'incomingBid'
+  | 'scouting' | 'prospect' | 'prospectsAnnounced';
 
 export interface TutorialStep {
   text: string;
@@ -215,6 +216,30 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
       { text: '他クラブの選手を獲るには、まずクラブと話をつけます。相手の考えの目安を見て、移籍金を決めましょう。主力は高く、移籍リストの選手は安く手放してくれます。', target: t('bid-player') },
       { text: '移籍金を出すと、数日後に返事が来ます。足りなければ、相手が希望の額を返してきます。違約金を払えば、相手は断れません。', target: t('bid-offer') },
       { text: 'クラブと合意したら、14日以内に選手（の代理人）と契約の話をします。23歳以下の控えや若手なら、レンタルで借りることもできます。' },
+    ],
+  },
+  scouting: {
+    title: 'スカウト',
+    steps: [
+      { text: 'スカウトの画面です。スカウトを送って、他クラブ、海外、高校・大学の選手を調べます。スカウトの人数は、クラブの規模で決まります。', target: t('scout-tiles') },
+      { text: '「スカウト」のタブで、地域、ポジション、年齢を決めて探しに行けます。条件に合う良い選手を、数人見つけて報告してくれます。海外の選手は、見つけると獲得の申し込みができます。', target: t('scout-tabs') },
+      { text: '調べた選手は「レポート」に並びます。能力の幅が狭まり、伸びしろ、長所と短所、人柄、勧める度合いが分かります。一度上がった知識度は下がりません。' },
+      { text: '気になる選手を指名して調べるときは、選手の詳細の「スカウトレポート」から「スカウトを送る」を押します。対戦した相手の選手も、少しずつ分かってきます。' },
+      { text: '毎年6月1日に、来年プロになる高校生・大学生の候補が発表されます。「新人の候補」で調べて、10月31日までに内定を出せます。' },
+    ],
+  },
+  prospect: {
+    title: '新人の内定',
+    steps: [
+      { text: '内定には、約束する役割と年俸を決めます。他クラブも内定を出すので、良い候補ほど競争になります。', target: t('prospect-offer') },
+      { text: '候補は、最初の内定から21日後に、クラブの評判、出番の見込み、約束する役割、年俸を比べて選びます。内定を受けた候補は、1月10日に加入します。' },
+    ],
+  },
+  prospectsAnnounced: {
+    title: '新人の候補の発表',
+    steps: [
+      { text: '来年プロになる高校生と大学生の候補が発表されました。スカウトの画面の「新人の候補」で調べて、内定を出せます。', target: t('menu-scouting') },
+      { text: '内定を出さなくても、足りない分は強化部が新人を獲って埋めます。将来の主力になりそうな候補だけ、自分で内定を出しましょう。' },
     ],
   },
   incomingBid: {

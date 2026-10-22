@@ -132,7 +132,7 @@ describe('古いセーブデータ（版3）', () => {
     delete v3.owner;
     v3.version = 3;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 3, state: v3 }));
-    expect(loaded.version).toBe(8);
+    expect(loaded.version).toBe(9);
     expect(loaded.owner.trust).toBe(OWNER.startTrust);
     expect(loaded.owner.goals.year).toBe(loaded.season.year);
     while (!todaysFixture(loaded)) advanceDay(loaded);

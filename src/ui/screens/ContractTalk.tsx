@@ -84,8 +84,8 @@ export function ContractTalk({ playerId }: { playerId: string }) {
         <div>
           <h1>{player.name}との契約の交渉</h1>
           <div className="muted">
-            {POSITION_NAME[player.position]}　{player.age}歳　{player.clubId ? <ClubLink game={game} clubId={player.clubId} short /> : '所属なし'}
-            {'　'}{renewal ? '契約の更新' : player.leaving ? '仮の契約（1月1日に加入）' : player.clubId ? `移籍（${transferBid ? `${transferBid.kind === 'clause' ? '違約金' : '移籍金'} ${yenText(transferBid.fee)}で` : ''}クラブと合意済み）` : '獲得（すぐに加入）'}
+            {POSITION_NAME[player.position]}　{player.age}歳　{player.clubId ? <ClubLink game={game} clubId={player.clubId} short /> : transferBid ? `海外のクラブ（${player.nationality}）` : '所属なし'}
+            {'　'}{renewal ? '契約の更新' : player.leaving ? '仮の契約（1月1日に加入）' : transferBid ? `移籍（${transferBid.kind === 'clause' ? '違約金' : '移籍金'} ${yenText(transferBid.fee)}でクラブと合意済み）` : '獲得（すぐに加入）'}
           </div>
         </div>
       </header>

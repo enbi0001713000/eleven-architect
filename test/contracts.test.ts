@@ -228,7 +228,7 @@ describe('古いセーブデータ（版6）', () => {
     }
     v6.version = 6;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 6, state: v6 }));
-    expect(loaded.version).toBe(8);
+    expect(loaded.version).toBe(9);
     expect(loaded.agents).toHaveLength(CONTRACT.agents);
     expect(loaded.freeAgents).toEqual([]);
     const player = Object.values(loaded.players).find((p) => p.contract)!;

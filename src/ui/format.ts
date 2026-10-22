@@ -83,7 +83,7 @@ export function ratingTone(rating: number | null): string {
 
 export const INBOX_CATEGORY_LABEL: Record<InboxCategory, string> = {
   match: '試合', medical: 'メディカル', discipline: '規律', player: '選手', media: 'メディア',
-  training: '練習', league: 'リーグ', club: 'クラブ', finance: '財務', transfer: '移籍',
+  training: '練習', league: 'リーグ', club: 'クラブ', finance: '財務', transfer: '移籍', scout: 'スカウト',
 };
 
 export function fanMoodLabel(value: number): string {

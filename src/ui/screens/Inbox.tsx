@@ -99,6 +99,7 @@ function MessageView({ message }: { message: InboxMessage }) {
         {action && message.resolved && <span className="muted small">対応済み</span>}
         {message.category === 'finance' && <button type="button" className="secondary" onClick={() => store.open({ name: 'finance' })}>財務の画面へ</button>}
         {message.category === 'transfer' && <button type="button" className="secondary" onClick={() => store.open({ name: 'transfers' })}>移籍の画面へ</button>}
+        {message.category === 'scout' && <button type="button" className="secondary" onClick={() => store.open({ name: 'scouting' })}>スカウトの画面へ</button>}
         {player && <button type="button" className="secondary" onClick={() => store.navigate({ name: 'player', id: player.id })}>選手を見る</button>}
         {message.category === 'training' && <button type="button" className="secondary" onClick={() => store.open({ name: 'training' })}>練習の画面へ</button>}
         {message.category === 'medical' && <button type="button" className="secondary" onClick={() => store.open({ name: 'tactics' })}>メンバーを見直す</button>}

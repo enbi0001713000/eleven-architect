@@ -8,12 +8,13 @@ import { simulateMatch } from '../engine/match';
 import { overallRating } from '../engine/ratings';
 import type { MatchResult } from '../engine/types';
 import { CONTRACT } from '../game/contractBalance';
-import { deservedRole, expiringPlayers, isDelegated, maxYears, neededSalary, offerContract, type ContractOffer } from '../game/contracts';
+import { deservedRole, expiringPlayers, isDelegated, marketValue, maxYears, neededSalary, offerContract, type ContractOffer } from '../game/contracts';
 import { debtOf, netResult, payrollOf, totalIncome } from '../game/finance';
 import { acceptIncoming, OVERSEAS } from '../game/transfers';
 import { createRng } from '../engine/rng';
 import { totalMembers } from '../game/fanClub';
 import { goalLabel, initialOwner, isDismissed, verdictLabel } from '../game/owner';
+import { prospectPlayers } from '../game/prospects';
 import { advanceDay, todaysFixture } from '../game/progress';
 import { applyMatchday, isSeasonOver, prepareMatchday } from '../game/season';
 import { autoSelect } from '../game/selection';
@@ -40,6 +41,45 @@ function clubStrength(s: GameState, clubId: string): number {
   const ratings = (s.clubs[clubId]?.playerIds ?? []).map((id) => s.players[id]).filter((p): p is PlayerRecord => !!p)
     .map(overallRating).sort((a, b) => b - a).slice(0, 18);
   return avg(ratings);
+}
+
+/** フェーズ4の完成条件の表で見る数字（世界の初めと終わり） */
+interface Checks {
+  /** 規模ごとの、上位18人の平均総合力 */
+  bySize: Record<ClubSize, number>;
+  /** 23歳以下と32歳以上の割合 */
+  young: number;
+  old: number;
+  /** GKが2人より少ないクラブ、ポジションの人数が最低を下回るクラブ */
+  thinGk: number;
+  thinClubs: number;
+  /** リーグの年俸の合計、市場価値の平均と最高 */
+  payroll: number;
+  valueAvg: number;
+  valueMax: number;
+}
+
+const MIN_AT: Record<string, number> = { GK: 2, CB: 3, SB: 2, DM: 1, CM: 2, AM: 1, WM: 1, W: 2, FW: 2 };
+
+function checks(s: GameState): Checks {
+  const players = leaguePlayers(s);
+  const bySize = Object.fromEntries(SIZES.map((size) => [size, avg(Object.values(s.clubs).filter((c) => c.size === size).map((c) => clubStrength(s, c.id)))])) as Record<ClubSize, number>;
+  let thinGk = 0;
+  let thinClubs = 0;
+  for (const club of Object.values(s.clubs)) {
+    const counts = new Map<string, number>();
+    for (const id of club.playerIds) {
+      const p = s.players[id];
+      if (p) counts.set(p.position, (counts.get(p.position) ?? 0) + 1);
+    }
+    if ((counts.get('GK') ?? 0) < 2) thinGk++;
+    if (Object.entries(MIN_AT).some(([pos, n]) => (counts.get(pos) ?? 0) < n)) thinClubs++;
+  }
+  const values = players.map((p) => marketValue(p, s.season.year));
+  return {
+    bySize, young: players.filter((p) => p.age <= 23).length / players.length, old: players.filter((p) => p.age >= 32).length / players.length,
+    thinGk, thinClubs, payroll: Object.keys(s.clubs).reduce((n, id) => n + payrollOf(s, id), 0), valueAvg: avg(values), valueMax: Math.max(...values),
+  };
 }
 
 function snapshot(s: GameState, label: string): { age: number; strength: number } {
@@ -141,6 +181,15 @@ interface WorldSummary {
   contracts: MoveStats;
   /** 移籍（フェーズ4-B）：年ごとの、移籍金での移籍、海外から、海外へ、レンタル、契約満了、移籍金の合計 */
   transfers: { transfer: number; fromAbroad: number; abroad: number; loan: number; free: number; fees: number }[];
+  /** 完成条件の表（フェーズ4-C） */
+  checksStart: Checks;
+  checksEnd: Checks | null;
+  top3: string[][];
+  bottom3: string[][];
+  /** 開始時に21歳以下だった選手の、終わりの総合力と潜在能力 */
+  growth: { reached: number; total: number; gains: number[] };
+  /** 内定で決まった新人の候補（年ごと） */
+  prospectsSigned: number[];
 }
 
 function moneyBySize(s: GameState): Record<ClubSize, { balance: number; debt: number; payroll: number }> {
@@ -169,7 +218,14 @@ const summary: WorldSummary = {
   money: Object.fromEntries(SIZES.map((size) => [size, { start: startMoney[size].balance, end: 0, debt: 0, payrollStart: startMoney[size].payroll, payrollEnd: 0 }])) as WorldSummary['money'],
   contracts: { last: null, moves: [], unsigned: [], squadMin: Infinity, squadMax: 0 },
   transfers: [],
+  checksStart: checks(state),
+  checksEnd: null,
+  top3: [],
+  bottom3: [],
+  growth: { reached: 0, total: 0, gains: [] },
+  prospectsSigned: [],
 };
+const youngAtStart = new Map(leaguePlayers(state).filter((p) => p.age <= 21).map((p) => [p.id, overallRating(p)]));
 for (let year = 0; year < years; year++) {
   let injuries = 0;
   let injuryDays = 0;
@@ -261,12 +317,15 @@ for (let year = 0; year < years; year++) {
     if (state.date.endsWith('-12-31')) {
       retiring = leaguePlayers(state).filter((p) => p.retiring).length;
       leaving = leaguePlayers(state).filter((p) => p.leaving).length;
+      summary.prospectsSigned.push(prospectPlayers(state).filter((p) => p.prospect?.signed).length);
     }
   }
   const joined = leaguePlayers(state).filter((p) => !idsBefore.has(p.id)).length;
   summary.goals.push(goals / matches);
   summary.champions.push(state.clubs[table[0]?.clubId ?? '']?.name ?? '');
   summary.championPoints.push(table[0]?.points ?? 0);
+  summary.top3.push(table.slice(0, 3).map((r) => r.clubId));
+  summary.bottom3.push(table.slice(-3).map((r) => r.clubId));
   log(`\n■ ${seasonYear}年（${startDate}〜）`);
   log(`  ゴール ${(goals / matches).toFixed(2)}  ホーム勝ち ${(homeWins / matches * 100).toFixed(1)}%  引き分け ${(draws / matches * 100).toFixed(1)}%`);
   log(`  優勝 ${state.clubs[table[0]?.clubId ?? '']?.name}（${table[0]?.points}）  最下位 ${table[17]?.points}`);
@@ -298,6 +357,14 @@ for (let year = 0; year < years; year++) {
   summary.deficits.push(money.deficits);
   summary.ownerFunded += money.ownerFunded;
   summary.end = snapshot(state, `  ${state.season.year}年の開幕前`);
+}
+summary.checksEnd = checks(state);
+for (const [id, start] of youngAtStart) {
+  const p = state.players[id];
+  if (!p || !p.clubId) continue;
+  summary.growth.total++;
+  summary.growth.gains.push(overallRating(p) - start);
+  if (overallRating(p) >= p.hidden.potential - 1) summary.growth.reached++;
 }
 const endMoney = moneyBySize(state);
 for (const size of SIZES) {
@@ -331,6 +398,18 @@ if (worlds > 1 || quiet) {
         const m = w.money[size];
         return `${SIZE_NAME[size]} 手元${oku(m.start)}→${oku(m.end)}億 借入${oku(m.debt)}億 年俸${oku(m.payrollStart)}→${oku(m.payrollEnd)}億`;
       }).join('  '));
+  }
+  for (const w of summaries) {
+    const a = w.checksStart;
+    const b = w.checksEnd ?? a;
+    const pct = (n: number): string => `${Math.round(n * 100)}%`;
+    const gains = [...w.growth.gains].sort((x, y) => x - y);
+    console.log(`  世界${w.seed}の完成条件：規模ごとの強さ ${SIZES.map((size) => `${SIZE_NAME[size]}${a.bySize[size].toFixed(2)}→${b.bySize[size].toFixed(2)}`).join(' ')}`
+      + `  23歳以下 ${pct(a.young)}→${pct(b.young)} 32歳以上 ${pct(a.old)}→${pct(b.old)}  GKが2人未満 ${b.thinGk}クラブ ポジションが足りない ${b.thinClubs}クラブ`);
+    console.log(`    年俸の合計 ${oku(a.payroll)}→${oku(b.payroll)}億  市場価値 平均${oku(a.valueAvg)}→${oku(b.valueAvg)}億 最高${oku(a.valueMax)}→${oku(b.valueMax)}億`
+      + `  上位3に入ったクラブ ${new Set(w.top3.flat()).size}  下位3に入ったクラブ ${new Set(w.bottom3.flat()).size}`
+      + `  開始時21歳以下の若手 ${w.growth.total}人：潜在能力-1まで伸びた ${pct(w.growth.reached / Math.max(1, w.growth.total))}（伸び ${gains.length ? `${gains[0]!.toFixed(1)}〜${gains[gains.length - 1]!.toFixed(1)}、真ん中 ${gains[Math.floor(gains.length / 2)]!.toFixed(1)}` : '-'}）`
+      + `  内定で決まった候補 ${w.prospectsSigned.join(' ')}`);
   }
   console.log(`  全体のゴール ${avg(summaries.flatMap((w) => w.goals)).toFixed(2)}（目標 2.6〜2.9）`);
 }
