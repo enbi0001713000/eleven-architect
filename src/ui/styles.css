@@ -439,3 +439,9 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 .tutorial-text { margin: 10px 0 12px; line-height: 1.75; font-size: 1.02rem; }
 .tutorial-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tutorial-spacer { flex: 1; }
+
+/* 監督のキャリア（フェーズ3-C） */
+.option-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
+.option-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.option-grid .option-card { border: 1px solid var(--control-border); background: var(--panel); }
+@media (max-width: 1000px) { .option-grid, .option-grid.three { grid-template-columns: 1fr 1fr; } }

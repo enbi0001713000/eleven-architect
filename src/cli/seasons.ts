@@ -91,6 +91,8 @@ interface WorldSummary {
   verdicts: string[];
   warnings: number;
   dismissals: { midSeason: number; seasonEnd: number };
+  /** シーズンごとの、AIクラブの監督の解任（フェーズ3-C） */
+  aiSackings: number[];
   trust: number[];
   /** 規模ごとの手元のお金と借り入れ（最初と最後） */
   money: Record<ClubSize, { start: number; end: number; debt: number; payrollStart: number; payrollEnd: number }>;
@@ -118,7 +120,7 @@ const startMoney = moneyBySize(state);
 const pastEvaluations: SeasonEvaluation[] = [];
 const summary: WorldSummary = {
   seed, goals: [], champions: [], championPoints: [], start: snapshot(state, `世界${seed} 開始時`), end: { age: 0, strength: 0 },
-  deficits: [], ownerFunded: 0, verdicts: [], warnings: 0, dismissals: { midSeason: 0, seasonEnd: 0 }, trust: [],
+  deficits: [], ownerFunded: 0, verdicts: [], warnings: 0, dismissals: { midSeason: 0, seasonEnd: 0 }, trust: [], aiSackings: [],
   money: Object.fromEntries(SIZES.map((size) => [size, { start: startMoney[size].balance, end: 0, debt: 0, payrollStart: startMoney[size].payroll, payrollEnd: 0 }])) as WorldSummary['money'],
 };
 for (let year = 0; year < years; year++) {
@@ -145,6 +147,15 @@ for (let year = 0; year < years; year++) {
     if (when === 'midSeason') dismissedMid = true;
     log(`  ★ 解任（${when === 'midSeason' ? 'シーズン中' : 'シーズンの評価'}）：${state.date} 信頼度 ${state.owner.trust}`);
     pastEvaluations.push(...state.owner.evaluations);
+    // 解任されると無職になる（フェーズ3-C）。ここでは同じクラブに新しい監督が来たことにして、オーナーの評価を見続ける
+    const club = state.clubs[myId];
+    if (club) {
+      club.vacancy = null;
+      club.managerName = state.manager.name;
+    }
+    state.manager.clubId = myId;
+    state.manager.unemployedSince = null;
+    state.manager.offers = [];
     state.owner = initialOwner(state);
   };
 
@@ -214,6 +225,11 @@ for (let year = 0; year < years; year++) {
   log(`  先発の状態：コンディション ${avg(conditionAtKickoff).toFixed(1)}  疲労 ${avg(fatigueAtKickoff).toFixed(1)}（70以上 ${(fatigueAtKickoff.filter((f) => f >= 70).length / fatigueAtKickoff.length * 100).toFixed(1)}%）`);
   log(`  モラル 平均 ${avg(morale).toFixed(1)}（35未満 ${(morale.filter((m) => m < 35).length / morale.length * 100).toFixed(1)}%）  申し出 ${requests}件`);
   log(`  オフ：引退 ${retiring}人、契約満了で退団 ${leaving}人、新人 ${joined}人 → ${leaguePlayers(state).length}人`);
+  const seasonNews = state.inbox.filter((m) => m.category === 'league' && m.date >= startDate);
+  const aiSacked = seasonNews.filter((m) => m.subject.includes('解任')).length;
+  const offers = state.inbox.filter((m) => m.topic === 'jobOffer' && m.date >= startDate).length;
+  summary.aiSackings.push(aiSacked);
+  log(`  監督：AIクラブの解任 ${aiSacked}人、自分へのオファー ${offers}件、評判 ${Math.round(state.manager.reputation)}`);
   const evaluation = [...pastEvaluations, ...state.owner.evaluations].find((e) => e.year === seasonYear);
   const warnings = state.inbox.filter((m) => m.topic === 'ownerWarning').length - warningsBefore;
   summary.warnings += warnings;
@@ -249,6 +265,7 @@ if (worlds > 1 || quiet) {
     for (const v of w.verdicts) verdicts.set(v, (verdicts.get(v) ?? 0) + 1);
     console.log(`    オーナー：${[...verdicts].map(([v, n]) => `${v === 'dismissed' ? 'シーズン中に解任' : v === 'none' ? '評価なし' : verdictLabel(v as 'met')} ${n}`).join('、')}`
       + `  警告 ${w.warnings}回  解任 シーズン中${w.dismissals.midSeason}・評価で${w.dismissals.seasonEnd}  信頼度（年の初め） ${w.trust.join(' ')}`);
+    console.log(`    AIクラブの監督の解任（シーズンごと）：${w.aiSackings.join(' ')}`);
     console.log(`    お金：赤字のクラブ（1年あたり）${avg(w.deficits).toFixed(1)}  オーナーの穴埋め ${w.ownerFunded}回  `
       + SIZES.map((size) => {
         const m = w.money[size];

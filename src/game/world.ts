@@ -9,16 +9,19 @@ import type { FormationName, Position, TeamInstructions } from '../engine/types'
 import { CLUB_SEEDS, type ClubSeed } from './clubData';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
+import { newManager, startTrustFor } from './career';
+import { BACKGROUNDS, DIFFICULTIES } from './careerBalance';
+import { addDays } from './dates';
 import { emptyFinance, initFinances } from './finance';
 import { bookOpeningFees, createFanClub, emptyFanClub } from './fanClub';
 import { addMessage } from './inbox';
 import { goalLabel, placeholderOwner, positionGoalFor, startOwner } from './owner';
 import { makeSchedule, seasonDates } from './schedule';
 import { autoSelect } from './selection';
-import type { Club, ClubSize, EmblemSpec, GameState, PlayerRecord } from './types';
+import type { Club, ClubSize, Difficulty, EmblemSpec, GameState, ManagerBackground, ManagerState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -163,6 +166,9 @@ export function createWorld(seed: number): GameState {
       emblem: makeEmblem(rng, clubSeed),
       rivalId: null,
       managerName: `${rng.pick(SURNAMES)} ${rng.pick(GIVEN_NAMES)}`,
+      managerReputation: 0,
+      managerSince: '',
+      vacancy: null,
       playerIds,
       tactics,
       selection: null,
@@ -215,7 +221,7 @@ export function createWorld(seed: number): GameState {
     version: STATE_VERSION,
     seed,
     createdAt: new Date().toISOString(),
-    manager: { name: '', clubId: '' },
+    manager: placeholderManager(),
     season: { year: START_YEAR, round: 1 },
     date: start.toISOString().slice(0, 10),
     clubs,
@@ -234,18 +240,49 @@ export function createWorld(seed: number): GameState {
     owner: placeholderOwner(START_YEAR, start.toISOString().slice(0, 10)),
   };
   for (const id of ids) assignSquadRoles(state, id);
+  // AIクラブの監督の評判は、クラブの評判の近く（フェーズ3-C）
+  for (const club of Object.values(state.clubs)) {
+    club.managerReputation = Math.max(20, Math.min(90, club.reputation + rng.int(-12, 6)));
+    club.managerSince = addDays(state.date, -rng.int(100, 1200));
+  }
   initFinances(state, rng, START_YEAR, true);
   for (const club of Object.values(state.clubs)) bookOpeningFees(club);
   return state;
 }
 
+/** 監督が決まる前の世界に入れておく、仮の監督（startNewGame で決め直す） */
+function placeholderManager(): ManagerState {
+  return {
+    name: '', clubId: '', background: 'coach', difficulty: 'normal', reputation: BACKGROUNDS.coach.reputation, reputationHistory: [],
+    career: [], offers: [], applications: [], unemployedSince: null, pendingMove: null, lastOfferDate: null, nextOfferNumber: 1,
+  };
+}
+
+export interface NewGameOptions {
+  /** 監督の経歴（フェーズ3-C）。省略すると「指導者の経験あり」 */
+  background?: ManagerBackground;
+  /** 難易度（フェーズ3-C）。省略すると「ふつう」 */
+  difficulty?: Difficulty;
+}
+
 /** 監督の名前と担当するクラブを決めて、ゲームを始められる状態にする */
-export function startNewGame(world: GameState, managerName: string, clubId: string): GameState {
+export function startNewGame(world: GameState, managerName: string, clubId: string, options: NewGameOptions = {}): GameState {
   const club = world.clubs[clubId];
   if (!club) throw new Error(`クラブ ${clubId} がありません`);
+  const background = options.background ?? 'coach';
+  const difficulty = options.difficulty ?? 'normal';
   club.managerName = managerName;
+  club.managerSince = world.date;
   club.selection = autoSelect(world, clubId, club.tactics.formation);
-  const state: GameState = { ...world, manager: { name: managerName, clubId } };
+  const state: GameState = { ...world, manager: newManager(managerName, club, background, difficulty, world.date) };
+  // 難易度：最初の年の予算
+  const factor = DIFFICULTIES[difficulty].budget;
+  if (factor !== 1) {
+    const budget = club.finance.budget;
+    budget.wages = Math.round(budget.wages * factor / 1e7) * 1e7;
+    budget.transfers = Math.round(budget.transfers * factor / 1e7) * 1e7;
+    budget.total = budget.wages + budget.transfers;
+  }
   addMessage(state, {
     category: 'club', from: 'オーナー', important: false,
     subject: `${club.name}へようこそ`,
@@ -253,7 +290,7 @@ export function startNewGame(world: GameState, managerName: string, clubId: stri
       + '開幕まで1週間あります。練習の方針と戦術を決めて、チームミーティングで目標を共有しておいてください。\n'
       + '画面右上の「次の出来事まで進める」で時間が進みます。試合の日や、大事な知らせが届いた日に止まります。',
   });
-  startOwner(state);
+  startOwner(state, DIFFICULTIES[difficulty].strictness, startTrustFor(club.reputation, state.manager.reputation));
   return state;
 }
 

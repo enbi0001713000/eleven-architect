@@ -3,13 +3,16 @@
 
 import { overallRating } from '../engine/ratings';
 import { createRng } from '../engine/rng';
+import { newManager } from './career';
+import { CAREER } from './careerBalance';
+import { addDays } from './dates';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
 import { initFinances } from './finance';
 import { createFanClub, totalMembers } from './fanClub';
 import { addMessage } from './inbox';
 import { goalLabel, initialOwner } from './owner';
-import type { GameState } from './types';
+import type { Difficulty, GameState, OwnerStrictness } from './types';
 import { salaryFor, SIZE_PROFILE, STATE_VERSION } from './world';
 
 export interface SaveFile {
@@ -31,6 +34,7 @@ function migrate(state: GameState, fromVersion: number): GameState {
     if (v === 2) current = migrateV2toV3(current);
     if (v === 3) current = migrateV3toV4(current);
     if (v === 4) current = migrateV4toV5(current);
+    if (v === 5) current = migrateV5toV6(current);
     current = { ...current, version: v + 1 };
   }
   return current;
@@ -93,6 +97,38 @@ function migrateV2toV3(state: GameState): GameState {
 }
 
 /** フェーズ3-A（版3）→ フェーズ3-B（版4）：オーナー（目標と信頼度）を足す */
+/**
+ * 版5（フェーズ3.5）→ 版6（フェーズ3-C）：監督の経歴・評判・キャリアと、AIクラブの監督の評判を足す。
+ * 経歴は「指導者の経験あり」、難易度はオーナーの厳しさから決める。解任されていたセーブは、無職から続けられる
+ */
+function migrateV5toV6(state: GameState): GameState {
+  const old = state.manager as unknown as { name: string; clubId: string };
+  const club = state.clubs[old.clubId];
+  const start = state.history[0] ? `${state.history[0].year}-02-20` : state.date;
+  const manager = newManager(old.name, club ?? Object.values(state.clubs)[0]!, 'coach', DIFFICULTY_OF[state.owner.strictness], start);
+  const stint = manager.career[0]!;
+  for (const e of state.owner.evaluations) stint.seasons.push({ year: e.year, position: e.position, goal: e.goal, verdict: e.verdict });
+  // これまでの評価で、評判を決めておく
+  manager.reputation = Math.max(1, Math.min(100, manager.reputation + state.owner.evaluations.reduce((n, e) => n + CAREER.verdictReputation[e.verdict], 0)));
+  manager.reputationHistory = [{ date: state.date, value: manager.reputation }];
+  state.manager = manager;
+  const rng = createRng(state.seed ^ 0x3c3c);
+  for (const c of Object.values(state.clubs)) {
+    c.managerReputation ??= Math.max(20, Math.min(90, c.reputation + rng.int(-12, 6)));
+    c.managerSince ??= c.id === manager.clubId ? start : addDays(state.date, -rng.int(100, 1200));
+    c.vacancy ??= null;
+  }
+  addMessage(state, {
+    category: 'club', from: 'あなたの代理人', important: false,
+    subject: '監督のキャリアの機能が使えるようになりました',
+    body: `監督の評判は${Math.round(manager.reputation)}です。評判が上がると、評判の高いクラブからオファーが届きます。`
+      + '\n解任されても、ほかのクラブのオファーで監督を続けられます。監督の画面で、評判と経歴を見られます。',
+  });
+  return state;
+}
+
+const DIFFICULTY_OF: Record<OwnerStrictness, Difficulty> = { lenient: 'easy', normal: 'normal', strict: 'hard' };
+
 /** 版4（フェーズ3-B）→ 版5（フェーズ3.5）：ファンクラブを足す。会員はファンの数から作る */
 function migrateV4toV5(state: GameState): GameState {
   for (const club of Object.values(state.clubs)) club.fanClub ??= createFanClub(club);

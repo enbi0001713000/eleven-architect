@@ -3,13 +3,13 @@
 import { Layout } from './components/Layout';
 import { ClubDetail } from './screens/ClubDetail';
 import { ConversationScreen } from './screens/ConversationScreen';
-import { Dismissed } from './screens/Dismissed';
 import { Finance } from './screens/Finance';
 import { Fixtures } from './screens/Fixtures';
 import { Home } from './screens/Home';
 import { Inbox } from './screens/Inbox';
 import { Later } from './screens/Later';
 import { League } from './screens/League';
+import { Manager } from './screens/Manager';
 import { MatchDay } from './screens/MatchDay';
 import { MyClub } from './screens/MyClub';
 import { Meeting } from './screens/Meeting';
@@ -25,6 +25,9 @@ import { Title } from './screens/Title';
 import { Training } from './screens/Training';
 import { useStore } from './store';
 
+/** 無職の間に開ける画面 */
+const UNEMPLOYED_SCREENS = new Set(['manager', 'inbox', 'conversation', 'fixtures', 'league', 'club', 'player', 'settings']);
+
 export function App() {
   const s = useStore();
   const screen = s.screen;
@@ -34,8 +37,8 @@ export function App() {
   if (screen.name === 'settings') return <Settings />;
   if (!s.game) return <Title />;
 
-  // 解任されたら、解任の話（会話）と解任の画面だけを見せる
-  if (s.game.owner?.dismissed && screen.name !== 'conversation') return <Layout><Dismissed /></Layout>;
+  // 無職の間（解任や辞任のあと）は、クラブの画面は開けない。監督の画面がホームになる
+  if (s.game.manager.clubId === '' && !UNEMPLOYED_SCREENS.has(screen.name)) return <Layout><Manager /></Layout>;
 
   let content;
   switch (screen.name) {
@@ -56,7 +59,7 @@ export function App() {
     case 'press': content = <Press key={screen.fixtureId} fixtureId={screen.fixtureId} />; break;
     case 'finance': content = <Finance key={screen.tab ?? 'finance'} initialTab={screen.tab} />; break;
     case 'myClub': content = <MyClub key={screen.tab ?? 'owner'} initialTab={screen.tab} />; break;
-    case 'dismissed': content = <Dismissed />; break;
+    case 'manager': content = <Manager />; break;
     case 'conversation': content = <ConversationScreen key={`${screen.messageId ?? ''}-${screen.topic ?? ''}-${s.history.length}`} screen={screen} />; break;
     case 'later': content = <Later key={screen.title} title={screen.title} phase={screen.phase} />; break;
   }

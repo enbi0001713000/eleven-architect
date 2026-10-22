@@ -3,6 +3,7 @@
 // 財務やクラブの画面からの相談（予算の増額、借り入れ、目標の話し合い、ファンクラブのイベント）を会話で見せる。
 
 import { useEffect, useState } from 'react';
+import { acceptOffer, declineOffer } from '../../game/career';
 import { budgetIncreaseRoom, chooseSponsorOffer, payrollOf, requestBudgetIncrease, yenText } from '../../game/finance';
 import { canHoldEvent, decideThanksDay, eventCandidates, eventPreview, holdEvent, popularity, type HeldEventKind } from '../../game/fanClub';
 import { EVENT_LABEL, FAN_EVENTS, THANKS_DAY } from '../../game/fanClubBalance';
@@ -20,7 +21,7 @@ export type ConversationTopic = Extract<Screen, { name: 'conversation' }>;
 
 /** 初めてその話をするときの説明 */
 const TOPIC_TUTORIAL: Partial<Record<string, TutorialId>> = {
-  sponsorOffer: 'sponsorOffer', sponsor: 'sponsorOffer', ownerWarning: 'ownerWarning', fanThanksDay: 'thanksDay',
+  sponsorOffer: 'sponsorOffer', sponsor: 'sponsorOffer', ownerWarning: 'ownerWarning', fanThanksDay: 'thanksDay', jobOffer: 'jobOffer',
 };
 
 const them = (text: string): ConversationLine => ({ who: 'them', text });
@@ -43,12 +44,25 @@ export function ConversationScreen({ screen }: { screen: ConversationTopic }) {
   const topic = message?.topic ?? screen.topic;
   useTutorial('conversation', topic ? TOPIC_TUTORIAL[topic] : undefined);
 
-  if (!club) return null;
+  if (!club) {
+    // 無職の間に開く話（オファー、解任の話）
+    return (
+      <div className="page conversation-page">
+        <header className="page-header">
+          <button type="button" className="secondary" onClick={() => store.back()}>← 戻る</button>
+          <h1>{message?.subject ?? '話'}</h1>
+        </header>
+        {message?.topic === 'jobOffer' ? <JobOfferTalk game={game} message={message} />
+          : message ? <MessageTalk game={game} club={formerClub(game)} message={message} /> : <p className="muted">話す相手がいません。</p>}
+      </div>
+    );
+  }
   let body;
   if (topic === 'sponsorOffer' || topic === 'sponsor') body = <SponsorTalk game={game} club={club} message={message} />;
   else if (topic === 'budget' || topic === 'budgetIncrease' || topic === 'goals') body = <OwnerBudgetTalk game={game} club={club} message={message} goals={topic === 'goals'} />;
   else if (topic === 'loan') body = <LoanTalk game={game} club={club} screen={screen} />;
   else if (topic === 'fanThanksDay' && message) body = <ThanksDayTalk game={game} club={club} message={message} />;
+  else if (topic === 'jobOffer' && message) body = <JobOfferTalk game={game} message={message} />;
   else if (topic === 'fanEvent' && screen.eventKind) body = <FanEventTalk game={game} club={club} kind={screen.eventKind} />;
   else if (message) body = <MessageTalk game={game} club={club} message={message} />;
   else body = <p className="muted">話す相手がいません。</p>;
@@ -94,7 +108,7 @@ function MessageTalk({ game, club, message }: { game: GameState; club: Club; mes
   if (message.topic === 'dismissal') {
     return (
       <Conversation speaker={speakerFor(message.from, club)} me={game.manager.name} lines={lines}
-        footer={<div className="button-row"><button type="button" className="primary" onClick={() => store.open({ name: 'dismissed' })}>次へ</button></div>} />
+        footer={<div className="button-row"><button type="button" className="primary" onClick={() => store.open({ name: 'manager' })}>次へ</button></div>} />
     );
   }
   const replies = (message.topic && REPLIES[message.topic]) ?? [{ id: 'ok', label: '「わかった」', say: 'わかった。', answer: 'よろしくお願いします。' }];
@@ -416,5 +430,66 @@ function FanEventTalk({ game, club, kind }: { game: GameState; club: Club; kind:
   return (
     <Conversation speaker={speakerFor(FAN_STAFF, club)} me={game.manager.name} lines={lines}
       choices={choices} onChoose={choose} footer={stage === 'done' ? <FanBackButtons /> : undefined} />
+  );
+}
+
+/** 無職の間に、前のクラブの話（解任の話など）を見るときのクラブ */
+function formerClub(game: GameState): Club {
+  const last = game.manager.career.at(-1);
+  return (last ? game.clubs[last.clubId] : undefined) ?? Object.values(game.clubs)[0] as Club;
+}
+
+/** 監督のオファー：そのクラブのオーナーが話し、受ける・断る・考えさせてほしい を選ぶ（フェーズ3-C） */
+function JobOfferTalk({ game, message }: { game: GameState; message: InboxMessage }) {
+  const offerId = message.action?.kind === 'jobOffer' ? message.action.offerId : '';
+  const offer = game.manager.offers.find((o) => o.id === offerId);
+  const club = offer ? game.clubs[offer.clubId] : undefined;
+  const speaker: Speaker = { name: message.from, role: message.from, kind: 'owner', color: club?.colors.primary };
+  const [lines, setLines] = useState<ConversationLine[]>(() => [
+    ...messageLines(message),
+    ...(!offer ? [note('このオファーには、もう返事をしたか、期限が過ぎました。')] : []),
+  ]);
+  const [result, setResult] = useState<'accepted' | 'declined' | 'later' | null>(offer ? null : 'later');
+  const choose = (id: string) => {
+    if (!offer || !club) return;
+    if (id === 'accept') {
+      let ok = false;
+      store.update((g) => {
+        ok = acceptOffer(g, offer.id);
+      });
+      setLines([
+        ...lines,
+        me('お引き受けします。よろしくお願いします。'),
+        ok ? them(offer.start === 'now' ? 'ありがとうございます！明日から、よろしくお願いします。まずは予算と目標の話をさせてください。' : 'ありがとうございます！来シーズンから、よろしくお願いします。')
+          : them('申し訳ありません、この話はもう進められなくなりました。'),
+      ]);
+      setResult(ok ? 'accepted' : 'later');
+      return;
+    }
+    if (id === 'decline') {
+      store.update((g) => declineOffer(g, offer.id));
+      setLines([...lines, me('ありがたいお話ですが、今回はお断りします。'), them('そうですか……残念です。またの機会に。')]);
+      setResult('declined');
+      return;
+    }
+    setLines([...lines, me('少し考えさせてください。'), them(`わかりました。${offer.expires.slice(5).replace('-', '月')}日までに返事をお願いします。`)]);
+    setResult('later');
+  };
+  const budgetTalk = game.inbox.find((m) => m.topic === 'budget' && m.date === game.date && !m.read);
+  return (
+    <Conversation speaker={speaker} me={game.manager.name} lines={lines}
+      choices={result === null ? [
+        { id: 'accept', label: '「お引き受けします」', description: offer?.start === 'now' ? '次の日から、このクラブの監督になる' : '今シーズンが終わったあと（1月1日）に移る' },
+        { id: 'decline', label: '「今回はお断りします」' },
+        { id: 'later', label: '「少し考えさせてください」', description: '期限までに、監督の画面から返事ができる' },
+      ] : undefined}
+      onChoose={choose}
+      footer={result !== null ? (
+        <div className="button-row">
+          {result === 'accepted' && offer?.start === 'now' && budgetTalk
+            ? <button type="button" className="primary" onClick={() => { store.open({ name: 'home' }); store.navigate({ name: 'conversation', messageId: budgetTalk.id }); }}>オーナーの話を聞く</button>
+            : <button type="button" className="primary" onClick={() => store.open({ name: game.manager.clubId === '' ? 'manager' : 'home' })}>戻る</button>}
+        </div>
+      ) : undefined} />
   );
 }

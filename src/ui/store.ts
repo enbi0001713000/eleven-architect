@@ -46,7 +46,7 @@ export type Screen =
   }
   | { name: 'later'; title: string; phase: number }
   | { name: 'myClub'; tab?: 'owner' | 'fanClub' }
-  | { name: 'dismissed' };
+  | { name: 'manager' };
 
 class Store {
   game: GameState | null = null;
@@ -147,20 +147,20 @@ class Store {
 
   /** 「次の出来事まで進める」。大事な知らせが届いたら受信箱（か会話画面）を、試合の日ならホームを開く */
   advance(): void {
-    if (!this.game || this.locked || this.game.owner?.dismissed || this.tutorial) return;
+    if (!this.game || this.locked || this.tutorial) return;
     const before = this.game.nextMessageNumber;
     let reason = 'match';
     this.update((g) => {
       reason = advanceToNextEvent(g).reason;
     });
     if (reason === 'message') this.openArrived(before);
-    else this.open({ name: 'home' });
+    else this.open({ name: this.game.manager.clubId === '' ? 'manager' : 'home' });
     this.eventTutorials(before);
   }
 
   /** 1日だけ進める */
   advanceOneDay(): void {
-    if (!this.game || this.locked || this.game.owner?.dismissed || this.tutorial) return;
+    if (!this.game || this.locked || this.tutorial) return;
     const before = this.game.nextMessageNumber;
     this.update((g) => advanceDay(g));
     const important = this.game.inbox.some((m) => Number(m.id.slice(1)) >= before && m.important);

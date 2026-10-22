@@ -11,6 +11,8 @@ import { overallRating } from '../engine/ratings';
 import { createRng, type Rng } from '../engine/rng';
 import type { MatchResult, TeamInstructions } from '../engine/types';
 import { BALANCE, TRAINING_FOCUS, TRAINING_INTENSITY } from './balance';
+import { careerEvents } from './career';
+import { backgroundOf } from './careerBalance';
 import { applyInjury, canPlay, createInjury, injuryName } from './condition';
 import { addDays, daySeed, weekday } from './dates';
 import { developWeek } from './development';
@@ -20,7 +22,7 @@ import { FAN_EVENTS } from './fanClubBalance';
 import { addMessage } from './inbox';
 import { afterMatchMorale, checkPromises, dailyMorale, maybePlayerRequest } from './morale';
 import { seasonEvents } from './offseason';
-import { isDismissed, ownerAfterEvents, ownerBeforeEvents } from './owner';
+import { ownerAfterEvents, ownerBeforeEvents } from './owner';
 import { LEAGUE_RULES } from './rules';
 import { repairSelection, validateSelection } from './selection';
 import { closePress, schedulePress } from './talks';
@@ -69,8 +71,10 @@ function dailyClub(state: GameState, club: Club, ctx: DayContext): void {
 
   // 公開練習の日は、練習の効果が少し下がる
   const openTraining = club.fanClub.openTrainingDate === state.date ? FAN_EVENTS.openTraining.trainingFactor : 1;
+  // 監督の経歴による得意（自分のクラブだけ）
+  const perk = mine ? backgroundOf(state) : null;
   if (!ctx.matchDay) {
-    const gain = BALANCE.familiarityGain * focus.familiarity * intensity.growth * openTraining;
+    const gain = BALANCE.familiarityGain * focus.familiarity * intensity.growth * openTraining * (perk?.familiarity ?? 1);
     for (const formation of Object.keys(club.familiarity.formations) as (keyof Club['familiarity']['formations'])[]) {
       const value = club.familiarity.formations[formation] ?? BALANCE.familiarityFloor;
       club.familiarity.formations[formation] = round1(formation === club.tactics.formation
@@ -120,7 +124,7 @@ function dailyClub(state: GameState, club: Club, ctx: DayContext): void {
       s.condition += intensity.condition;
       s.integration = Math.min(100, s.integration + 1.2 * focus.familiarity * openTraining);
       recovery = focus.recovery;
-      const chance = BALANCE.trainingInjury * focus.injury * intensity.injury
+      const chance = BALANCE.trainingInjury * focus.injury * intensity.injury * (perk?.trainingInjury ?? 1)
         * (0.5 + player.hidden.injuryProneness / 20) * (1 + s.fatigue / 50)
         * (s.recurrence ? BALANCE.recurrenceMultiplier : 1);
       if (ctx.rng.chance(chance)) {
@@ -162,7 +166,7 @@ function weekly(state: GameState, rng: Rng): void {
     for (const id of club.playerIds) {
       const player = state.players[id];
       if (!player) continue;
-      const change = developWeek(rng, player, club, player.status.recentMinutes);
+      const change = developWeek(rng, player, club, player.status.recentMinutes, club.id === myId ? backgroundOf(state).growth : 1);
       player.status.recentMinutes = Math.round(player.status.recentMinutes * 0.75);
       if (club.id === myId) growth.push({ player, delta: change.overall });
     }
@@ -205,6 +209,7 @@ export function advanceDay(state: GameState): void {
   ownerBeforeEvents(state);
   fanClubEvents(state);
   seasonEvents(state, rng);
+  careerEvents(state, rng);
   ownerAfterEvents(state, financeAfterEvents(state, rng));
   const matchDates = new Set(state.fixtures.filter((f) => f.result === null).map((f) => f.date));
   const ctx: DayContext = {
@@ -239,13 +244,12 @@ function prepareSelection(state: GameState): void {
   });
 }
 
-export type StopReason = 'match' | 'message' | 'limit' | 'dismissed';
+export type StopReason = 'match' | 'message' | 'limit';
 
 /** 「次の出来事まで進める」：試合の日か、大事な知らせが届いた日まで進める */
 export function advanceToNextEvent(state: GameState, maxDays = 120): { reason: StopReason; days: number } {
   const startNumber = state.nextMessageNumber;
   for (let days = 0; days < maxDays; days++) {
-    if (isDismissed(state)) return { reason: 'dismissed', days };
     if (todaysFixture(state)) return { reason: 'match', days };
     advanceDay(state);
     if (todaysFixture(state)) return { reason: 'match', days: days + 1 };

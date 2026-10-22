@@ -48,6 +48,8 @@ const VERDICT_COMMENT: Record<SeasonVerdict, string> = {
 };
 
 const myClub = (state: GameState): Club | undefined => state.clubs[state.manager.clubId];
+/** 無職（解任や辞任のあと、次のクラブが決まるまで。フェーズ3-C） */
+const unemployed = (state: GameState): boolean => state.manager.clubId === '';
 const seasonPlaying = (state: GameState): boolean => state.season.round <= LEAGUE_RULES.rounds;
 export const isDismissed = (state: GameState): boolean => (state.owner?.dismissed ?? null) !== null;
 
@@ -108,10 +110,11 @@ export function placeholderOwner(year: number, date: string): OwnerState {
   };
 }
 
-export function initialOwner(state: GameState, strictness: OwnerStrictness = 'normal'): OwnerState {
+/** 新しいオーナー。trust は最初の信頼度（監督の評判がクラブに足りないと低い。フェーズ3-C） */
+export function initialOwner(state: GameState, strictness: OwnerStrictness = 'normal', trust: number = OWNER.startTrust): OwnerState {
   return {
-    trust: OWNER.startTrust, strictness, goals: newGoals(state, state.season.year),
-    trustHistory: [{ date: state.date, trust: OWNER.startTrust }], warned: 0, evaluations: [], dismissed: null,
+    trust, strictness, goals: newGoals(state, state.season.year),
+    trustHistory: [{ date: state.date, trust }], warned: 0, evaluations: [], dismissed: null,
   };
 }
 
@@ -277,7 +280,7 @@ function dismiss(state: GameState, reasons: string[]): void {
     category: 'club', from: 'オーナー', important: true, topic: 'dismissal',
     subject: '監督を解任されました',
     lines,
-    body: [...lines, '', `オーナーの信頼度：${Math.round(owner.trust)}`, '（他クラブからのオファーで監督を続ける機能は、フェーズ3-Cで加わります）'].join('\n'),
+    body: [...lines, '', `オーナーの信頼度：${Math.round(owner.trust)}`, 'これからは、ほかのクラブからのオファーを待つか、監督が空いているクラブに応募することになります。'].join('\n'),
   });
 }
 
@@ -355,7 +358,7 @@ function yearTalk(state: GameState, start: YearStart, evaluation: SeasonEvaluati
 
 /** advanceDay が、シーズンの出来事の前に呼ぶ（お金の締めの後）：毎月の信頼度と、1月1日のシーズンの評価 */
 export function ownerBeforeEvents(state: GameState): void {
-  if (!state.owner || isDismissed(state) || !state.date.endsWith('-01')) return;
+  if (!state.owner || unemployed(state) || isDismissed(state) || !state.date.endsWith('-01')) return;
   const month = addMonths(state.date.slice(0, 7), -1);
   monthlyTrust(state, month);
   if (monthDay(state.date) === '01-01' && !isDismissed(state)) evaluateSeason(state, yearOf(month));
@@ -363,15 +366,15 @@ export function ownerBeforeEvents(state: GameState): void {
 
 /** advanceDay が、新しい年度の予算を決めた後に呼ぶ：新しい目標と、オーナーとの話 */
 export function ownerAfterEvents(state: GameState, start: YearStart | null): void {
-  if (!start || !state.owner || isDismissed(state)) return;
+  if (!start || !state.owner || unemployed(state) || isDismissed(state)) return;
   const year = yearOf(state.date);
   const evaluation = state.owner.evaluations.find((e) => e.year === year - 1) ?? null;
   state.owner.goals = newGoals(state, year);
   yearTalk(state, start, evaluation);
 }
 
-/** 新しいゲーム：オーナーを用意して、最初の話（目標と予算）をする */
-export function startOwner(state: GameState, strictness: OwnerStrictness = 'normal'): void {
-  state.owner = initialOwner(state, strictness);
+/** 新しいゲーム（とシーズンの途中でクラブに就任したとき）：オーナーを用意して、最初の話（目標と予算）をする */
+export function startOwner(state: GameState, strictness: OwnerStrictness = 'normal', trust: number = OWNER.startTrust): void {
+  state.owner = initialOwner(state, strictness, trust);
   yearTalk(state, firstYearStart(state), null);
 }

@@ -35,6 +35,12 @@ export interface Club {
   emblem: EmblemSpec;
   rivalId: string | null;
   managerName: string;
+  /** 監督の評判（AIの監督。プレイヤーが監督のときは使わない。フェーズ3-C） */
+  managerReputation: number;
+  /** 今の監督が就任した日 */
+  managerSince: string;
+  /** 監督が空いている（代理の監督が率いている）。fillOn に新しい監督が決まる */
+  vacancy: { since: string; fillOn: string } | null;
   playerIds: string[];
   tactics: Tactics;
   /** プレイヤーが選んだ先発と控え。AIのクラブは試合ごとに自動で選ぶので null。 */
@@ -305,7 +311,8 @@ export type InboxAction =
   | { kind: 'playerRequest'; requestId: string }
   | { kind: 'press'; fixtureId: string }
   | { kind: 'sponsorOffer' }
-  | { kind: 'fanThanksDay'; year: number };
+  | { kind: 'fanThanksDay'; year: number }
+  | { kind: 'jobOffer'; offerId: string };
 
 /** 受信箱の知らせ（要件定義書「時間の進め方」） */
 export interface InboxMessage {
@@ -332,7 +339,7 @@ export interface InboxMessage {
 }
 
 /** 会話画面で開く知らせの種類（オーナーの予算と目標、お金が足りない、スポンサーの提案、オーナーの警告、解任） */
-export type MessageTopic = 'budget' | 'shortfall' | 'sponsorOffer' | 'ownerWarning' | 'dismissal' | 'fanThanksDay';
+export type MessageTopic = 'budget' | 'shortfall' | 'sponsorOffer' | 'ownerWarning' | 'dismissal' | 'fanThanksDay' | 'jobOffer';
 
 // ---- フェーズ3.5：ファンクラブ ----
 
@@ -379,6 +386,56 @@ export interface FanClub {
   /** 月末の会員数 */
   history: { month: string; total: number }[];
   events: FanEventRecord[];
+}
+
+// ---- フェーズ3-C：監督のキャリア ----
+
+export type ManagerBackground = 'national' | 'pro' | 'coach' | 'none';
+export type Difficulty = 'easy' | 'normal' | 'hard';
+export type StintEnd = 'dismissed' | 'resigned' | 'moved';
+
+/** 1つのクラブで監督をした期間 */
+export interface CareerStint {
+  clubId: string;
+  clubName: string;
+  from: string;
+  to: string | null;
+  end: StintEnd | null;
+  /** そのクラブで終えたシーズン（途中で離れたシーズンは partial） */
+  seasons: { year: number; position: number; goal: number | null; verdict: SeasonVerdict | null; partial?: boolean }[];
+}
+
+export interface JobOffer {
+  id: string;
+  clubId: string;
+  date: string;
+  /** この日を過ぎると取り下げられる */
+  expires: string;
+  /** now：すぐ就任（無職のとき）、nextSeason：1月1日に移る（在任中のとき） */
+  start: 'now' | 'nextSeason';
+  /** 応募への返事として届いた */
+  applied: boolean;
+}
+
+export interface ManagerState {
+  name: string;
+  /** 監督をしているクラブ。'' のときは無職 */
+  clubId: string;
+  background: ManagerBackground;
+  difficulty: Difficulty;
+  /** 監督の評判（1〜100） */
+  reputation: number;
+  reputationHistory: { date: string; value: number }[];
+  career: CareerStint[];
+  offers: JobOffer[];
+  /** 応募したクラブと、返事が来る日 */
+  applications: { clubId: string; date: string; answerOn: string }[];
+  unemployedSince: string | null;
+  /** 在任中に受けたオファー。1月1日に移る */
+  pendingMove: { clubId: string; date: string } | null;
+  /** 最後にオファーが届いた日（無職が長いときの話に使う） */
+  lastOfferDate: string | null;
+  nextOfferNumber: number;
 }
 
 // ---- フェーズ3-B：オーナーの評価 ----
@@ -462,7 +519,7 @@ export interface GameState {
   version: number;
   seed: number;
   createdAt: string;
-  manager: { name: string; clubId: string };
+  manager: ManagerState;
   season: {
     year: number;
     /** 次に行う節（1〜34）。全節が終わると 35 */

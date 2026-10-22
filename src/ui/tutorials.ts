@@ -4,7 +4,8 @@
 
 export type TutorialId =
   | 'conversation' | 'start' | 'inbox' | 'squad' | 'tactics' | 'training' | 'fixtures' | 'league' | 'finance' | 'myClub' | 'fanClub'
-  | 'match' | 'talk' | 'press' | 'monthClose' | 'sponsorOffer' | 'fanClubWindow' | 'ownerWarning' | 'thanksDay';
+  | 'match' | 'talk' | 'press' | 'monthClose' | 'sponsorOffer' | 'fanClubWindow' | 'ownerWarning' | 'thanksDay'
+  | 'manager' | 'unemployed' | 'jobOffer';
 
 export interface TutorialStep {
   text: string;
@@ -153,6 +154,29 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
     steps: [
       { text: 'オーナーから警告されました。信頼度がもっと下がると、解任されてしまいます。' },
       { text: '目標に近づけるよう、戦術やメンバー、練習を見直しましょう。クラブの画面で、信頼度の推移を見られます。' },
+    ],
+  },
+  manager: {
+    title: '監督',
+    steps: [
+      { text: '監督としてのあなたの評判です。シーズンの評価で上下し、高いほど評判の高いクラブで信頼されます。', target: t('manager-reputation') },
+      { text: 'ほかのクラブからのオファーは、ここに届きます。在任中のオファーは、シーズンが終わった12月に届き、受けると1月1日に移ります。', target: t('manager-offers') },
+      { text: '監督が空いているクラブも、ここで見られます。' , target: t('manager-vacancies') },
+    ],
+  },
+  unemployed: {
+    title: '次のクラブを探す',
+    steps: [
+      { text: 'クラブを離れて、今は無職です。でも、監督の仕事はここで終わりではありません。', target: t('job-hunt') },
+      { text: '日を進めると、監督が空いたクラブからオファーが届きます。評判に合ったクラブほど、声をかけてくれます。', target: t('manager-offers') },
+      { text: '監督が空いているクラブには、自分から応募もできます。数日で返事が届きます。', target: t('manager-vacancies') },
+      { text: '長く無職が続いても、いずれ評判の低いクラブから話が来ます。あせらずに待ちましょう。', target: t('advance') },
+    ],
+  },
+  jobOffer: {
+    title: '監督のオファー',
+    steps: [
+      { text: 'ほかのクラブから、監督のオファーが届きました。受けるか断るかを選べます。すぐに決めなくても、期限までに監督の画面から返事ができます。' },
     ],
   },
   thanksDay: {
