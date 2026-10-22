@@ -120,7 +120,7 @@ function aiContract(state: GameState, player: PlayerRecord, clubId: string): Con
 
 // ---- 記録と知らせ ----
 
-function record(state: GameState, player: PlayerRecord, fromClubId: string | null, toClubId: string | null, fee: number, kind: TransferKind): void {
+export function recordTransfer(state: GameState, player: PlayerRecord, fromClubId: string | null, toClubId: string | null, fee: number, kind: TransferKind): void {
   state.transferHistory ??= [];
   state.transferHistory.unshift({ date: state.date, playerId: player.id, playerName: player.name, fromClubId, toClubId, fee, kind });
   if (state.transferHistory.length > TRANSFER.keepHistory) state.transferHistory.length = TRANSFER.keepHistory;
@@ -220,7 +220,7 @@ export function startLoan(state: GameState, player: PlayerRecord, borrowerId: st
   player.listed = null;
   player.status.integration = Math.min(player.status.integration, 30);
   addToClub(state, player, borrowerId);
-  record(state, player, parent, borrowerId, 0, 'loan');
+  recordTransfer(state, player, parent, borrowerId, 0, 'loan');
 }
 
 /** 交渉がすべてまとまった移籍を成立させる（移籍期間の中で） */
@@ -246,7 +246,7 @@ function complete(state: GameState, bid: TransferBid): void {
   if (bid.buyerId === OVERSEAS) {
     payFee(state, null, bid.sellerId, bid.fee);
     removeFromClub(state, player);
-    record(state, player, bid.sellerId, null, bid.fee, 'abroad');
+    recordTransfer(state, player, bid.sellerId, null, bid.fee, 'abroad');
     if (bid.sellerId === myId) {
       notify(state, bid, `${player.name}が海外のクラブへ移籍しました`, `${player.name}が海外のクラブへ移籍しました。移籍金${yenText(bid.fee)}が入りました（半分は今年の移籍予算に足されます）。`, true);
     }
@@ -260,7 +260,7 @@ function complete(state: GameState, bid: TransferBid): void {
   }
   payFee(state, bid.buyerId, bid.sellerId, bid.fee);
   moveWithContract(state, player, bid.buyerId, contract);
-  record(state, player, bid.sellerId, bid.buyerId, bid.fee, 'transfer');
+  recordTransfer(state, player, bid.sellerId, bid.buyerId, bid.fee, 'transfer');
   if (bid.buyerId === myId) {
     notify(state, bid, `${player.name}が加入しました`, `${player.name}が${clubName(state, bid.sellerId)}から加入しました（移籍金${yenText(bid.fee)}）。新しく入った選手は、まだ戦術に慣れていません。`, true);
   } else if (bid.sellerId === myId) {
@@ -302,8 +302,9 @@ export interface BidRequest {
   wageShare: number;
 }
 
-/** レンタルに出してもらえそうな選手か */
-export function loanable(player: PlayerRecord): boolean {
+/** レンタルに出してもらえそうな選手か。契約がレンタルの終わり（その年の11月30日）より先まで残っている選手だけ */
+export function loanable(state: GameState, player: PlayerRecord): boolean {
+  if ((player.contract?.endYear ?? 0) <= yearOf(nextWindowStart(state.date))) return false;
   return player.listed === 'loan' || (player.age <= 23 && (player.contract?.role === 'backup' || player.contract?.role === 'youth'));
 }
 
@@ -321,13 +322,13 @@ export function bidProblem(state: GameState, playerId: string, req: BidRequest):
   if (projectedSquad(state, myId).length >= LEAGUE_RULES.squadMax) return `登録できるのは${LEAGUE_RULES.squadMax}人までです。`;
   const left = transferBudgetLeft(club);
   if (req.kind === 'loan') {
-    if (!loanable(player)) return '主力やローテーションの選手は、レンタルに出してもらえません（23歳以下の控えか若手、またはレンタルのリストに載っている選手）。';
+    if (!loanable(state, player)) return '主力やローテーションの選手と、契約が今年で切れる選手は、レンタルに出してもらえません（23歳以下の控えか若手、またはレンタルのリストに載っている選手）。';
     return null;
   }
   const fee = req.kind === 'clause' ? player.contract?.releaseClause ?? null : req.fee;
   if (fee === null) return 'この選手には違約金がありません。';
   if (fee <= 0) return '移籍金を決めてください。';
-  if (fee > left) return `移籍予算の残り（${yenText(Math.max(0, left))}）に収まりません。財務の画面で、年俸予算から移籍予算に回すこともできます。`;
+  if (fee > left) return `移籍予算の残り（${yenText(Math.max(0, left))}）に収まりません。財務の画面で年俸予算から移籍予算に回すか、選手を売ってください（移籍金の半分が移籍予算に入ります）。`;
   return null;
 }
 
@@ -361,7 +362,7 @@ function answerMyBid(state: GameState, bid: TransferBid, rng: Rng): void {
   }
   const seller = clubName(state, bid.sellerId);
   if (bid.kind === 'loan') {
-    const ok = loanable(player) && (player.listed === 'loan' || rng.chance(bid.wageShare >= 1 ? 0.6 : 0.3));
+    const ok = loanable(state, player) && (player.listed === 'loan' || rng.chance(bid.wageShare >= 1 ? 0.6 : 0.3));
     if (!ok) {
       bid.status = 'rejected';
       bid.note = `${seller}は、${player.name}を今はレンタルに出さないそうです。`;
@@ -623,7 +624,7 @@ function aiBuyRound(state: GameState, rng: Rng): void {
         c.player.contract = contract;
         addToClub(state, c.player, club.id);
         c.player.status.integration = 30;
-        record(state, c.player, null, club.id, c.fee, 'fromAbroad');
+        recordTransfer(state, c.player, null, club.id, c.fee, 'fromAbroad');
         bought.set(club.id, (bought.get(club.id) ?? 0) + 1);
         break;
       }
@@ -677,7 +678,7 @@ function incomingBid(state: GameState, c: Candidate, buyer: Club, rng: Rng): voi
 function aiLoanRound(state: GameState, rng: Rng): void {
   const myId = state.manager.clubId;
   const sizeRank: Record<string, number> = { small: 0, medium: 1, large: 2 };
-  const listed = Object.values(state.players).filter((p) => p.listed === 'loan' && p.clubId && !p.loan && !p.leaving && !openBidFor(state, p.id));
+  const listed = Object.values(state.players).filter((p) => p.listed === 'loan' && p.clubId && !p.loan && !p.leaving && loanable(state, p) && !openBidFor(state, p.id));
   for (const player of listed) {
     if (!rng.chance(TRANSFER.loanChance)) continue;
     const parent = state.clubs[player.clubId!];
@@ -767,7 +768,7 @@ function endLoans(state: GameState): void {
     removeFromClub(state, player);
     player.loan = null;
     addToClub(state, player, parent);
-    record(state, player, borrower, parent, 0, 'loanReturn');
+    recordTransfer(state, player, borrower, parent, 0, 'loanReturn');
     if (parent === myId || borrower === myId) back.push(player);
   }
   if (back.length > 0) {

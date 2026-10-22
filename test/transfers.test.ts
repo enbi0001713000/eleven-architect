@@ -14,7 +14,7 @@ import { parseSaveFile, toSaveFile } from '../src/game/save';
 import { applyMatchday, prepareMatchday } from '../src/game/season';
 import { TRANSFER } from '../src/game/transferBalance';
 import {
-  acceptIncoming, askingFee, bidProblem, nextWindowStart, OVERSEAS, placeBid, rejectIncoming, startLoan, transferBudgetLeft, windowOpen,
+  acceptIncoming, askingFee, bidProblem, loanable, nextWindowStart, OVERSEAS, placeBid, rejectIncoming, startLoan, transferBudgetLeft, windowOpen,
 } from '../src/game/transfers';
 import type { GameState, PlayerRecord, TransferBid } from '../src/game/types';
 import { createWorld, startNewGame } from '../src/game/world';
@@ -187,6 +187,16 @@ describe('レンタル', () => {
     expect(young.loan).toBeNull();
     expect(young.clubId).toBe(myId);
   }, 120000);
+
+  it('契約がその年で切れる選手は、レンタルに出してもらえない', () => {
+    const state = newGame();
+    const young = Object.values(state.players).find((p) => p.clubId && p.clubId !== state.manager.clubId && p.age <= 23 && p.contract?.role === 'youth')!;
+    young.contract!.endYear = state.season.year + 1;
+    expect(loanable(state, young)).toBe(true);
+    young.contract!.endYear = state.season.year;
+    expect(loanable(state, young)).toBe(false);
+    expect(bidProblem(state, young.id, { kind: 'loan', fee: 0, wageShare: 1 })).toContain('レンタル');
+  });
 });
 
 describe('AIクラブ同士の移籍', () => {

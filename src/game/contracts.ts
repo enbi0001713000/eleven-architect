@@ -21,7 +21,7 @@ import { addMessage } from './inbox';
 import { knowledgeOf } from './knowledge';
 import { SQUAD_ROLE_LABEL } from './morale';
 import { LEAGUE_RULES } from './rules';
-import { acceptedBid, onContractAgreed } from './transfers';
+import { acceptedBid, onContractAgreed, recordTransfer } from './transfers';
 import type { Agent, AgentStyle, Club, Contract, ContractBonus, GameState, PlayerRecord, SquadRole } from './types';
 import { salaryFor, SIZE_PROFILE, SQUAD_TEMPLATE } from './world';
 
@@ -352,6 +352,7 @@ export function joinClub(state: GameState, player: PlayerRecord, clubId: string,
   const club = state.clubs[clubId];
   if (!club) return;
   const from = player.clubId ? state.clubs[player.clubId] : undefined;
+  recordTransfer(state, player, player.clubId, clubId, 0, 'free');
   if (from) from.playerIds = from.playerIds.filter((id) => id !== player.id);
   state.freeAgents = (state.freeAgents ?? []).filter((id) => id !== player.id);
   player.clubId = clubId;

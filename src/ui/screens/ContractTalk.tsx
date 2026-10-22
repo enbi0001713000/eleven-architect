@@ -11,6 +11,7 @@ import {
 import { yenText } from '../../game/finance';
 import { knowledgeOf, viewAttribute } from '../../game/knowledge';
 import { SQUAD_ROLE_LABEL } from '../../game/morale';
+import { acceptedBid } from '../../game/transfers';
 import type { SquadRole } from '../../game/types';
 import { salaryFor, SIZE_PROFILE } from '../../game/world';
 import { AttributeValue, ClubLink, Panel } from '../components/bits';
@@ -51,6 +52,7 @@ export function ContractTalk({ playerId }: { playerId: string }) {
   if (!player || !club) return <div className="page"><p>選手が見つかりません。</p></div>;
 
   const check = talkStatus(game, playerId);
+  const transferBid = acceptedBid(game, playerId, myId);
   const agent = agentOf(game, player);
   const profile = AGENT_STYLES[agent.style];
   const talk = game.contractTalks?.[playerId];
@@ -83,7 +85,7 @@ export function ContractTalk({ playerId }: { playerId: string }) {
           <h1>{player.name}との契約の交渉</h1>
           <div className="muted">
             {POSITION_NAME[player.position]}　{player.age}歳　{player.clubId ? <ClubLink game={game} clubId={player.clubId} short /> : '所属なし'}
-            {'　'}{renewal ? '契約の更新' : player.clubId ? '仮の契約（1月1日に加入）' : '獲得（すぐに加入）'}
+            {'　'}{renewal ? '契約の更新' : player.leaving ? '仮の契約（1月1日に加入）' : player.clubId ? `移籍（${transferBid ? `${transferBid.kind === 'clause' ? '違約金' : '移籍金'} ${yenText(transferBid.fee)}で` : ''}クラブと合意済み）` : '獲得（すぐに加入）'}
           </div>
         </div>
       </header>
@@ -132,7 +134,7 @@ export function ContractTalk({ playerId }: { playerId: string }) {
                 return <option key={String(m)} value={String(m)}>{clauseLabel(m)}{yen !== null ? `（${yenText(yen)}）` : ''}</option>;
               })}
             </select>
-            <span className="hint muted small">低いほど選手は喜び、年俸の希望が下がります。ただし、この額を払われると他クラブに引き抜かれます（フェーズ4-B）。</span>
+            <span className="hint muted small">低いほど選手は喜び、年俸の希望が下がります。ただし、この額を払われると、クラブは断れずに他クラブに引き抜かれることがあります。</span>
             <label htmlFor="appearance">出場ボーナス</label>
             <select id="appearance" value={offer.bonus.appearance} disabled={done}
               onChange={(e) => set({ bonus: { ...offer.bonus, appearance: Number(e.target.value) } })}>
