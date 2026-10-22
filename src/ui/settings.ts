@@ -19,6 +19,7 @@ export interface Settings {
   tutorialSeen: string[];
 }
 
+// 今までの設定を読めるように、リポジトリの名前を変えても変えない
 const KEY = 'soccer-manager:settings';
 const DEFAULTS: Settings = {
   matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [],

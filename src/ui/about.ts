@@ -3,4 +3,4 @@
 /** package.json の version と同じにする（test/about.test.ts で確かめている） */
 export const APP_VERSION = '1.0.0';
 
-export const ISSUES_URL = 'https://github.com/enbi0001713000/soccer-manager/issues';
+export const ISSUES_URL = 'https://github.com/enbi0001713000/eleven-architect/issues';

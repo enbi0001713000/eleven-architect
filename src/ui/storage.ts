@@ -18,6 +18,7 @@ class SaveDatabase extends Dexie {
   saves!: Table<SaveRecord, string>;
 
   constructor() {
+    // 保存先の名前は、遊んでいる人のセーブを読めるように、リポジトリの名前を変えても変えない
     super('soccer-manager');
     this.version(1).stores({ saves: 'id, updatedAt' });
   }

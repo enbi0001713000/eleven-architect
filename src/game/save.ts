@@ -20,6 +20,7 @@ import type { Difficulty, GameState, OwnerStrictness } from './types';
 import { salaryFor, SIZE_PROFILE, STATE_VERSION } from './world';
 
 export interface SaveFile {
+  /** セーブファイルの目印。今までのセーブを読めるように、ゲームの名前やリポジトリの名前を変えても変えない */
   app: 'soccer-manager';
   version: number;
   savedAt: string;
