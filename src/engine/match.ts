@@ -166,6 +166,14 @@ const AI_SUB_CHECKPOINTS: { minute: number; count: number }[] = [
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 const other = (side: Side): Side => (side === 0 ? 1 : 0);
 
+/** スタミナ（0〜100）による能力の倍率。終盤に疲れが急に効く */
+export function tirednessFactor(stamina: number): number {
+  const t = C.tiredness;
+  const x = stamina / 100;
+  const value = x >= t.knee ? 1 - t.slopeAbove * (1 - x) : 1 - t.slopeAbove * (1 - t.knee) - t.slopeBelow * (t.knee - x);
+  return Math.max(t.min, value);
+}
+
 const EVENT_TYPE: Record<CommentaryKey, MatchEventType> = {
   kickoff: 'kickoff', secondHalf: 'kickoff', halftime: 'halftime', fulltime: 'fulltime',
   goal: 'goal', headerGoal: 'goal', freeKickGoal: 'goal', penaltyGoal: 'penaltyGoal',
@@ -466,7 +474,8 @@ export class LiveMatch {
     const fatigue = readiness?.fatigue ?? 0;
     return {
       player, position: slot.position, slot, role, profile: ROLE_PROFILES[role],
-      fit: positionFit(player.position, slot.position), stamina: clamp(readiness?.condition ?? 100, 20, 100),
+      fit: positionFit(player.position, slot.position),
+      stamina: clamp(100 - (100 - (readiness?.condition ?? 100)) * C.conditionWeight, 20, 100),
       form: clamp(this.rng.normal(1, spread), 0.8, 1.2) * bigMatch * morale,
       fatigueFactor: 1 - (Math.max(0, fatigue - C.fatigueThreshold) / (100 - C.fatigueThreshold)) * C.fatigueMaxPenalty,
       familiarity: clamp(readiness?.familiarity ?? 1, 0, 1),
@@ -646,7 +655,7 @@ export class LiveMatch {
     const value = C.attributeCenter + (raw - C.attributeCenter) * C.attributeSpread;
     // 戦術の熟成度が低いと、判断力とポジショニングが下がる
     const familiar = key === 'decisions' || key === 'positioning' || key === 'offTheBall' ? 1 - C.familiarityWeight * (1 - op.familiarity) : 1;
-    const tired = C.staminaFloor + (1 - C.staminaFloor) * (op.stamina / 100);
+    const tired = tirednessFactor(op.stamina);
     return value * home * op.form * tired * (0.85 + 0.15 * op.fit)
       * op.fatigueFactor * familiar * (op.injured ? C.injury.playingHurt : 1);
   }

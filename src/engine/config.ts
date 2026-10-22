@@ -109,9 +109,14 @@ export const ENGINE_CONFIG = {
   },
 
   /** 1分あたりのスタミナの減り方の基準 */
-  staminaDrainPerMinute: 0.42,
-  /** スタミナが0のときの能力の倍率（100で1倍）。低いほど、疲れた選手の交代が効く */
-  staminaFloor: 0.62,
+  staminaDrainPerMinute: 0.6,
+  /**
+   * スタミナによる能力の倍率。スタミナが knee（割合）までは少しずつ下がり（slopeAbove）、それを切ると急に下がる（slopeBelow）。
+   * 試合の終盤に疲れが効き、交代で元気な選手を入れる意味が出る。min より下には下がらない
+   */
+  tiredness: { knee: 0.65, slopeAbove: 0.2, slopeBelow: 0.9, min: 0.5 },
+  /** 試合の前のコンディションが、試合開始時のスタミナにどれだけ響くか（1なら、コンディション70%でスタミナ70から始まる。0.4なら88から） */
+  conditionWeight: 0.4,
 
   /** ボールを失った直後に守備の形が整うまでの秒数と、そのあいだ攻撃時の位置から守る割合（直後の値） */
   transition: {
