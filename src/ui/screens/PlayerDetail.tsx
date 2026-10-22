@@ -1,4 +1,4 @@
-// 選手の詳細：能力、記録、契約、スカウトレポート（フェーズ4）をタブで切り替える
+// 選手の詳細：能力、記録、契約、スカウトレポート（フェーズ4-C）をタブで切り替える
 
 import { useState } from 'react';
 import { overallRating, positionRating } from '../../engine/ratings';
@@ -10,12 +10,15 @@ import { expectedPlayingTime, isUnhappyWithPlayingTime, SQUAD_ROLE_LABEL } from 
 import { talkCooldownLeft } from '../../game/talks';
 import { AGENT_STYLES } from '../../game/contractBalance';
 import { agentOf, formatValueRange, marketValueRange, talkStatus } from '../../game/contracts';
+import { SCHOOL_LABEL } from '../../game/prospects';
+import { isFoundOverseas } from '../../game/scouting';
 import { setListing } from '../../game/transfers';
 import type { GameState, PlayerRecord } from '../../game/types';
 import { LEAGUE_RULES } from '../../game/rules';
 import { averageRating } from '../../game/season';
 import { AttributeValue, Bar, ClubLink, Condition, Fatigue, Morale, Panel, Rating, Stars, StatusTags } from '../components/bits';
 import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, formatDate, formatYen, POSITION_LABEL, POSITION_NAME, POSITION_ORDER } from '../format';
+import { ScoutReportView } from '../components/ScoutReport';
 import { store, useGame } from '../store';
 
 type Tab = 'attributes' | 'records' | 'contract' | 'scout';
@@ -42,9 +45,17 @@ export function PlayerDetail({ id }: { id: string }) {
               {POSITION_NAME[player.position]}　{player.age}歳　{player.nationality}　利き足：{player.foot === 'left' ? '左' : player.foot === 'right' ? '右' : '両足'}
             </div>
             <div>
-              {player.clubId ? <ClubLink game={game} clubId={player.clubId} /> : <span className="muted">{(game.freeAgents ?? []).includes(player.id) ? '所属なし（契約満了）' : '所属なし（海外）'}</span>}
-              {!mine && player.clubId && game.manager.clubId && !player.leaving && !player.loan && (
+              {player.clubId ? <ClubLink game={game} clubId={player.clubId} /> : (
+                <span className="muted">
+                  {player.prospect ? `${SCHOOL_LABEL[player.prospect.school]}（新人の候補。${player.prospect.joinYear}年1月に加入）`
+                    : (game.freeAgents ?? []).includes(player.id) ? '所属なし（契約満了）' : `海外（${player.nationality}）`}
+                </span>
+              )}
+              {!mine && game.manager.clubId && ((player.clubId && !player.leaving && !player.loan) || isFoundOverseas(game, player)) && (
                 <button type="button" className="primary small" style={{ marginLeft: 12 }} onClick={() => store.navigate({ name: 'bid', playerId: player.id })}>獲得の交渉</button>
+              )}
+              {player.prospect && game.manager.clubId && (
+                <button type="button" className="primary small" style={{ marginLeft: 12 }} onClick={() => store.navigate({ name: 'prospect', playerId: player.id })}>内定</button>
               )}
             </div>
           </div>
@@ -101,7 +112,7 @@ export function PlayerDetail({ id }: { id: string }) {
         <button type="button" className={tab === 'attributes' ? 'active' : ''} onClick={() => setTab('attributes')}>能力</button>
         <button type="button" className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>記録</button>
         <button type="button" className={tab === 'contract' ? 'active' : ''} onClick={() => setTab('contract')}>契約</button>
-        <button type="button" disabled title="フェーズ4-Cで追加">スカウトレポート</button>
+        <button type="button" className={tab === 'scout' ? 'active' : ''} onClick={() => setTab('scout')}>スカウトレポート</button>
       </div>
 
       {tab === 'attributes' && (
@@ -136,7 +147,7 @@ export function PlayerDetail({ id }: { id: string }) {
           )}
           {!mine && (
             <Panel title="能力の見え方">
-              <p className="small">他クラブの選手の能力は、幅（例：12〜16）でしか分かりません。スカウトで調べると正確になります（フェーズ4）。</p>
+              <p className="small">他クラブの選手の能力は、知識度に応じた幅（例：12〜16）でしか分かりません。スカウトで調べると幅が狭まります（「スカウトレポート」のタブから）。</p>
             </Panel>
           )}
         </div>
@@ -187,6 +198,7 @@ export function PlayerDetail({ id }: { id: string }) {
       )}
 
       {tab === 'contract' && <ContractPanel game={game} player={player} mine={mine} />}
+      {tab === 'scout' && <Panel title="スカウトレポート"><ScoutReportView game={game} player={player} /></Panel>}
     </div>
   );
 }

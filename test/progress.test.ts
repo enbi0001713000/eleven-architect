@@ -299,6 +299,7 @@ describe('シーズンの切り替え', () => {
     playSeason(state);
     const year = state.season.year;
     const ages = new Map(Object.values(state.players).map((p) => [p.id, p.age]));
+    const prospectIds = new Set(state.prospects);
     const stops: string[] = [];
     while (state.season.year === year || state.date < `${year + 1}-02-01`) {
       const result = advanceToNextEvent(state);
@@ -322,7 +323,8 @@ describe('シーズンの切り替え', () => {
       expect(club.playerIds.length).toBeLessThanOrEqual(30);
       expect(club.playerIds.every((id) => state.players[id]?.clubId === club.id)).toBe(true);
     }
-    const rookies = Object.values(state.players).filter((p) => !ages.has(p.id) && p.clubId);
+    // 新人：強化部が獲った選手と、内定を受けた候補（フェーズ4-C）
+    const rookies = Object.values(state.players).filter((p) => (!ages.has(p.id) || prospectIds.has(p.id)) && p.clubId);
     expect(rookies.length).toBeGreaterThanOrEqual(36);
     expect(rookies.every((p) => p.status.integration === BALANCE.newcomerIntegration || p.status.integration > BALANCE.newcomerIntegration)).toBe(true);
     // 2年目も試合ができる
@@ -349,13 +351,13 @@ describe('古いセーブデータ', () => {
     v1.version = 1;
     const file = { ...toSaveFile(state), version: 1, state: v1 };
     const loaded = parseSaveFile(JSON.stringify(file));
-    expect(loaded.version).toBe(8);
+    expect(loaded.version).toBe(9);
     const player = Object.values(loaded.players).find((p) => p.clubId)!;
     expect(player.status.condition).toBe(100);
     expect(player.contract?.role).toBeDefined();
     expect(loaded.clubs[loaded.manager.clubId]!.training.focus).toBe('balanced');
-    // フェーズ2、フェーズ3-A、フェーズ3-B、フェーズ3.5、フェーズ3-C、フェーズ4-A、フェーズ4-Bの知らせ（新しいものが先頭）
-    expect(loaded.inbox.map((m) => m.category)).toEqual(['transfer', 'transfer', 'club', 'club', 'club', 'finance', 'club']);
+    // フェーズ2、フェーズ3-A、フェーズ3-B、フェーズ3.5、フェーズ3-C、フェーズ4-A、フェーズ4-B、フェーズ4-Cの知らせ（新しいものが先頭）
+    expect(loaded.inbox.map((m) => m.category)).toEqual(['scout', 'transfer', 'transfer', 'club', 'club', 'club', 'finance', 'club']);
     expect(loaded.owner.goals.year).toBe(loaded.season.year);
     expect(loaded.clubs[loaded.manager.clubId]!.finance.budget.total).toBeGreaterThan(0);
     // 変換したデータでそのまま遊べる

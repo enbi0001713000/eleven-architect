@@ -259,7 +259,7 @@ function Search({ game }: { game: GameState }) {
         <select value={minOverall} onChange={(e) => setMinOverall(Number(e.target.value))} aria-label="総合力">
           {[10, 12, 13, 14, 15, 16].map((o) => <option key={o} value={o}>{o === 10 ? 'すべての総合力' : `総合力${o}以上`}</option>)}
         </select>
-        <label className="small nowrap"><input type="checkbox" checked={onlyListed} onChange={(e) => setOnlyListed(e.target.checked)} /> リストの選手だけ</label>
+        <label className="inline small nowrap"><input type="checkbox" checked={onlyListed} onChange={(e) => setOnlyListed(e.target.checked)} /> リストの選手だけ</label>
       </div>
     }>
       <div className="table-wrap"><table className="data-table compact">
@@ -387,7 +387,7 @@ function History({ game }: { game: GameState }) {
   };
   return (
     <Panel title="移籍の記録" tutorial="transfer-history" actions={
-      <label className="small nowrap"><input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} /> 自分のクラブだけ</label>
+      <label className="inline small nowrap"><input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} /> 自分のクラブだけ</label>
     }>
       {records.length === 0 ? <p className="muted">まだ移籍はありません。</p> : (
         <div className="table-wrap"><table className="data-table compact">

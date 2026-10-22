@@ -1,6 +1,6 @@
 // ゲーム全体の状態（セーブデータの中身）。要件定義書「リーグと日程」の章に対応する。
 
-import type { AttributeKey, FormationName, MatchEvent, Player, Tactics, TeamInstructions, TeamStats } from '../engine/types';
+import type { AttributeKey, FormationName, MatchEvent, Player, Position, Tactics, TeamInstructions, TeamStats } from '../engine/types';
 
 export type ClubSize = 'large' | 'medium' | 'small';
 
@@ -296,6 +296,8 @@ export interface PlayerRecord extends Player {
   listed?: 'sale' | 'loan' | null;
   /** 海外への移籍を断られた回数（多いほど、次に話が来たときに行きたがる） */
   overseasRefused?: number;
+  /** 新人の候補（高校生・大学生。翌年1月に加入する。フェーズ4-C） */
+  prospect?: Prospect | null;
   /** 引退した（どのクラブにも属さない） */
   retired?: boolean;
   discipline: {
@@ -330,7 +332,7 @@ export interface Fixture {
   result: FixtureResult | null;
 }
 
-export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'media' | 'training' | 'league' | 'club' | 'finance' | 'transfer';
+export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'media' | 'training' | 'league' | 'club' | 'finance' | 'transfer' | 'scout';
 
 export type InboxAction =
   | { kind: 'playerRequest'; requestId: string }
@@ -492,6 +494,63 @@ export interface TransferRecord {
   toClubId: string | null;
   fee: number;
   kind: TransferKind;
+}
+
+// ---- フェーズ4-C：スカウトと新人 ----
+
+/** スカウトを送る先。国内リーグ、高校・大学、海外の選手プールの地域 */
+export type ScoutRegion = 'domestic' | 'students' | 'southAmerica' | 'asia' | 'europe';
+
+/** スカウトの仕事。選手を指名して調べるか、条件を付けて探す */
+export interface ScoutAssignment {
+  id: string;
+  kind: 'player' | 'search';
+  /** 調べる選手（kind が player のとき） */
+  playerId: string | null;
+  /** 探す条件（kind が search のとき） */
+  region: ScoutRegion | null;
+  position: Position | null;
+  maxAge: number | null;
+  start: string;
+  due: string;
+}
+
+/** スカウトレポート（中身は、そのときの知識度から毎回作る） */
+export interface ScoutReport {
+  playerId: string;
+  date: string;
+}
+
+export interface ScoutingState {
+  /** 自分（監督）が持つ、選手ごとの知識度。ない選手は、所属で決まる基本の値 */
+  knowledge: Record<string, number>;
+  assignments: ScoutAssignment[];
+  /** 新しい順 */
+  reports: ScoutReport[];
+  /** スカウトが見つけた海外の選手（海外の選手プールのうち、画面に出るもの） */
+  found: string[];
+  nextAssignment: number;
+}
+
+export type ProspectSchool = 'high' | 'university';
+
+/** 新人の候補への内定 */
+export interface ProspectOffer {
+  clubId: string;
+  role: SquadRole;
+  salary: number;
+  date: string;
+}
+
+export interface Prospect {
+  school: ProspectSchool;
+  /** 加入する年 */
+  joinYear: number;
+  offers: ProspectOffer[];
+  /** どのクラブにするかを決める日（最初の内定から数日後） */
+  decideBy: string | null;
+  /** 決めたクラブと条件 */
+  signed: ProspectOffer | null;
 }
 
 // ---- フェーズ3-C：監督のキャリア ----
@@ -665,4 +724,8 @@ export interface GameState {
   bids: TransferBid[];
   nextBidNumber: number;
   transferHistory: TransferRecord[];
+  // ---- フェーズ4-C ----
+  scouting: ScoutingState;
+  /** 新人の候補（6月に発表され、翌年1月10日に加入する） */
+  prospects: string[];
 }

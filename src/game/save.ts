@@ -14,6 +14,8 @@ import { initFinances } from './finance';
 import { createFanClub, totalMembers } from './fanClub';
 import { addMessage } from './inbox';
 import { goalLabel, initialOwner } from './owner';
+import { createProspects, offersOpen } from './prospects';
+import { emptyScouting } from './scouting';
 import type { Difficulty, GameState, OwnerStrictness } from './types';
 import { salaryFor, SIZE_PROFILE, STATE_VERSION } from './world';
 
@@ -39,6 +41,7 @@ function migrate(state: GameState, fromVersion: number): GameState {
     if (v === 5) current = migrateV5toV6(current);
     if (v === 6) current = migrateV6toV7(current);
     if (v === 7) current = migrateV7toV8(current);
+    if (v === 8) current = migrateV8toV9(current);
     current = { ...current, version: v + 1 };
   }
   return current;
@@ -173,6 +176,21 @@ function migrateV7toV8(state: GameState): GameState {
     body: '移籍の画面の「選手を探す」から、他クラブの選手に移籍金やレンタルを申し込めます。移籍期間は冬（1月5日〜3月27日）と夏（7月15日〜8月15日）です。'
       + '\n自分の選手を移籍リストに載せると、他クラブから申し込みが届きやすくなります。',
   });
+  return state;
+}
+
+/** 版8（フェーズ4-B）→ 版9（フェーズ4-C）：スカウトと新人の候補を足す。6月以降なら、今年の候補をすぐに発表する */
+function migrateV8toV9(state: GameState): GameState {
+  state.scouting ??= emptyScouting();
+  state.prospects ??= [];
+  for (const player of Object.values(state.players)) player.prospect ??= null;
+  addMessage(state, {
+    category: 'scout', from: '強化部', important: false,
+    subject: 'スカウトの機能が使えるようになりました',
+    body: 'スカウトの画面から、選手を指名して調べたり、地域とポジションを決めて選手を探したりできます。調べた選手は、能力の幅が狭まります。'
+      + '\n海外の選手は、スカウトが見つけると獲得の申し込みができます。毎年6月には高校生・大学生の新人の候補が発表され、内定を出せます。',
+  });
+  if (offersOpen(state.date)) createProspects(state, createRng(state.seed ^ 0x9c1));
   return state;
 }
 

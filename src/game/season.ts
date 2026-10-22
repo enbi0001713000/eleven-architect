@@ -8,6 +8,7 @@ import { afterMatches } from './progress';
 import { bestRoles } from './roleFit';
 import { LEAGUE_RULES } from './rules';
 import { autoSelect, clubPlayers, validateSelection } from './selection';
+import { learnFromMatch } from './scouting';
 import { standingsOf } from './standings';
 import type { Fixture, GameState } from './types';
 
@@ -94,6 +95,7 @@ export function applyMatchday(state: GameState, results: Record<string, MatchRes
 
   for (const fixture of fixtures) {
     const result = results[fixture.id] as MatchResult;
+    learnFromMatch(state, fixture, result);
     const ratings: Record<string, number> = {};
     for (const line of result.players) {
       ratings[line.player.id] = line.stats.rating;

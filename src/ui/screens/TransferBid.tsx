@@ -3,10 +3,12 @@
 
 import { useState } from 'react';
 import { overallRating } from '../../engine/ratings';
-import { formatValueRange, marketValue, marketValueRange } from '../../game/contracts';
+import { formatValueRange, marketValueRange } from '../../game/contracts';
 import { yenText } from '../../game/finance';
 import { knowledgeOf, viewAttribute } from '../../game/knowledge';
 import { SQUAD_ROLE_LABEL } from '../../game/morale';
+import { isFoundOverseas } from '../../game/scouting';
+import { TRANSFER } from '../../game/transferBalance';
 import { bidProblem, loanable, nextWindowStart, openBidFor, placeBid, transferBudgetLeft, windowOpen, type BidRequest } from '../../game/transfers';
 import { BidActions, bidStatusLabel } from '../components/BidActions';
 import { AttributeValue, ClubLink, Panel } from '../components/bits';
@@ -17,7 +19,8 @@ import { useTutorial } from '../useTutorial';
 type Kind = BidRequest['kind'];
 
 /** 売る側の考えの目安（正確な額は見せない） */
-function stanceHint(role: string | undefined, listed: string | null | undefined): string {
+function stanceHint(role: string | undefined, listed: string | null | undefined, abroad: boolean): string {
+  if (abroad) return `海外のクラブは、市場価値の${Math.round(TRANSFER.poolFee * 10)}割ほどで手放してくれそうです。`;
   if (listed === 'sale') return '移籍リストに載っている選手です。市場価値より安く手放してくれそうです。';
   if (listed === 'loan') return 'レンタルに出したい選手です。レンタルなら受けてもらいやすいです。';
   if (role === 'key') return '主力の選手です。市場価値よりかなり高い額でないと、手放さないでしょう。';
@@ -32,10 +35,16 @@ export function TransferBid({ playerId }: { playerId: string }) {
   const myId = game.manager.clubId;
   const club = game.clubs[myId];
   const [kind, setKind] = useState<Kind>('transfer');
-  const [fee, setFee] = useState(() => (player ? Math.round(marketValue(player, game.season.year) / 1e6) : 0));
+  // 最初の額は、見えている市場価値の幅の真ん中（本当の額は見せない）
+  const [fee, setFee] = useState(() => {
+    if (!player) return 0;
+    const range = marketValueRange(game, player);
+    return Math.round((range.low + range.high) / 2 / 1e6);
+  });
   const [wageShare, setWageShare] = useState(1);
   const [result, setResult] = useState('');
-  if (!player || !club || !player.clubId) return <div className="page"><p>選手が見つかりません。</p></div>;
+  const abroad = !!player && isFoundOverseas(game, player);
+  if (!player || !club || (!player.clubId && !abroad)) return <div className="page"><p>選手が見つかりません。</p></div>;
 
   const request: BidRequest = { kind, fee: fee * 1e6, wageShare };
   const problem = bidProblem(game, playerId, request);
@@ -57,7 +66,7 @@ export function TransferBid({ playerId }: { playerId: string }) {
         <div>
           <h1>{player.name}の獲得</h1>
           <div className="muted">
-            {POSITION_NAME[player.position]}　{player.age}歳　<ClubLink game={game} clubId={player.clubId} short />
+            {POSITION_NAME[player.position]}　{player.age}歳　{player.clubId ? <ClubLink game={game} clubId={player.clubId} short /> : `海外のクラブ（${player.nationality}）`}
           </div>
         </div>
       </header>
@@ -75,7 +84,7 @@ export function TransferBid({ playerId }: { playerId: string }) {
             <dt>市場価値</dt><dd>{formatValueRange(marketValueRange(game, player))}</dd>
             <dt>契約</dt><dd>{player.contract ? `${player.contract.endYear}年まで（${SQUAD_ROLE_LABEL[player.contract.role]}）` : 'なし'}</dd>
             <dt>違約金</dt><dd>{clause === null ? 'なし' : yenText(clause)}</dd>
-            <dt>相手の考え</dt><dd className="small">{stanceHint(player.contract?.role, player.listed)}</dd>
+            <dt>相手の考え</dt><dd className="small">{stanceHint(player.contract?.role, player.listed, abroad)}</dd>
             <dt>移籍予算の残り</dt><dd className={left < 0 ? 'tone-low' : ''}>{yenText(left)}</dd>
           </dl>
         </Panel>
@@ -90,8 +99,8 @@ export function TransferBid({ playerId }: { playerId: string }) {
             <>
               <div className="segmented" style={{ marginBottom: 12 }}>
                 <button type="button" className={kind === 'transfer' ? 'active' : ''} onClick={() => setKind('transfer')}>移籍金を出す</button>
-                <button type="button" className={kind === 'clause' ? 'active' : ''} disabled={clause === null} onClick={() => setKind('clause')}>違約金を払う</button>
-                <button type="button" className={kind === 'loan' ? 'active' : ''} disabled={!loanable(game, player)} onClick={() => setKind('loan')}>レンタル</button>
+                <button type="button" className={kind === 'clause' ? 'active' : ''} disabled={clause === null || abroad} onClick={() => setKind('clause')}>違約金を払う</button>
+                <button type="button" className={kind === 'loan' ? 'active' : ''} disabled={abroad || !loanable(game, player)} onClick={() => setKind('loan')}>レンタル</button>
               </div>
               <div className="offer-form">
                 {kind === 'transfer' && (
@@ -103,7 +112,7 @@ export function TransferBid({ playerId }: { playerId: string }) {
                 )}
                 {kind === 'clause' && (
                   <span className="hint muted small" style={{ gridColumn: '1 / -1' }}>
-                    違約金{clause !== null ? yenText(clause) : ''}を払えば、{game.clubs[player.clubId]?.name}は断れません。すぐに選手と契約の話ができます。
+                    違約金{clause !== null ? yenText(clause) : ''}を払えば、{game.clubs[player.clubId ?? '']?.name}は断れません。すぐに選手と契約の話ができます。
                   </span>
                 )}
                 {kind === 'loan' && (

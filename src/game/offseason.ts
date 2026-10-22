@@ -4,29 +4,28 @@
 // 12月1日  契約の更新の締め切り（contracts.ts）
 // 12月20日 引退の発表
 // 1月1日   新しい年：年齢が1つ上がり、引退した選手が去り、契約満了の選手が移り、新しい日程が発表される
-// 1月10日  新人の加入（スカウトでの獲得はフェーズ4で追加。それまでは自動で入る）
+// 1月10日  新人の加入（内定した高校生・大学生と、強化部が獲る新人。prospects.ts）
 // 1月20日  キャンプ開始
 
 import { FOREIGN_NAMES } from '../data/names';
-import { generatePlayer, playerName } from '../data/generate';
+import { generatePlayer } from '../data/generate';
 import { overallRating } from '../engine/ratings';
 import type { Rng } from '../engine/rng';
-import type { Position } from '../engine/types';
-import { BALANCE } from './balance';
 import { monthDay, yearOf } from './dates';
-import { assignSquadRoles, defaultStatus, playerPhase2Fields } from './defaults';
+import { playerPhase2Fields } from './defaults';
 import { decideRetirement, potentialFor } from './development';
-import { CONTRACT } from './contractBalance';
-import { clauseFor, completeExpiries } from './contracts';
+import { completeExpiries } from './contracts';
 import { seasonEndMoney } from './finance';
 import { addMessage } from './inbox';
-import { HOME_NATIONALITY, LEAGUE_RULES } from './rules';
+import { newcomers, uniqueName } from './prospects';
+import { pruneScouting } from './scouting';
+import { LEAGUE_RULES } from './rules';
 import { makeSchedule, seasonDates } from './schedule';
 import { averageRating } from './season';
 import { repairSelection } from './selection';
 import { standingsOf } from './standings';
 import type { GameState, PlayerRecord } from './types';
-import { emptySeason, salaryFor, SIZE_PROFILE, SQUAD_TEMPLATE } from './world';
+import { emptySeason, SQUAD_TEMPLATE } from './world';
 
 const isSeasonDone = (state: GameState): boolean => state.season.round > LEAGUE_RULES.rounds;
 
@@ -152,6 +151,7 @@ export function newSeason(state: GameState, rng: Rng): void {
     state.overseasPool.push(base.id);
   }
 
+  pruneScouting(state);
   state.season = { year, round: 1 };
   state.fixtures = makeSchedule(Object.keys(state.clubs), rng, year);
   state.requests = [];
@@ -169,82 +169,6 @@ export function newSeason(state: GameState, rng: Rng): void {
       first ? `開幕戦は${opponent?.name}と${first.homeId === myId ? 'ホーム' : 'アウェイ'}で対戦します。` : '',
       '選手は1つ年を取り、引退した選手はチームを離れました。1月10日に新人が加入します。',
     ].filter((l) => l !== '').join('\n'),
-  });
-}
-
-function uniqueName(rng: Rng, names: Set<string>, name: string, nationality: string): string {
-  let candidate = name;
-  for (let tries = 0; names.has(candidate) && tries < 50; tries++) candidate = playerName(rng, nationality);
-  names.add(candidate);
-  return candidate;
-}
-
-/** 足りないポジション（理想の内訳と比べて、いちばん足りないところ） */
-function neededPosition(state: GameState, clubId: string): Position {
-  const club = state.clubs[clubId];
-  const counts = new Map<Position, number>();
-  for (const id of club?.playerIds ?? []) {
-    const p = state.players[id];
-    if (p) counts.set(p.position, (counts.get(p.position) ?? 0) + 1);
-  }
-  let best: Position = 'CM';
-  let bestGap = -Infinity;
-  for (const [position, ideal] of SQUAD_TEMPLATE) {
-    const gap = (ideal - (counts.get(position) ?? 0)) / ideal;
-    if (gap > bestGap) {
-      best = position;
-      bestGap = gap;
-    }
-  }
-  return best;
-}
-
-export function newcomers(state: GameState, rng: Rng): void {
-  const myId = state.manager.clubId;
-  const year = state.season.year;
-  const names = new Set(Object.values(state.players).map((p) => p.name));
-  const mine: PlayerRecord[] = [];
-  for (const club of Object.values(state.clubs)) {
-    const count = club.playerIds.length;
-    // 毎年2〜3人。登録が少なければ埋める（登録の上限まで）。残りは契約満了の選手を獲って埋める（フェーズ4-A）
-    const need = Math.min(LEAGUE_RULES.squadMax - count, Math.max(CONTRACT.newcomerMinSquad - count, rng.int(...CONTRACT.newcomers)));
-    const numbers = new Set(club.playerIds.map((id) => state.players[id]?.squadNumber));
-    for (let i = 0; i < need; i++) {
-      const position = neededPosition(state, club.id);
-      const fromHighSchool = rng.chance(0.55);
-      const age = fromHighSchool ? 18 : 22;
-      const level = club.level - (fromHighSchool ? 3.6 : 2.8) + rng.normal(0, 0.6);
-      const base = generatePlayer(rng, position, level, {
-        id: `p${String(state.nextPlayerNumber++).padStart(4, '0')}`, age, nationality: HOME_NATIONALITY,
-      });
-      base.name = uniqueName(rng, names, base.name, base.nationality);
-      base.hidden.potential = potentialFor(rng, overallRating(base), age);
-      let number = 2;
-      while (numbers.has(number)) number++;
-      numbers.add(number);
-      const record: PlayerRecord = {
-        ...base,
-        clubId: club.id,
-        squadNumber: number,
-        contract: { salary: salaryFor(overallRating(base), SIZE_PROFILE[club.size].salary), endYear: year + 2, role: 'youth', releaseClause: null, bonus: null },
-        season: emptySeason(),
-        discipline: { yellowAccumulation: 0, suspendedMatches: 0 },
-        ...playerPhase2Fields(),
-        status: defaultStatus(BALANCE.newcomerIntegration),
-      };
-      record.contract!.releaseClause = clauseFor(record, year, CONTRACT.defaultClause);
-      state.players[record.id] = record;
-      club.playerIds.push(record.id);
-      if (club.id === myId) mine.push(record);
-    }
-    if (club.id !== myId) assignSquadRoles(state, club.id);
-  }
-  addMessage(state, {
-    category: 'club', from: '強化部', important: true,
-    subject: '新人選手が加入しました',
-    body: mine.length > 0
-      ? `${mine.map((p) => `${p.name}（${p.position}、${p.age}歳、総合力 ${overallRating(p).toFixed(1)}）`).join('\n')}\n\n新しく入った選手は、まだ戦術に慣れていません。（高校生・大学生のスカウトはフェーズ4で追加します）`
-      : '今年は新人の加入はありません（登録の上限に達しています）。',
   });
 }
 

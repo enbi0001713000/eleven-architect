@@ -26,7 +26,7 @@ const MENU: MenuItem[] = [
   { label: '日程と結果', screen: { name: 'fixtures' } },
   { label: 'リーグ', screen: { name: 'league' } },
   { label: '移籍', screen: { name: 'transfers' } },
-  { label: 'スカウト', screen: { name: 'later', title: 'スカウト', phase: 4 }, phase: 4 },
+  { label: 'スカウト', screen: { name: 'scouting' } },
   { label: '財務', screen: { name: 'finance' } },
   { label: 'クラブ', screen: { name: 'myClub' } },
   { label: '監督', screen: { name: 'manager' } },
@@ -37,7 +37,7 @@ const UNEMPLOYED_MENU = new Set(['受信箱', '日程と結果', 'リーグ', '�
 
 const MENU_SCREENS: Record<string, string> = {
   home: 'ホーム', squad: '選手', player: '選手', tactics: '戦術', fixtures: '日程と結果', league: 'リーグ', club: 'リーグ',
-  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', finance: '財務', conversation: '受信箱', myClub: 'クラブ', manager: '監督', transfers: '移籍', contract: '移籍', bid: '移籍',
+  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', finance: '財務', conversation: '受信箱', myClub: 'クラブ', manager: '監督', transfers: '移籍', contract: '移籍', bid: '移籍', scouting: 'スカウト', prospect: 'スカウト',
 };
 
 export function Layout({ children }: { children: ReactNode }) {

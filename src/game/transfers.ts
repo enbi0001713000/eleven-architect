@@ -14,6 +14,7 @@ import { addDays, monthDay, yearOf } from './dates';
 import { earn, spend, yenText } from './finance';
 import { addMessage } from './inbox';
 import { LEAGUE_RULES, HOME_NATIONALITY } from './rules';
+import { inOverseasPool, isFoundOverseas } from './scouting';
 import { standingsOf } from './standings';
 import { TRANSFER, type SizePolicy } from './transferBalance';
 import type { BidKind, Club, Contract, GameState, PlayerRecord, TransferBid, TransferKind } from './types';
@@ -43,6 +44,11 @@ export function nextWindowStart(date: string): string {
 }
 
 export const isForeign = (p: PlayerRecord): boolean => p.nationality !== HOME_NATIONALITY;
+
+/** 選手を売る側（クラブか、海外の選手プールなら海外のクラブ） */
+function sellerOf(state: GameState, player: PlayerRecord): string | null {
+  return player.clubId ?? (inOverseasPool(state, player) ? OVERSEAS : null);
+}
 
 export function transferBudgetLeft(club: Club): number {
   return club.finance.budget.transfers - club.finance.budget.transfersSpent;
@@ -80,6 +86,7 @@ export function titleRaceClubs(state: GameState): Set<string> {
 
 /** 売る側のクラブが、この選手を売ってもよい額（市場価値 × 役割の倍率。主力は規模で決まる。夏に優勝争いをしていれば上がる） */
 export function askingFee(state: GameState, player: PlayerRecord, sellerId: string, race: Set<string> = titleRaceClubs(state)): Asking {
+  if (sellerId === OVERSEAS) return { fee: feeRound(marketValue(player, state.season.year) * TRANSFER.poolFee), reason: '' };
   const club = state.clubs[sellerId];
   if (!club || !player.contract) return { fee: null, reason: '契約のない選手です。' };
   if (player.loan) return { fee: null, reason: 'レンタル中の選手は売れません。' };
@@ -227,7 +234,7 @@ export function startLoan(state: GameState, player: PlayerRecord, borrowerId: st
 function complete(state: GameState, bid: TransferBid): void {
   const player = state.players[bid.playerId];
   const myId = state.manager.clubId;
-  if (!player || player.clubId !== bid.sellerId || player.retiring) {
+  if (!player || sellerOf(state, player) !== bid.sellerId || player.retiring) {
     bid.status = 'failed';
     bid.note = '選手の状況が変わったため、移籍は成立しませんでした。';
     resolveMessages(state, bid.id);
@@ -260,7 +267,11 @@ function complete(state: GameState, bid: TransferBid): void {
   }
   payFee(state, bid.buyerId, bid.sellerId, bid.fee);
   moveWithContract(state, player, bid.buyerId, contract);
-  recordTransfer(state, player, bid.sellerId, bid.buyerId, bid.fee, 'transfer');
+  if (bid.sellerId === OVERSEAS) {
+    state.overseasPool = state.overseasPool.filter((id) => id !== player.id);
+    if (state.scouting) state.scouting.found = state.scouting.found.filter((id) => id !== player.id);
+  }
+  recordTransfer(state, player, bid.sellerId === OVERSEAS ? null : bid.sellerId, bid.buyerId, bid.fee, bid.sellerId === OVERSEAS ? 'fromAbroad' : 'transfer');
   if (bid.buyerId === myId) {
     notify(state, bid, `${player.name}が加入しました`, `${player.name}が${clubName(state, bid.sellerId)}から加入しました（移籍金${yenText(bid.fee)}）。新しく入った選手は、まだ戦術に慣れていません。`, true);
   } else if (bid.sellerId === myId) {
@@ -314,7 +325,11 @@ export function bidProblem(state: GameState, playerId: string, req: BidRequest):
   const club = state.clubs[myId];
   const player = state.players[playerId];
   if (!club || !player) return '今は申し込めません。';
-  if (!player.clubId || player.clubId === myId) return '他クラブの選手ではありません。';
+  const abroad = inOverseasPool(state, player);
+  if (abroad && !isFoundOverseas(state, player)) return 'まだスカウトが見つけていない海外の選手です。';
+  if (!abroad && (!player.clubId || player.clubId === myId)) return '他クラブの選手ではありません。';
+  if (abroad && req.kind !== 'transfer') return '海外の選手は、移籍金を出して獲ります。';
+  if (abroad && isForeign(player) && playersOf(state, myId).filter(isForeign).length >= TRANSFER.foreignMax) return `外国籍の選手は${TRANSFER.foreignMax}人までです。`;
   if (player.retiring) return '今シーズン限りで引退します。';
   if (player.leaving) return '契約満了で退団する選手です。12月からは、契約満了の選手として移籍金なしで話せます。';
   if (player.loan) return 'レンタル中の選手です。';
@@ -336,25 +351,26 @@ export function bidProblem(state: GameState, playerId: string, req: BidRequest):
 export function placeBid(state: GameState, playerId: string, req: BidRequest): { ok: boolean; message: string; bid?: TransferBid } {
   const problem = bidProblem(state, playerId, req);
   const player = state.players[playerId];
-  if (problem || !player?.clubId) return { ok: false, message: problem ?? '今は申し込めません。' };
+  const sellerId = player ? sellerOf(state, player) : null;
+  if (problem || !player || !sellerId) return { ok: false, message: problem ?? '今は申し込めません。' };
   const myId = state.manager.clubId;
   if (req.kind === 'clause') {
     const fee = player.contract?.releaseClause ?? 0;
-    const bid = newBid(state, { kind: 'clause', playerId, sellerId: player.clubId, buyerId: myId, fee, wageShare: 1, status: 'accepted', due: addDays(state.date, TRANSFER.contractDays) });
-    return { ok: true, bid, message: `違約金${yenText(fee)}を払うので、${clubName(state, player.clubId)}は断れません。${TRANSFER.contractDays}日以内に、選手と契約の話をしてください。` };
+    const bid = newBid(state, { kind: 'clause', playerId, sellerId, buyerId: myId, fee, wageShare: 1, status: 'accepted', due: addDays(state.date, TRANSFER.contractDays) });
+    return { ok: true, bid, message: `違約金${yenText(fee)}を払うので、${clubName(state, sellerId)}は断れません。${TRANSFER.contractDays}日以内に、選手と契約の話をしてください。` };
   }
   const bid = newBid(state, {
-    kind: req.kind, playerId, sellerId: player.clubId, buyerId: myId,
+    kind: req.kind, playerId, sellerId, buyerId: myId,
     fee: req.kind === 'loan' ? 0 : roundTo(req.fee, 1e5), wageShare: req.kind === 'loan' ? req.wageShare : 1,
     status: 'waiting', due: addDays(state.date, TRANSFER.answerDays[0] + (Number(playerId.replace(/\D/g, '')) % (TRANSFER.answerDays[1] - TRANSFER.answerDays[0] + 1))),
   });
-  return { ok: true, bid, message: `${clubName(state, player.clubId)}に申し込みました。${Number(bid.due.slice(5, 7))}月${Number(bid.due.slice(8, 10))}日ごろに返事が届きます。` };
+  return { ok: true, bid, message: `${clubName(state, sellerId)}に申し込みました。${Number(bid.due.slice(5, 7))}月${Number(bid.due.slice(8, 10))}日ごろに返事が届きます。` };
 }
 
 /** 売る側（AIクラブ）が、自分のクラブの申し込みに返事をする */
 function answerMyBid(state: GameState, bid: TransferBid, rng: Rng): void {
   const player = state.players[bid.playerId];
-  if (!player || player.clubId !== bid.sellerId) {
+  if (!player || sellerOf(state, player) !== bid.sellerId) {
     bid.status = 'failed';
     bid.note = '選手がすでにクラブを離れていました。';
     notify(state, bid, '移籍の申し込みが流れました', bid.note, false);
@@ -556,7 +572,7 @@ function aiBuyRound(state: GameState, rng: Rng): void {
     const j = rng.int(0, i);
     [clubs[i], clubs[j]] = [clubs[j] as Club, clubs[i] as Club];
   }
-  const taken = new Set<string>();
+  const taken = new Set<string>((state.bids ?? []).filter(isOpen).map((b) => b.playerId));
   const race = titleRaceClubs(state);
   const poolIds = new Set(state.overseasPool);
   const power = strengths(state);

@@ -229,7 +229,7 @@ describe('古いセーブデータ（版7）', () => {
     delete v7.transferHistory;
     v7.version = 7;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 7, state: v7 }));
-    expect(loaded.version).toBe(8);
+    expect(loaded.version).toBe(9);
     expect(loaded.bids).toEqual([]);
     expect(loaded.transferHistory).toEqual([]);
     advanceDay(loaded);

@@ -1,17 +1,28 @@
 // 他クラブの選手の能力の見え方。要件定義書「選手データ」の「能力の見え方」に対応する。
 // 知識度（0〜100%）が低いほど、能力値は「12〜16」のような幅でしか分からない。
-// フェーズ1では、自分のクラブは100%、同じリーグの他クラブは一律で50%とする（スカウトはフェーズ4）。
+// 自分のクラブの選手は100%。同じリーグの選手は50%、海外の選手と新人の候補は20%から始まり、
+// スカウトで調べると上がる（下がらない。フェーズ4-C）。
 
+import { SCOUTING } from './scoutingBalance';
 import type { GameState, PlayerRecord } from './types';
 
-export const LEAGUE_KNOWLEDGE = 50;
+export const LEAGUE_KNOWLEDGE = SCOUTING.base.league;
+
+/** 調べる前の知識度（所属で決まる） */
+export function baseKnowledge(state: GameState, player: PlayerRecord): number {
+  if (player.prospect) return SCOUTING.base.prospect;
+  if (!player.clubId && (state.overseasPool ?? []).includes(player.id)) return SCOUTING.base.overseas;
+  return LEAGUE_KNOWLEDGE;
+}
 
 export function knowledgeOf(state: GameState, player: PlayerRecord): number {
-  return player.clubId === state.manager.clubId ? 100 : LEAGUE_KNOWLEDGE;
+  const myId = state.manager.clubId;
+  if (myId && (player.clubId === myId || player.loan?.fromClubId === myId)) return 100;
+  return Math.max(baseKnowledge(state, player), state.scouting?.knowledge[player.id] ?? 0);
 }
 
 /** 文字列から決まった数を作る（同じ選手・同じ能力なら毎回同じ幅になるように） */
-function hash(text: string): number {
+export function hash(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);

@@ -49,6 +49,8 @@ export type Screen =
   | { name: 'manager' }
   | { name: 'transfers'; tab?: 'search' | 'bids' | 'mine' | 'renewals' | 'market' | 'history' }
   | { name: 'bid'; playerId: string }
+  | { name: 'scouting'; tab?: 'scouts' | 'reports' | 'prospects' | 'overseas' }
+  | { name: 'prospect'; playerId: string }
   | { name: 'contract'; playerId: string };
 
 class Store {
@@ -197,6 +199,7 @@ class Store {
     if (arrived.some((m) => m.from === 'ファンクラブ担当' && m.subject.includes('受付を始めました'))) ids.push('fanClubWindow');
     if (arrived.some((m) => m.category === 'transfer' && m.subject === '契約の更新の交渉が始まりました')) ids.push('renewalWindow');
     if (arrived.some((m) => m.category === 'transfer' && m.action?.kind === 'transferBid')) ids.push('incomingBid');
+    if (arrived.some((m) => m.category === 'scout' && m.subject.includes('新人の候補が発表されました'))) ids.push('prospectsAnnounced');
     const id = ids.find((i) => !this.seen(i));
     if (id && !this.tutorial && this.settings.tutorials) {
       this.tutorial = { id, step: 0 };
