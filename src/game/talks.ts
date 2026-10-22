@@ -5,6 +5,7 @@
 import { createRng, type Rng } from '../engine/rng';
 import { overallRating } from '../engine/ratings';
 import { BALANCE } from './balance';
+import { talkGain } from './careerBalance';
 import { adjustMorale } from './condition';
 import { daysBetween, daySeed } from './dates';
 import { addMessage } from './inbox';
@@ -106,7 +107,7 @@ export function answerRequest(state: GameState, requestId: string, reply: Reques
       ? { text: `${player.name}は怒って部屋を出て行った。`, tone: 'negative', morale: -14 }
       : { text: `${player.name}はしぶしぶ受け入れたが、表情は暗い。`, tone: 'negative', morale: -5 };
   }
-  adjustMorale(player, outcome.morale);
+  adjustMorale(player, talkGain(state, outcome.morale));
   if (reply !== 'promise') player.status.playingTime = Math.max(player.status.playingTime, 0.3);
   state.requests = state.requests.filter((r) => r.id !== requestId);
   for (const m of state.inbox) {
@@ -165,7 +166,7 @@ export function managerTalk(state: GameState, playerId: string, kind: ManagerTal
     outcome = { text: `${player.name}は「頑張ります」と答えた。`, tone: 'positive', morale: 3 };
   }
   outcome.morale += Math.round(rng.normal(0, 1));
-  adjustMorale(player, outcome.morale);
+  adjustMorale(player, talkGain(state, outcome.morale));
   player.lastTalk = state.date;
   return outcome;
 }
@@ -222,7 +223,7 @@ export function teamMeeting(state: GameState, kind: MeetingKind): { summary: str
     if (kind === 'rally' && losses >= 2 && player.hidden.temperament >= 12) score += 2;
     score += rng.normal(0, 1.2);
     const morale = Math.round(score);
-    adjustMorale(player, morale);
+    adjustMorale(player, talkGain(state, morale));
     const tone = toneOf(score);
     return { playerId: player.id, name: player.name, tone, text: rng.pick(REACTION_TEXT[tone]), morale, form: 0 };
   });
@@ -482,7 +483,7 @@ export function teamTalk(rng: Rng, players: PlayerRecord[], situation: TalkSitua
 export function applyTalkMorale(state: GameState, reactions: Reaction[]): void {
   for (const r of reactions) {
     const player = state.players[r.playerId];
-    if (player) adjustMorale(player, r.morale);
+    if (player) adjustMorale(player, talkGain(state, r.morale));
   }
 }
 

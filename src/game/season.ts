@@ -1,5 +1,6 @@
 // 節ごとの進行：試合の準備、結果の記録、選手の記録と出場停止の更新。
 
+import { simulateMatch } from '../engine/match';
 import type { MatchResult, Team } from '../engine/types';
 import { clubReadiness } from './condition';
 import { settleHomeMatch } from './finance';
@@ -144,4 +145,20 @@ export function applyMatchday(state: GameState, results: Record<string, MatchRes
 
 export function averageRating(stats: { ratingTotal: number; ratingCount: number }): number | null {
   return stats.ratingCount === 0 ? null : Math.round((stats.ratingTotal / stats.ratingCount) * 100) / 100;
+}
+
+/**
+ * 監督が無職の間は、その節の試合をここで計算して進める（フェーズ3-C）。
+ * 監督がいるときは、試合の画面（観戦や他会場の計算）で進める。
+ */
+export function playRoundWithoutManager(state: GameState): boolean {
+  if (state.manager.clubId !== '' || isSeasonOver(state)) return false;
+  const fixtures = fixturesOfRound(state, state.season.round);
+  if (fixtures.length === 0 || fixtures.some((f) => f.date > state.date) || fixtures.every((f) => f.result !== null)) return false;
+  const results: Record<string, MatchResult> = {};
+  for (const m of prepareMatchday(state)) {
+    results[m.fixture.id] = simulateMatch(m.home, m.away, { seed: m.seed, detailedCommentary: false, important: m.important });
+  }
+  applyMatchday(state, results);
+  return true;
 }

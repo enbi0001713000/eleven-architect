@@ -242,7 +242,7 @@ describe('古いセーブデータ（版2）', () => {
     for (const c of Object.values(v2.clubs as Record<string, Record<string, unknown>>)) delete c.finance;
     v2.version = 2;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 2, state: v2 }));
-    expect(loaded.version).toBe(5);
+    expect(loaded.version).toBe(6);
     for (const club of Object.values(loaded.clubs)) {
       expect(club.finance.budget.total).toBeGreaterThan(0);
       expect(club.finance.months).toEqual([]);

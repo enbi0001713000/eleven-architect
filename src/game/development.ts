@@ -36,7 +36,8 @@ export interface WeeklyChange {
  * 1週間分の成長と衰え。club が null（海外の選手プール）なら、バランスの練習をしているものとして扱う。
  * 総合力が潜在能力に届くと伸びが止まる。30歳を過ぎるとフィジカルから衰え、メンタルはその後も伸びることがある。
  */
-export function developWeek(rng: Rng, player: PlayerRecord, club: Club | null, weeklyMinutes: number): WeeklyChange {
+/** growthFactor は監督の経歴による練習での成長の倍率（自分のクラブだけ。フェーズ3-C） */
+export function developWeek(rng: Rng, player: PlayerRecord, club: Club | null, weeklyMinutes: number, growthFactor = 1): WeeklyChange {
   const keeper = player.position === 'GK';
   const focus = TRAINING_FOCUS[club?.training.focus ?? 'balanced'];
   const intensity = TRAINING_INTENSITY[club?.training.intensity ?? 'normal'];
@@ -47,7 +48,7 @@ export function developWeek(rng: Rng, player: PlayerRecord, club: Club | null, w
   const played = Math.min(1, player.status.recentMinutes / 360);
   const playFactor = player.age <= 23 ? 0.45 + 0.9 * played : 0.7 + 0.45 * played;
   const injured = player.status.injury !== null ? 0.2 : 1;
-  const base = BALANCE.weeklyGrowth * professionalism * playFactor * focus.growth * intensity.growth * injured;
+  const base = BALANCE.weeklyGrowth * professionalism * playFactor * focus.growth * intensity.growth * injured * growthFactor;
   const relevant = relevantKeys(player);
   const youthGrowth = ageGrowth(player.age, keeper);
   const veteranMental = player.age >= 27 && player.age <= 33 ? 0.3 : 0;

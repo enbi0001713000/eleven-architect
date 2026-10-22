@@ -36,7 +36,11 @@ export function ClubDetail({ id }: { id: string }) {
       <div className="grid-2">
         <Panel title="基本情報">
           <dl className="facts">
-            <dt>監督</dt><dd>{mine ? game.manager.name : club.managerName}</dd>
+            <dt>監督</dt>
+            <dd>
+              {mine ? game.manager.name : club.managerName}
+              {!mine && (club.vacancy ? <span className="muted small">（監督が空いています）</span> : <span className="muted small">（評判 {Math.round(club.managerReputation)}）</span>)}
+            </dd>
             <dt>スタジアム</dt><dd>{club.stadium.name}（{club.stadium.capacity.toLocaleString('ja-JP')}人）</dd>
             <dt>ファンの数</dt><dd>約{club.fans.toLocaleString('ja-JP')}人</dd>
             <dt>ライバル</dt><dd>{club.rivalId && <ClubLink game={game} clubId={club.rivalId} />}</dd>

@@ -137,10 +137,10 @@ describe('古いセーブデータ（版4）', () => {
     for (const club of Object.values(v4.clubs)) delete club.fanClub;
     v4.version = 4;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 4, state: v4 }));
-    expect(loaded.version).toBe(5);
+    expect(loaded.version).toBe(6);
     const club = loaded.clubs[loaded.manager.clubId]!;
     expect(totalMembers(club.fanClub.members)).toBeGreaterThan(0);
-    expect(loaded.inbox[0]?.subject).toContain('ファンクラブ');
+    expect(loaded.inbox.some((m) => m.subject.includes('ファンクラブの機能'))).toBe(true);
     advanceDay(loaded);
   });
 });

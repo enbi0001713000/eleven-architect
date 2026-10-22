@@ -95,8 +95,9 @@ describe('信頼度と解任', () => {
     expect(isDismissed(state)).toBe(true);
     expect(state.inbox.some((m) => m.topic === 'dismissal')).toBe(true);
     expect(state.season.round).toBeGreaterThan(OWNER.dismissFromRound);
-    // 解任されたら、「次の出来事まで進める」は止まる
-    expect(advanceToNextEvent(state).reason).toBe('dismissed');
+    // 解任されたら無職になる（フェーズ3-C）。無職でも日は進められ、試合の日では止まらない
+    expect(state.manager.clubId).toBe('');
+    expect(advanceToNextEvent(state, 30).reason).not.toBe('match');
   });
 
   it('勝ち続けると信頼度が上がり、シーズンの評価で目標の達成をほめられる', () => {
@@ -131,7 +132,7 @@ describe('古いセーブデータ（版3）', () => {
     delete v3.owner;
     v3.version = 3;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 3, state: v3 }));
-    expect(loaded.version).toBe(5);
+    expect(loaded.version).toBe(6);
     expect(loaded.owner.trust).toBe(OWNER.startTrust);
     expect(loaded.owner.goals.year).toBe(loaded.season.year);
     while (!todaysFixture(loaded)) advanceDay(loaded);

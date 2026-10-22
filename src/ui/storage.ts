@@ -34,7 +34,7 @@ export async function writeSave(id: string, state: GameState): Promise<void> {
   await db.saves.put({
     id,
     managerName: state.manager.name,
-    clubName: club?.name ?? '',
+    clubName: club?.name ?? '無職',
     round: state.season.round,
     date: state.date,
     updatedAt: new Date().toISOString(),
