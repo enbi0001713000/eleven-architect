@@ -9,7 +9,7 @@
 
 import { commentary, type CommentaryKey, type CommentaryNames } from './commentary';
 import { ENGINE_CONFIG as C } from './config';
-import { FORMATIONS, shapePoint, type Slot } from './formations';
+import { FORMATIONS, isBackLine, shapePoint, type Slot } from './formations';
 import { positionFit, positionRating } from './ratings';
 import { createRng, type Rng } from './rng';
 import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot, type RoleProfile } from './roles';
@@ -152,10 +152,10 @@ type ShotKind = 'open' | 'header' | 'freeKick';
 
 /** ポジションごとの、シュートとドリブルの選びやすさ */
 const SHOOT_TENDENCY: Record<Position, number> = {
-  GK: 0, CB: 0.4, SB: 0.5, DM: 0.6, CM: 0.8, AM: 1.1, WM: 0.9, W: 1.1, FW: 1.4,
+  GK: 0, CB: 0.4, SB: 0.5, WB: 0.6, DM: 0.6, CM: 0.8, AM: 1.1, WM: 0.9, W: 1.1, FW: 1.4,
 };
 const DRIBBLE_TENDENCY: Record<Position, number> = {
-  GK: 0, CB: 0.3, SB: 0.8, DM: 0.5, CM: 0.8, AM: 1.3, WM: 1.1, W: 1.6, FW: 1.0,
+  GK: 0, CB: 0.3, SB: 0.8, WB: 0.95, DM: 0.5, CM: 0.8, AM: 1.3, WM: 1.1, W: 1.6, FW: 1.0,
 };
 
 /** AIの交代のタイミング（分）と、そのときに代える最大人数 */
@@ -381,7 +381,7 @@ export class LiveMatch {
 
     const roles = state.players.map((op, i) => {
       const wanted = change.roles?.[i] ?? (change.formation === undefined ? op.role : undefined);
-      return wanted && ROLE_OPTIONS[op.position].includes(wanted) ? wanted : roleForSlot({ ...state.tactics, roles: [] }, i, op.position);
+      return wanted && ROLE_OPTIONS[op.position].includes(wanted) ? wanted : roleForSlot({ ...state.tactics, formation, roles: [] }, i, op.position);
     });
     state.players.forEach((op, i) => {
       op.role = roles[i] as Role;
@@ -705,16 +705,16 @@ export class LiveMatch {
     return 0.5 * this.attr(side, op, 'pace') + 0.5 * this.attr(side, op, 'acceleration');
   }
 
-  /** 最終ライン（CBとSB）の平均の速さ */
+  /** 最終ライン（CB、SB、WB）の平均の速さ */
   private backLineSpeed(side: Side): number {
-    const line = this.sides[side].players.filter((op) => !op.sentOff && (op.position === 'CB' || op.position === 'SB'));
+    const line = this.sides[side].players.filter((op) => !op.sentOff && isBackLine(op.position));
     return line.length === 0 ? 8 : line.reduce((sum, op) => sum + this.speed(side, op), 0) / line.length;
   }
 
   /** 前線と中盤の、寄せる力（運動量・スピード・スタミナ）。1が平均的。 */
   private pressingUnit(side: Side): number {
     if (this.pressingUnitStamp[side] === this.stepId) return this.pressingUnitCache[side];
-    const front = this.sides[side].players.filter((op) => !op.sentOff && op.position !== 'GK' && op.position !== 'CB' && op.position !== 'SB');
+    const front = this.sides[side].players.filter((op) => !op.sentOff && op.position !== 'GK' && !isBackLine(op.position));
     const total = front.reduce((sum, op) =>
       sum + 0.6 * this.attr(side, op, 'workRate') + 0.2 * this.attr(side, op, 'pace') + 0.2 * this.attr(side, op, 'acceleration'), 0);
     const value = front.length === 0 ? 0 : total / front.length / 12;
@@ -1314,7 +1314,7 @@ export class LiveMatch {
 
     for (const op of this.sides[def].players) {
       if (op.position === 'GK') op.stats.rating -= 0.3;
-      if (op.position === 'CB' || op.position === 'SB') op.stats.rating -= 0.15;
+      if (isBackLine(op.position)) op.stats.rating -= 0.15;
     }
     this.stoppage += 60;
     this.kickoff(def, null);
@@ -1416,7 +1416,7 @@ export class LiveMatch {
       const everyone = [...state.players, ...state.subbedOff].sort((a, b) => a.order - b.order);
       for (const op of everyone) {
         if (cleanSheet && op.position === 'GK') op.stats.rating += 0.4;
-        if (cleanSheet && (op.position === 'CB' || op.position === 'SB')) op.stats.rating += 0.25;
+        if (cleanSheet && isBackLine(op.position)) op.stats.rating += 0.25;
         op.stats.rating += 0.2 * result(side);
         op.stats.rating = Math.round(clamp(op.stats.rating, 3, 10) * 10) / 10;
         lines.push({

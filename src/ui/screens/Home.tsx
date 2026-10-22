@@ -4,6 +4,7 @@ import { overallRating } from '../../engine/ratings';
 import { injuryName, moraleLabel, teamFamiliarity } from '../../game/condition';
 import { daysBetween } from '../../game/dates';
 import { debtOf, netResult, payrollOf, yearToDate, yenText } from '../../game/finance';
+import { totalMembers } from '../../game/fanClub';
 import { financeGoalStatus, goalLabel, trustLabel } from '../../game/owner';
 import { FINANCE_GOAL_LABEL } from '../../game/ownerBalance';
 import { pendingActions } from '../../game/inbox';
@@ -17,8 +18,10 @@ import { Emblem } from '../components/Emblem';
 import { fanMoodLabel, formatDate, INBOX_CATEGORY_LABEL, POSITION_LABEL } from '../format';
 import { playedFixtures, scoreFor, topScorers } from '../queries';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 export function Home() {
+  useTutorial('start');
   const game = useGame();
   const myId = game.manager.clubId;
   const club = game.clubs[myId];
@@ -46,7 +49,7 @@ export function Home() {
     <div className="page home">
       <h1>ホーム</h1>
       <div className="grid-2">
-        <Panel title="次の試合">
+        <Panel title="次の試合" tutorial="home-next-match">
           {isSeasonOver(game) && (
             <div className="next-match">
               <p>今シーズンの全日程が終わりました。「次の出来事まで進める」で、シーズンの総括、引退の発表、新しい日程、新人の加入と進みます。</p>
@@ -126,7 +129,7 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="オーナーの評価" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
+        <Panel title="オーナーの評価" tutorial="home-owner" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
           {(() => {
             const owner = game.owner;
             const money = financeGoalStatus(game);
@@ -215,6 +218,11 @@ export function Home() {
                 <dt>手元のお金</dt><dd className={fin.balance < 0 ? 'tone-low' : ''}>{yenText(fin.balance)}{debtOf(fin) > 0 ? `（借り入れの残り ${yenText(debtOf(fin))}）` : ''}</dd>
                 <dt>今年の差し引き</dt><dd className={net < 0 ? 'tone-low' : ''}>{yenText(net)}（{net >= 0 ? '黒字' : '赤字'}）</dd>
                 <dt>年俸 ／ 年俸予算</dt><dd className={payroll > fin.budget.wages ? 'tone-low' : ''}>{yenText(payroll)} ／ {yenText(fin.budget.wages)}</dd>
+                <dt>ファンクラブ</dt>
+                <dd>
+                  会員 {totalMembers(club.fanClub.members).toLocaleString('ja-JP')}人
+                  <button type="button" className="link" onClick={() => store.open({ name: 'myClub', tab: 'fanClub' })}>ファンクラブへ</button>
+                </dd>
               </dl>
             );
           })()}

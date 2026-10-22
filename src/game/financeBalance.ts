@@ -5,12 +5,12 @@ import type { ClubSize, ExpenseKind, IncomeKind, SeatKind, SponsorDealKind, Spon
 
 export const INCOME_LABEL: Record<IncomeKind, string> = {
   tickets: '入場料', broadcast: '放映権（リーグからの配分）', sponsor: 'スポンサー', merchandise: 'グッズ販売',
-  prize: '賞金', transfers: '移籍金',
+  fanClub: 'ファンクラブ会費', prize: '賞金', transfers: '移籍金',
 };
 
 export const EXPENSE_LABEL: Record<ExpenseKind, string> = {
   wages: '選手の年俸', operations: 'クラブの運営費', matchday: '試合の運営費', merchandiseCost: 'グッズの仕入れ',
-  interest: '借り入れの利息', transfers: '移籍金', agentFees: '代理人の手数料',
+  fanClubCost: 'ファンクラブの運営費', interest: '借り入れの利息', transfers: '移籍金', agentFees: '代理人の手数料',
 };
 
 export interface SeatProfile {

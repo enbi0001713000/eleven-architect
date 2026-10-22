@@ -1,6 +1,6 @@
 // ゲーム全体で使うデータの形。要件定義書「選手データ」「戦術と観戦」の章に対応する。
 
-export type Position = 'GK' | 'CB' | 'SB' | 'DM' | 'CM' | 'AM' | 'WM' | 'W' | 'FW';
+export type Position = 'GK' | 'CB' | 'SB' | 'WB' | 'DM' | 'CM' | 'AM' | 'WM' | 'W' | 'FW';
 
 /** 能力値（23項目）。画面では1〜20に丸めて表示し、内部では小数で持つ。 */
 export interface Attributes {
@@ -66,17 +66,17 @@ export interface Player {
   hidden: HiddenAttributes;
 }
 
-export type FormationName = '4-4-2' | '4-3-3' | '4-2-3-1';
+export type FormationName = '4-4-2' | '4-3-3' | '4-2-3-1' | '4-1-4-1' | '3-4-2-1' | '3-5-2';
 
 /** 選手の役割（ポジションごとに選べるものは roles.ts の ROLE_OPTIONS） */
 export type Role =
   | 'goalkeeper' | 'sweeperKeeper'
-  | 'stopper' | 'ballPlayingDefender'
-  | 'defensiveFullback' | 'attackingFullback'
-  | 'anchor' | 'playmaker' | 'boxToBox'
+  | 'stopper' | 'coverDefender' | 'ballPlayingDefender'
+  | 'defensiveFullback' | 'attackingFullback' | 'invertedFullback' | 'wingBack'
+  | 'anchor' | 'volante' | 'playmaker' | 'boxToBox' | 'mezzala'
   | 'advancedPlaymaker' | 'shadowStriker'
   | 'wideMidfielder' | 'winger' | 'insideForward'
-  | 'targetMan' | 'runner' | 'falseNine';
+  | 'poacher' | 'targetMan' | 'runner' | 'falseNine';
 
 /** チーム指示。どれも -2（弱い・低い・短い）〜 +2（強い・高い・長い）。 */
 export interface TeamInstructions {

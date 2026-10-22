@@ -5,8 +5,10 @@ import { clubPlayers } from '../../game/selection';
 import { ColumnPicker, DataTable } from '../components/DataTable';
 import { COLUMN_PRESETS, playerColumns } from '../playerColumns';
 import { store, useGame, useStore } from '../store';
+import { useTutorial } from '../useTutorial';
 
 export function Squad() {
+  useTutorial('squad');
   const game = useGame();
   const s = useStore();
   const [preset, setPreset] = useState<string>(s.settings.squadColumns ? 'custom' : 'overview');
@@ -21,7 +23,7 @@ export function Squad() {
     <div className="page">
       <h1>選手（{players.length}人）</h1>
       <div className="toolbar">
-        <div className="segmented">
+        <div className="segmented" data-tutorial="squad-views">
           {COLUMN_PRESETS.map((p) => (
             <button key={p.id} type="button" className={preset === p.id ? 'active' : ''} onClick={() => setPreset(p.id)}>{p.label}</button>
           ))}
@@ -34,8 +36,10 @@ export function Squad() {
           setPreset('custom');
         }} />
       </div>
-      <DataTable rows={players} columns={visible} rowKey={(p) => p.id} initialSort={{ key: 'pos', desc: false }}
-        onRowClick={(p) => store.navigate({ name: 'player', id: p.id })} />
+      <div data-tutorial="squad-table">
+        <DataTable rows={players} columns={visible} rowKey={(p) => p.id} initialSort={{ key: 'pos', desc: false }}
+          onRowClick={(p) => store.navigate({ name: 'player', id: p.id })} />
+      </div>
     </div>
   );
 }

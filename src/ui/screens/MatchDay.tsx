@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { LiveMatch, SUBSTITUTION_RULES } from '../../engine/match';
 import { createRng } from '../../engine/rng';
 import { positionRating } from '../../engine/ratings';
-import { ROLE_OPTIONS, ROLE_PROFILES } from '../../engine/roles';
+import { ROLE_OPTIONS, roleLabel } from '../../engine/roles';
 import type { FormationName, MatchResult, Role, Side, TeamInstructions } from '../../engine/types';
 import { matchGate } from '../../game/finance';
+import { ROLE_FIT_MARK, roleFit } from '../../game/roleFit';
 import { applyMatchday, isSeasonOver, nextFixtureOf, prepareMatchday } from '../../game/season';
 import { autoSelect, repairSelection, selectionWarnings, validateSelection } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
@@ -25,6 +26,7 @@ import { FORMATIONS_LIST, formatDate, INSTRUCTION_LABELS, POSITION_LABEL, rating
 import type { CommentaryMode, MatchSpeed } from '../settings';
 import { simulateInBackground } from '../simClient';
 import { store, useGame, useStore } from '../store';
+import { useTutorial } from '../useTutorial';
 
 type Stage = 'preview' | 'loading' | 'pretalk' | 'live' | 'report';
 
@@ -57,6 +59,7 @@ function scoreUntil(result: MatchResult, half: 1 | 2, clock: number): [number, n
 }
 
 export function MatchDay() {
+  useTutorial('match');
   const game = useGame();
   const s = useStore();
   const myId = game.manager.clubId;
@@ -423,7 +426,7 @@ function PlayersOnPitch({ side, compact }: { side: ReturnType<LiveMatch['snapsho
           <tr key={p.player.id} className={p.sentOff ? 'sent-off' : ''}>
             <td>{POSITION_LABEL[p.position]}</td>
             <td>{p.player.name}{p.stats.yellowCards > 0 && !p.sentOff ? ' 🟨' : ''}{p.sentOff ? ' 🟥' : ''}{p.stats.goals > 0 ? ` ⚽${p.stats.goals > 1 ? p.stats.goals : ''}` : ''}{p.injured ? ' 🩹' : ''}</td>
-            {!compact && <td className="small muted">{ROLE_PROFILES[p.role].label}</td>}
+            {!compact && <td className="small muted">{roleLabel(p.role, p.position)}</td>}
             <td><StaminaBar value={p.stamina} /></td>
             <td className="num"><span className={`rating ${ratingTone(p.stats.rating)}`}>{p.stats.rating.toFixed(1)}</span></td>
           </tr>
@@ -522,7 +525,7 @@ function TacticsPanel({ live, side, onChange, onClose }: { live: LiveMatch; side
                   <label key={p.player.id} className="inline">
                     {POSITION_LABEL[p.position]} {p.player.name}
                     <select value={roles[i]} onChange={(e) => setRoles(roles.map((r, j) => (j === i ? (e.target.value as Role) : r)))}>
-                      {ROLE_OPTIONS[p.position].map((r) => <option key={r} value={r}>{ROLE_PROFILES[r].label}</option>)}
+                      {ROLE_OPTIONS[p.position].map((r) => <option key={r} value={r}>{ROLE_FIT_MARK[roleFit(p.player, r, p.position)]} {roleLabel(r, p.position)}</option>)}
                     </select>
                   </label>
                 ))}

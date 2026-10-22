@@ -8,10 +8,12 @@ import { DataTable } from '../components/DataTable';
 import { POSITION_LABEL } from '../format';
 import { topAssists, topRated, topScorers } from '../queries';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 type Tab = 'table' | 'scorers' | 'assists' | 'rated' | 'history';
 
 export function League() {
+  useTutorial('league');
   const game = useGame();
   const [tab, setTab] = useState<Tab>('table');
   const table = standingsOf(game);
@@ -51,7 +53,7 @@ export function League() {
       )}
 
       {tab === 'table' && (
-        <table className="data-table standings">
+        <table className="data-table standings" data-tutorial="league">
           <thead>
             <tr>
               <th>順位</th><th>クラブ</th><th className="num">試合</th><th className="num">勝</th><th className="num">分</th>

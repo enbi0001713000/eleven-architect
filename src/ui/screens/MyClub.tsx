@@ -1,5 +1,6 @@
-// クラブ：オーナーの目標と信頼度、評価の履歴、クラブの情報（要件定義書「画面の一覧」の「クラブ」。スタッフはフェーズ5）
+// クラブ：オーナーの目標と信頼度、評価の履歴、クラブの情報、ファンクラブ（要件定義書「画面の一覧」の「クラブ」。スタッフはフェーズ5）
 
+import { useState } from 'react';
 import { canNegotiate, financeGoalStatus, goalLabel, trustLabel, verdictLabel } from '../../game/owner';
 import { FINANCE_GOAL_LABEL, OWNER, STRICTNESS_LABEL } from '../../game/ownerBalance';
 import { standingsOf } from '../../game/standings';
@@ -8,9 +9,16 @@ import { Bar, ClubLink, Panel } from '../components/bits';
 import { Emblem } from '../components/Emblem';
 import { formatDate, SIZE_LABEL } from '../format';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
+import { FanClubTab } from './FanClubTab';
 
-export function MyClub() {
+type Tab = 'owner' | 'fanClub';
+const TABS: { key: Tab; label: string }[] = [{ key: 'owner', label: 'オーナー' }, { key: 'fanClub', label: 'ファンクラブ' }];
+
+export function MyClub({ initialTab }: { initialTab?: Tab }) {
   const game = useGame();
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'owner');
+  useTutorial(tab === 'owner' ? 'myClub' : undefined);
   const club = game.clubs[game.manager.clubId];
   if (!club) return null;
   const owner = game.owner;
@@ -29,8 +37,16 @@ export function MyClub() {
           <div className="muted">{club.hometown}　創設{club.founded}年　規模：{SIZE_LABEL[club.size]}　監督 {game.manager.name}</div>
         </div>
       </header>
+      <div className="tabs">
+        <div className="segmented" data-tutorial="club-tabs">
+          {TABS.map((t) => (
+            <button key={t.key} type="button" className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+      {tab === 'fanClub' ? <FanClubTab game={game} club={club} /> : (
       <div className="grid-2">
-        <Panel title="オーナーの信頼度">
+        <Panel title="オーナーの信頼度" tutorial="owner-trust">
           <div className="trust-row">
             <strong className="trust-value">{Math.round(owner.trust)}</strong>
             <span>{trustLabel(owner.trust)}</span>
@@ -46,7 +62,7 @@ export function MyClub() {
           </p>
         </Panel>
 
-        <Panel title={`${goals.year}年シーズンの目標`} actions={canNegotiate(game)
+        <Panel title={`${goals.year}年シーズンの目標`} tutorial="owner-goals" actions={canNegotiate(game)
           ? <button type="button" className="primary small" onClick={() => store.navigate({ name: 'conversation', topic: 'goals' })}>オーナーと目標を話し合う</button>
           : undefined}>
           <dl className="facts">
@@ -104,6 +120,7 @@ export function MyClub() {
           </dl>
         </Panel>
       </div>
+      )}
     </div>
   );
 }

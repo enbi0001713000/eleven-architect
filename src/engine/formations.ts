@@ -2,12 +2,14 @@
 // 座標はそのチームから見た向きで、x は 0（自陣ゴール）〜 6（相手ゴール）、y は 0（左サイド）〜 5（右サイド）。
 
 import type { RoleProfile } from './roles';
-import type { FormationName, Position, TeamInstructions } from './types';
+import type { FormationName, Position, Role, TeamInstructions } from './types';
 
 export interface Slot {
   position: Position;
   x: number;
   y: number;
+  /** この枠の初期の役割（決めなければポジションの初期値） */
+  role?: Role;
 }
 
 const GK: Slot = { position: 'GK', x: 0.3, y: 2.5 };
@@ -16,6 +18,11 @@ const BACK_FOUR: Slot[] = [
   { position: 'CB', x: 1.0, y: 1.9 },
   { position: 'CB', x: 1.0, y: 3.1 },
   { position: 'SB', x: 1.3, y: 4.4 },
+];
+const BACK_THREE: Slot[] = [
+  { position: 'CB', x: 1.0, y: 1.4 },
+  { position: 'CB', x: 0.9, y: 2.5 },
+  { position: 'CB', x: 1.0, y: 3.6 },
 ];
 
 /** 守備時の基本の立ち位置。並び順は Team.lineup の順と同じ。 */
@@ -47,12 +54,47 @@ export const FORMATIONS: Record<FormationName, Slot[]> = {
     { position: 'W', x: 3.1, y: 4.3 },
     { position: 'FW', x: 3.9, y: 2.5 },
   ],
+  '4-1-4-1': [
+    GK, ...BACK_FOUR,
+    { position: 'DM', x: 2.0, y: 2.5 },
+    { position: 'WM', x: 2.8, y: 0.7 },
+    { position: 'CM', x: 2.9, y: 1.75 },
+    { position: 'CM', x: 2.9, y: 3.25 },
+    { position: 'WM', x: 2.8, y: 4.3 },
+    { position: 'FW', x: 3.9, y: 2.5 },
+  ],
+  '3-4-2-1': [
+    GK, ...BACK_THREE,
+    { position: 'WB', x: 1.7, y: 0.5 },
+    { position: 'DM', x: 2.1, y: 1.9, role: 'volante' },
+    { position: 'DM', x: 2.1, y: 3.1, role: 'volante' },
+    { position: 'WB', x: 1.7, y: 4.5 },
+    { position: 'AM', x: 3.0, y: 1.7, role: 'shadowStriker' },
+    { position: 'AM', x: 3.0, y: 3.3, role: 'shadowStriker' },
+    { position: 'FW', x: 3.9, y: 2.5 },
+  ],
+  '3-5-2': [
+    GK, ...BACK_THREE,
+    { position: 'WB', x: 1.8, y: 0.5 },
+    { position: 'CM', x: 2.8, y: 1.6 },
+    { position: 'DM', x: 2.0, y: 2.5 },
+    { position: 'CM', x: 2.8, y: 3.4 },
+    { position: 'WB', x: 1.8, y: 4.5 },
+    { position: 'FW', x: 3.7, y: 1.95 },
+    { position: 'FW', x: 3.7, y: 3.05 },
+  ],
 };
+
+/** 画面で選べる順 */
+export const FORMATION_NAMES: FormationName[] = ['4-4-2', '4-3-3', '4-2-3-1', '4-1-4-1', '3-4-2-1', '3-5-2'];
 
 /** 攻撃時に前へ出る量 */
 const ATTACK_PUSH: Record<Position, number> = {
-  GK: 0, CB: 0.7, SB: 1.4, DM: 0.9, CM: 1.2, AM: 1.3, WM: 1.4, W: 1.5, FW: 1.4,
+  GK: 0, CB: 0.7, SB: 1.4, WB: 1.5, DM: 0.9, CM: 1.2, AM: 1.3, WM: 1.4, W: 1.5, FW: 1.4,
 };
+
+/** 最終ラインの選手（CB、SB、WB） */
+export const isBackLine = (position: Position): boolean => position === 'CB' || position === 'SB' || position === 'WB';
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
@@ -64,7 +106,7 @@ export function shapePoint(slot: Slot, ins: TeamInstructions, phase: Phase, role
     const x = phase === 'attack' ? 0.5 + 0.1 * ins.defensiveLine + (role?.attackX ?? 0) : 0.3 + (role?.defendX ?? 0);
     return { x, y: 2.5 };
   }
-  const isDefender = slot.position === 'CB' || slot.position === 'SB';
+  const isDefender = isBackLine(slot.position);
   // 守備ラインの高さは、守備時はチーム全体を押し上げる（コンパクトにする）が、攻撃時の前線の位置はあまり変えない
   const lineShift = phase === 'defend' ? (isDefender ? 0.3 : 0.18) : (isDefender ? 0.15 : 0.06);
   let x = slot.x + ins.defensiveLine * lineShift;

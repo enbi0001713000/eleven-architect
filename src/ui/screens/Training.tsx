@@ -12,11 +12,13 @@ import type { TrainingFocus, TrainingIntensity } from '../../game/types';
 import { Bar, Condition, Fatigue, Morale, Panel, Stars, StatusTags } from '../components/bits';
 import { ATTRIBUTE_LABEL, formatDate, FORMATIONS_LIST, POSITION_LABEL, POSITION_ORDER } from '../format';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 const level = (v: number, labels: [string, string, string, string, string]): string =>
   v >= 1.5 ? labels[4] : v >= 1.15 ? labels[3] : v > 0.85 ? labels[2] : v >= 0.5 ? labels[1] : labels[0];
 
 export function Training() {
+  useTutorial('training');
   const game = useGame();
   const club = game.clubs[game.manager.clubId];
   if (!club) return null;
@@ -39,7 +41,7 @@ export function Training() {
     <div className="page">
       <h1>練習</h1>
       <div className="grid-2">
-        <Panel title="チームの練習">
+        <Panel title="チームの練習" tutorial="training-plan">
           <h3 className="small muted">方針</h3>
           <div className="option-cards">
             {(Object.keys(TRAINING_FOCUS) as TrainingFocus[]).map((key) => (

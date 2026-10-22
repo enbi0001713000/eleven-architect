@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { FORMATIONS } from '../../engine/formations';
 import { overallRating, positionFit, positionRating } from '../../engine/ratings';
-import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot } from '../../engine/roles';
+import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot, roleLabel } from '../../engine/roles';
 import type { FormationName, Role, TeamInstructions } from '../../engine/types';
 import { teamFamiliarity } from '../../game/condition';
 import { instructionFamiliarity } from '../../game/progress';
+import { bestRoles, ROLE_FIT_MARK, ROLE_FIT_TEXT, roleFit } from '../../game/roleFit';
 import { LEAGUE_RULES } from '../../game/rules';
 import {
   arrangeForFormation, autoSelect, clubPlayers, isAvailable, isForeign, repairSelection, selectionWarnings, unavailableReason, validateSelection,
@@ -15,8 +16,10 @@ import type { PlayerRecord } from '../../game/types';
 import { Condition, Panel, StatusTags } from '../components/bits';
 import { FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL } from '../format';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 export function Tactics() {
+  useTutorial('tactics');
   const game = useGame();
   const clubId = game.manager.clubId;
   const club = game.clubs[clubId];
@@ -93,7 +96,7 @@ export function Tactics() {
     <div className="page tactics">
       <div className="toolbar">
         <h1>戦術</h1>
-        <label className="inline">
+        <label className="inline" data-tutorial="formation">
           フォーメーション
           <select value={tactics.formation} onChange={(e) => changeFormation(e.target.value as FormationName)}>
             {FORMATIONS_LIST.map((f) => <option key={f} value={f}>{f}（熟成度 {Math.round(club.familiarity.formations[f] ?? 0)}%）</option>)}
@@ -104,6 +107,10 @@ export function Tactics() {
           save(auto.lineup, auto.bench);
         }}>
           自動で選ぶ
+        </button>
+        <button type="button" className="secondary" data-tutorial="fit-roles" title="先発の全員を、一番向いている役割にする" onClick={() =>
+          setTactics({ roles: bestRoles(tactics.formation, selection.lineup.map(byId)) })}>
+          役割を選手に合わせる
         </button>
         <span className="muted small">外国籍選手 {foreignCount}/{LEAGUE_RULES.foreignLimit}</span>
         <span className="muted small" title="フォーメーション6割、チーム指示4割">
@@ -123,7 +130,7 @@ export function Tactics() {
 
       <div className="tactics-grid">
         <div>
-          <div className="pitch">
+          <div className="pitch" data-tutorial="pitch">
             <div className="pitch-lines" />
             {slots.map((s, i) => {
               const p = byId(selection.lineup[i]);
@@ -137,7 +144,7 @@ export function Tactics() {
                   onClick={() => setSelectedSlot(i)}>
                   <span className="slot-pos">{POSITION_LABEL[s.position]}</span>
                   <span className="slot-name">{p ? p.name.split(' ')[0]?.split('・')[0] : '（空き）'}</span>
-                  <span className="slot-role">{ROLE_PROFILES[role].label}</span>
+                  <span className="slot-role">{p && <span className={`fit-mark fit-${roleFit(p, role, s.position)}`}>{ROLE_FIT_MARK[roleFit(p, role, s.position)]}</span>}{roleLabel(role, s.position)}</span>
                   {p && <span className="slot-rating">{positionRating(p, s.position).toFixed(1)}　<Condition value={p.status.condition} /></span>}
                 </button>
               );
@@ -174,17 +181,24 @@ export function Tactics() {
         <div className="tactics-side">
           {slot && (
             <Panel title={`${POSITION_LABEL[slot.position]} の枠${slotPlayer ? `：${slotPlayer.name}` : ''}`}>
-              <div className="role-options">
-                {ROLE_OPTIONS[slot.position].map((role) => (
-                  <label key={role} className={`role-option${slotRole === role ? ' active' : ''}`}>
-                    <input type="radio" name="role" checked={slotRole === role} onChange={() => setRole(role)} />
-                    <strong>{ROLE_PROFILES[role].label}</strong>
-                    <span className="muted small">{ROLE_PROFILES[role].description}</span>
-                  </label>
-                ))}
+              <div className="role-options" data-tutorial="roles">
+                {ROLE_OPTIONS[slot.position].map((role) => {
+                  const fit = slotPlayer ? roleFit(slotPlayer, role, slot.position) : null;
+                  return (
+                    <label key={role} className={`role-option${slotRole === role ? ' active' : ''}`}>
+                      <input type="radio" name="role" checked={slotRole === role} onChange={() => setRole(role)} />
+                      <strong>
+                        {fit && <span className={`fit-mark fit-${fit}`} title={`${slotPlayer?.name}に${ROLE_FIT_TEXT[fit]}`}>{ROLE_FIT_MARK[fit]}</span>}
+                        {roleLabel(role, slot.position)}
+                      </strong>
+                      <span className="muted small">{ROLE_PROFILES[role].description}</span>
+                    </label>
+                  );
+                })}
+                {slotPlayer && <p className="muted small">◎○△は、その役割で大事な能力が、{slotPlayer.name}のこの位置での力より高いかどうかの目安です。</p>}
               </div>
               <table className="data-table compact">
-                <thead><tr><th>Pos</th><th>名前</th><th className="num">この枠での力</th><th>調子</th><th>状態</th><th /></tr></thead>
+                <thead><tr><th>Pos</th><th>名前</th><th className="num">この枠での力</th><th title={slotRole ? `${roleLabel(slotRole, slot.position)}への向き不向き` : ''}>役割</th><th>調子</th><th>状態</th><th /></tr></thead>
                 <tbody>
                   {candidates.slice(0, 12).map((p) => {
                     const where = selection.lineup.includes(p.id) ? '先発' : selection.bench.includes(p.id) ? '控え' : '';
@@ -193,6 +207,7 @@ export function Tactics() {
                         <td>{POSITION_LABEL[p.position]}</td>
                         <td>{p.name}{isForeign(p) ? <span className="muted small">（外）</span> : null}</td>
                         <td className="num">{positionRating(p, slot.position).toFixed(1)}</td>
+                        <td>{slotRole && <span className={`fit-mark fit-${roleFit(p, slotRole, slot.position)}`}>{ROLE_FIT_MARK[roleFit(p, slotRole, slot.position)]}</span>}</td>
                         <td><Condition value={p.status.condition} /></td>
                         <td>{unavailableReason(p) ? <StatusTags player={p} /> : <>{where} <StatusTags player={p} /></>}</td>
                         <td>
@@ -208,7 +223,7 @@ export function Tactics() {
             </Panel>
           )}
 
-          <Panel title="チーム指示">
+          <Panel title="チーム指示" tutorial="instructions">
             {INSTRUCTION_LABELS.map((item) => (
               <div key={item.key} className="instruction">
                 <span className="instruction-label">{item.label}</span>

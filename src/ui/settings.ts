@@ -2,6 +2,7 @@
 
 export type MatchSpeed = 1 | 2 | 4;
 export type CommentaryMode = 'key' | 'all';
+export type Theme = 'light' | 'dark';
 
 export interface Settings {
   matchSpeed: MatchSpeed;
@@ -10,10 +11,18 @@ export interface Settings {
   squadColumns: string[] | null;
   /** 大事な出来事（オーナーの予算、スポンサーの提案、選手の申し出など）を会話画面で開く */
   conversations: boolean;
+  /** 配色（初めて遊ぶときは明るい配色） */
+  theme: Theme;
+  /** チュートリアルを出す */
+  tutorials: boolean;
+  /** 見たチュートリアル（新しいゲームでも出さない） */
+  tutorialSeen: string[];
 }
 
 const KEY = 'soccer-manager:settings';
-const DEFAULTS: Settings = { matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true };
+const DEFAULTS: Settings = {
+  matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [],
+};
 
 export function loadSettings(): Settings {
   try {
@@ -30,4 +39,9 @@ export function saveSettings(settings: Settings): void {
   } catch {
     // 保存できなくても遊べる
   }
+}
+
+/** 配色を画面に反映する（styles.css の :root[data-theme] が切り替わる） */
+export function applyTheme(theme: Theme): void {
+  if (typeof document !== 'undefined') document.documentElement.dataset.theme = theme;
 }

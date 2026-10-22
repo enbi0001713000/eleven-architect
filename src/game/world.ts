@@ -10,6 +10,7 @@ import { CLUB_SEEDS, type ClubSeed } from './clubData';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
 import { emptyFinance, initFinances } from './finance';
+import { bookOpeningFees, createFanClub, emptyFanClub } from './fanClub';
 import { addMessage } from './inbox';
 import { goalLabel, placeholderOwner, positionGoalFor, startOwner } from './owner';
 import { makeSchedule, seasonDates } from './schedule';
@@ -17,7 +18,7 @@ import { autoSelect } from './selection';
 import type { Club, ClubSize, EmblemSpec, GameState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -37,7 +38,8 @@ export const SIZE_PROFILE: Record<ClubSize, {
 /** 規模ごとのクラブ数（大4・中10・小4） */
 const SIZE_COUNTS: [ClubSize, number][] = [['large', 4], ['medium', 10], ['small', 4]];
 
-const FORMATION_CHOICES: FormationName[] = ['4-4-2', '4-3-3', '4-2-3-1'];
+/** AIのクラブの形。4バックの3つを多めにし、フェーズ3.5で足した形も使う */
+const FORMATION_CHOICES: FormationName[] = ['4-4-2', '4-4-2', '4-3-3', '4-3-3', '4-2-3-1', '4-2-3-1', '4-1-4-1', '3-4-2-1', '3-5-2'];
 
 const between = (rng: Rng, [lo, hi]: [number, number]): number => lo + rng.next() * (hi - lo);
 
@@ -167,7 +169,9 @@ export function createWorld(seed: number): GameState {
       training: defaultClubTraining(),
       familiarity: defaultFamiliarity(tactics.formation, tactics.instructions),
       finance: emptyFinance(),
+      fanClub: emptyFanClub(),
     };
+    clubs[clubSeed.id]!.fanClub = createFanClub(clubs[clubSeed.id]!);
   });
 
   // ライバル：2クラブずつ組にする
@@ -231,6 +235,7 @@ export function createWorld(seed: number): GameState {
   };
   for (const id of ids) assignSquadRoles(state, id);
   initFinances(state, rng, START_YEAR, true);
+  for (const club of Object.values(state.clubs)) bookOpeningFees(club);
   return state;
 }
 
