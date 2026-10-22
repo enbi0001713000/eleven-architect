@@ -16,6 +16,7 @@ import {
   FINANCE, REPUTATION_BASE, SEAT_KINDS, SEATS, SPONSOR_DEALS, SPONSOR_PREFIXES, SPONSOR_SLOT_ORDER, SPONSOR_SLOTS, SPONSOR_SUFFIXES,
 } from './financeBalance';
 import { addMessage } from './inbox';
+import { budgetTrustFactor, OWNER } from './ownerBalance';
 import { LEAGUE_RULES } from './rules';
 import type { StandingRow } from './standings';
 import type {
@@ -421,10 +422,11 @@ export function ownerBudget(state: GameState, club: Club, year: number): Budget 
   return { year, total: roundedTotal, wages: roundedWages, transfers: roundedTotal - roundedWages, transfersSpent: 0, extra: 0 };
 }
 
-/** オーナーに頼めば、今年の予算に足してもらえる残りの額（手元のお金の余裕の半分まで） */
+/** オーナーに頼めば、今年の予算に足してもらえる残りの額（手元のお金の余裕の半分まで。信頼度が低いと減る） */
 export function budgetIncreaseRoom(state: GameState, club: Club): number {
   const spare = club.finance.balance - reserveOf(state, club);
-  return Math.max(0, Math.floor((spare * FINANCE.budgetIncreaseShare - club.finance.budget.extra) / 1e7) * 1e7);
+  const trust = isMine(state, club) ? budgetTrustFactor(state.owner?.trust ?? OWNER.startTrust) : 1;
+  return Math.max(0, Math.floor((spare * FINANCE.budgetIncreaseShare * trust - club.finance.budget.extra) / 1e7) * 1e7);
 }
 
 /** 手元のお金から、年俸予算か移籍予算を増やしてもらう（貯めた黒字を、選手に高い年俸を出すのに使える） */
@@ -433,7 +435,14 @@ export function requestBudgetIncrease(state: GameState, clubId: string, amount: 
   if (!club) return { approved: false, reason: 'クラブが見つかりません。' };
   const room = budgetIncreaseRoom(state, club);
   if (amount <= 0) return { approved: false, reason: '増やす額を決めてください。' };
-  if (room <= 0) return { approved: false, reason: '手元のお金に余裕がありません。今のお金は、支払いのために残しておきたい。' };
+  if (room <= 0) {
+    return {
+      approved: false,
+      reason: budgetTrustFactor(state.owner?.trust ?? OWNER.startTrust) === 0
+        ? '今の成績では、予算を増やすことはできません。まずは結果を出してください。'
+        : '手元のお金に余裕がありません。今のお金は、支払いのために残しておきたい。',
+    };
+  }
   if (amount > room) return { approved: false, reason: `今年、手元のお金から足せるのは${yenText(room)}までです。` };
   const budget = club.finance.budget;
   budget.total += amount;
@@ -556,8 +565,17 @@ function renewSponsors(state: GameState, club: Club, year: number, rng: Rng): Sp
   return started;
 }
 
-/** 新しい年度の始まり：スポンサー、リーグからの配分、運営費、オーナーの予算 */
-export function startYear(state: GameState, year: number, rng: Rng): void {
+/** 自分のクラブの、新しい年度の始まりの様子（オーナーとの話に使う） */
+export interface YearStart {
+  /** 新しく始まったスポンサー契約 */
+  started: SponsorDeal[];
+  /** リーグからの配分を決めた順位（前年の順位、最初の年は評判の順位） */
+  position: number;
+}
+
+/** 新しい年度の始まり：スポンサー、リーグからの配分、運営費、オーナーの予算。自分のクラブの様子を返す */
+export function startYear(state: GameState, year: number, rng: Rng): YearStart | null {
+  let mine: YearStart | null = null;
   const last = state.history.find((h) => h.year === year - 1);
   const ranks = reputationRanks(state);
   const count = Object.keys(state.clubs).length;
@@ -569,43 +587,48 @@ export function startYear(state: GameState, year: number, rng: Rng): void {
     // 運営費は、見込みの収入に合わせて増減する（割合はクラブごとに変わらない）
     fin.operations = roundTo(fin.operationsRate * incomeAndCosts(state, club).income, 1e6);
     fin.budget = ownerBudget(state, club, year);
-    if (isMine(state, club)) budgetMessage(state, club, year, started, position);
+    if (isMine(state, club)) mine = { started, position };
   }
+  return mine;
 }
 
-function budgetMessage(state: GameState, club: Club, year: number, started: readonly SponsorDeal[], position: number): void {
+/** 予算のセリフ（オーナーが話す形）。目標と評価の話は owner.ts で前後に足す */
+export function budgetLines(state: GameState, club: Club): string[] {
   const fin = club.finance;
   const payroll = payrollOf(state, club.id);
   const last = fin.history.at(-1);
   const net = last ? netResult(last.ledger) : 0;
-  addMessage(state, {
-    category: 'finance', from: 'オーナー', important: true, topic: 'budget',
-    subject: `${year}年の予算`,
-    lines: [
-      state.history.length === 0 ? `${state.manager.name}監督、改めてようこそ。今シーズンの予算の話をさせてください。` : `${state.manager.name}監督、${year}年の予算を決めました。`,
-      `総予算は${yenText(fin.budget.total)}です。年俸予算を${yenText(fin.budget.wages)}、移籍予算を${yenText(fin.budget.transfers)}にしてあります。`,
-      payroll > fin.budget.wages
-        ? `今の年俸の合計は${yenText(payroll)}で、年俸予算を超えています。契約を更新するときは、年俸を抑えてください。`
-        : `今の年俸の合計は${yenText(payroll)}なので、年俸予算にはまだ${yenText(fin.budget.wages - payroll)}の余裕があります。`,
-      last ? `昨年は${net >= 0 ? `${yenText(net)}の黒字` : `${yenText(-net)}の赤字`}でした。手元のお金は${yenText(fin.balance)}あります。` : `手元のお金は${yenText(fin.balance)}あります。`,
-      budgetIncreaseRoom(state, club) > 0 ? '手元のお金には余裕があるので、良い選手を獲るためなら、もう少し予算に回すこともできます。' : '',
-      '年俸と移籍の配分は、財務の画面で変えてかまいません。',
-    ].filter((l) => l !== ''),
-    body: [
-      `${year}年の予算を決めました。総予算は${yenText(fin.budget.total)}です。`,
-      `年俸予算 ${yenText(fin.budget.wages)}（今の年俸の合計は${yenText(payroll)}）`,
-      `移籍予算 ${yenText(fin.budget.transfers)}`,
-      payroll > fin.budget.wages ? '年俸の合計が年俸予算を超えています。契約の更新では、年俸を抑えることになります。' : '',
-      '',
-      last ? `${last.year}年の決算：収入 ${yenText(totalIncome(last.ledger))}、支出 ${yenText(totalExpense(last.ledger))}、差し引き ${yenText(netResult(last.ledger))}（${netResult(last.ledger) >= 0 ? '黒字' : '赤字'}）` : '',
-      `手元のお金 ${yenText(fin.balance)}${debtOf(fin) > 0 ? `、借り入れの残り ${yenText(debtOf(fin))}` : ''}`,
-      `スポンサー：${fin.sponsors.length}社、年額の合計${yenText(sponsorIncome(fin))}`,
-      ...started.map((d) => `　新しく始まった契約：${SPONSOR_SLOTS[d.slot].label} ${d.company}（年額${yenText(d.annual)}、${d.endYear}年まで）`),
-      `リーグからの配分：年額${yenText(fin.broadcast)}（${state.history.length > 0 ? `前年の${position}位` : `評判の順位${position}位`}に応じた額）`,
-      '',
-      '年俸予算と移籍予算の配分は、財務の画面で変えられます。',
-    ].filter((l, i, all) => l !== '' || (i > 0 && all[i - 1] !== '')).join('\n'),
-  });
+  return [
+    `予算は、総額${yenText(fin.budget.total)}です。年俸予算を${yenText(fin.budget.wages)}、移籍予算を${yenText(fin.budget.transfers)}にしてあります。`,
+    payroll > fin.budget.wages
+      ? `今の年俸の合計は${yenText(payroll)}で、年俸予算を超えています。契約を更新するときは、年俸を抑えてください。`
+      : `今の年俸の合計は${yenText(payroll)}なので、年俸予算にはまだ${yenText(fin.budget.wages - payroll)}の余裕があります。`,
+    last ? `昨年は${net >= 0 ? `${yenText(net)}の黒字` : `${yenText(-net)}の赤字`}でした。手元のお金は${yenText(fin.balance)}あります。` : `手元のお金は${yenText(fin.balance)}あります。`,
+    budgetIncreaseRoom(state, club) > 0 ? '手元のお金には余裕があるので、良い選手を獲るためなら、もう少し予算に回すこともできます。' : '',
+    '年俸と移籍の配分は、財務の画面で変えてかまいません。',
+  ].filter((l) => l !== '');
+}
+
+/** 予算の知らせの本文（受信箱で読む形） */
+export function budgetReport(state: GameState, club: Club, year: number, start: YearStart): string[] {
+  const fin = club.finance;
+  const payroll = payrollOf(state, club.id);
+  const last = fin.history.at(-1);
+  const { started, position } = start;
+  return [
+    `${year}年の予算を決めました。総予算は${yenText(fin.budget.total)}です。`,
+    `年俸予算 ${yenText(fin.budget.wages)}（今の年俸の合計は${yenText(payroll)}）`,
+    `移籍予算 ${yenText(fin.budget.transfers)}`,
+    payroll > fin.budget.wages ? '年俸の合計が年俸予算を超えています。契約の更新では、年俸を抑えることになります。' : '',
+    '',
+    last ? `${last.year}年の決算：収入 ${yenText(totalIncome(last.ledger))}、支出 ${yenText(totalExpense(last.ledger))}、差し引き ${yenText(netResult(last.ledger))}（${netResult(last.ledger) >= 0 ? '黒字' : '赤字'}）` : '',
+    `手元のお金 ${yenText(fin.balance)}${debtOf(fin) > 0 ? `、借り入れの残り ${yenText(debtOf(fin))}` : ''}`,
+    `スポンサー：${fin.sponsors.length}社、年額の合計${yenText(sponsorIncome(fin))}`,
+    ...started.map((d) => `　新しく始まった契約：${SPONSOR_SLOTS[d.slot].label} ${d.company}（年額${yenText(d.annual)}、${d.endYear}年まで）`),
+    `リーグからの配分：年額${yenText(fin.broadcast)}（${state.history.length > 0 ? `前年の${position}位` : `評判の順位${position}位`}に応じた額）`,
+    '',
+    '年俸予算と移籍予算の配分は、財務の画面で変えられます。',
+  ].filter((l, i, all) => l !== '' || (i > 0 && all[i - 1] !== ''));
 }
 
 // ---- 借り入れ ----
@@ -617,12 +640,15 @@ export interface OwnerAnswer {
 }
 export type LoanAnswer = OwnerAnswer;
 
-/** 借り入れの申請への、オーナーの返事 */
-export function loanDecision(club: Club, amount: number): LoanAnswer {
+/** 借り入れの申請への、オーナーの返事。trust を渡すと、信頼度が低いときは断る */
+export function loanDecision(club: Club, amount: number, trust?: number): LoanAnswer {
   const fin = club.finance;
   const limit = FINANCE.loanLimit[club.size];
   const debt = debtOf(fin);
   if (amount <= 0) return { approved: false, reason: '借りる額を決めてください。' };
+  if (trust !== undefined && trust < OWNER.loanMinTrust) {
+    return { approved: false, reason: '今の成績では、クラブとしてお金を借りる判断はできません。' };
+  }
   if (debt + amount > limit) {
     return { approved: false, reason: `借り入れの上限は${yenText(limit)}です（今の残り${yenText(debt)}）。` };
   }
@@ -637,7 +663,7 @@ export function loanDecision(club: Club, amount: number): LoanAnswer {
 export function requestLoan(state: GameState, clubId: string, amount: number, months: number): LoanAnswer {
   const club = state.clubs[clubId];
   if (!club) return { approved: false, reason: 'クラブが見つかりません。' };
-  const answer = loanDecision(club, amount);
+  const answer = loanDecision(club, amount, isMine(state, club) ? state.owner?.trust : undefined);
   if (!answer.approved) return answer;
   const loan = createLoan(club, amount, months, state.date.slice(0, 7), false);
   addMessage(state, {
@@ -717,10 +743,13 @@ export function financeBeforeEvents(state: GameState): void {
   if (monthDay(state.date) === '01-01') closeYear(state, yearOf(previous));
 }
 
-/** advanceDay が、シーズンの出来事の後に呼ぶ：1月1日に新しい年度を始める（引退した選手が去った後の年俸で予算を決める） */
-export function financeAfterEvents(state: GameState, rng: Rng): void {
-  if (monthDay(state.date) === '01-01') startYear(state, yearOf(state.date), rng);
+/**
+ * advanceDay が、シーズンの出来事の後に呼ぶ：1月1日に新しい年度を始める（引退した選手が去った後の年俸で予算を決める）。
+ * 年度を始めた日は、自分のクラブの様子を返す（オーナーとの話に使う）
+ */
+export function financeAfterEvents(state: GameState, rng: Rng): YearStart | null {
   if (monthDay(state.date) === '12-01') makeSponsorOffers(state, rng);
+  return monthDay(state.date) === '01-01' ? startYear(state, yearOf(state.date), rng) : null;
 }
 
 // ---- 新しいゲーム ----
@@ -779,10 +808,7 @@ export function initFinances(state: GameState, rng: Rng, year: number, janFirst:
   if (janFirst) closeMonth(state, `${year}-01`, false);
 }
 
-/** 新しいゲームの始まりの、オーナーからの予算の知らせ */
-export function firstBudgetMessage(state: GameState): void {
-  const club = state.clubs[state.manager.clubId];
-  if (!club) return;
-  const position = reputationRanks(state).get(club.id) ?? 9;
-  budgetMessage(state, club, state.season.year, [], position);
+/** 新しいゲームの始まりの様子（オーナーとの最初の話に使う） */
+export function firstYearStart(state: GameState): YearStart {
+  return { started: [], position: reputationRanks(state).get(state.manager.clubId) ?? 9 };
 }

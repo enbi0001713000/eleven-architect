@@ -4,13 +4,15 @@ import { overallRating } from '../../engine/ratings';
 import { injuryName, moraleLabel, teamFamiliarity } from '../../game/condition';
 import { daysBetween } from '../../game/dates';
 import { debtOf, netResult, payrollOf, yearToDate, yenText } from '../../game/finance';
+import { financeGoalStatus, goalLabel, trustLabel } from '../../game/owner';
+import { FINANCE_GOAL_LABEL } from '../../game/ownerBalance';
 import { pendingActions } from '../../game/inbox';
 import { todaysFixture } from '../../game/progress';
 import { averageRating, isSeasonOver, nextFixtureOf } from '../../game/season';
 import { clubPlayers, validateSelection } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
 import { meetingCooldownLeft } from '../../game/talks';
-import { ClubLink, FormBadges, Panel, Rating, ResultChip } from '../components/bits';
+import { Bar, ClubLink, FormBadges, Panel, Rating, ResultChip } from '../components/bits';
 import { Emblem } from '../components/Emblem';
 import { fanMoodLabel, formatDate, INBOX_CATEGORY_LABEL, POSITION_LABEL } from '../format';
 import { playedFixtures, scoreFor, topScorers } from '../queries';
@@ -122,6 +124,26 @@ export function Home() {
               );
             })}
           </ul>
+        </Panel>
+
+        <Panel title="オーナーの評価" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
+          {(() => {
+            const owner = game.owner;
+            const money = financeGoalStatus(game);
+            return (
+              <dl className="facts">
+                <dt>信頼度</dt>
+                <dd className="trust-row">
+                  <strong>{Math.round(owner.trust)}</strong><span>{trustLabel(owner.trust)}</span>
+                  <Bar value={owner.trust} width={120} title={`信頼度 ${Math.round(owner.trust)}`} />
+                </dd>
+                <dt>順位の目標</dt>
+                <dd>{goalLabel(owner.goals.position)}{myRow && myRow.played > 0 ? `（今 ${myRow.position}位）` : ''}</dd>
+                <dt>財務の目標</dt>
+                <dd>{FINANCE_GOAL_LABEL[owner.goals.finance]}<span className={`tag ${money.met === null ? '' : money.met ? 'tag-good' : 'tag-bad'}`} style={{ marginLeft: 6 }}>{money.met === null ? '年末に判定' : money.met ? '今は達成' : '今は未達'}</span></dd>
+              </dl>
+            );
+          })()}
         </Panel>
 
         <Panel title="受信箱の新着" actions={<button type="button" className="link" onClick={() => store.open({ name: 'inbox' })}>受信箱へ</button>}>

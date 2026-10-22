@@ -328,8 +328,52 @@ export interface InboxMessage {
   topic?: MessageTopic;
 }
 
-/** 会話画面で開く知らせの種類（オーナーの予算、お金が足りない、スポンサーの提案） */
-export type MessageTopic = 'budget' | 'shortfall' | 'sponsorOffer';
+/** 会話画面で開く知らせの種類（オーナーの予算と目標、お金が足りない、スポンサーの提案、オーナーの警告、解任） */
+export type MessageTopic = 'budget' | 'shortfall' | 'sponsorOffer' | 'ownerWarning' | 'dismissal';
+
+// ---- フェーズ3-B：オーナーの評価 ----
+
+export type OwnerStrictness = 'lenient' | 'normal' | 'strict';
+export type FinanceGoalKind = 'noDeficit' | 'wagesWithinBudget' | 'reduceDebt';
+
+export interface SeasonGoals {
+  year: number;
+  /** 順位の目標（この順位以内） */
+  position: number;
+  /** オーナーが最初に示した順位の目標 */
+  basePosition: number;
+  finance: FinanceGoalKind;
+  /** 目標を話し合った（1シーズンに1回まで） */
+  negotiated: boolean;
+  /** 年の初めの借り入れの残り（借り入れを減らす目標に使う） */
+  debtAtStart: number;
+}
+
+export type SeasonVerdict = 'exceeded' | 'met' | 'near' | 'missed' | 'farMissed';
+
+export interface SeasonEvaluation {
+  year: number;
+  goal: number;
+  position: number;
+  verdict: SeasonVerdict;
+  finance: FinanceGoalKind;
+  financeMet: boolean;
+  trustBefore: number;
+  trustAfter: number;
+}
+
+export interface OwnerState {
+  /** 信頼度（0〜100） */
+  trust: number;
+  strictness: OwnerStrictness;
+  goals: SeasonGoals;
+  /** 信頼度の推移（月末と、シーズンの評価のとき） */
+  trustHistory: { date: string; trust: number }[];
+  /** このシーズンに出した警告の段階（0〜2） */
+  warned: number;
+  evaluations: SeasonEvaluation[];
+  dismissed: { date: string; reason: string } | null;
+}
 
 /** 選手からの申し出（フェーズ2は出場機会への不満。契約と移籍の希望はフェーズ4） */
 export interface PlayerRequest {
@@ -394,4 +438,6 @@ export interface GameState {
   managerRelations: Record<string, number>;
   /** 最後にチームミーティングをした日 */
   lastTeamMeeting: string | null;
+  // ---- フェーズ3-B ----
+  owner: OwnerState;
 }
