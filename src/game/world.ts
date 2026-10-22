@@ -10,6 +10,7 @@ import { CLUB_SEEDS, type ClubSeed } from './clubData';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
 import { emptyFinance, initFinances } from './finance';
+import { bookOpeningFees, createFanClub, emptyFanClub } from './fanClub';
 import { addMessage } from './inbox';
 import { goalLabel, placeholderOwner, positionGoalFor, startOwner } from './owner';
 import { makeSchedule, seasonDates } from './schedule';
@@ -17,7 +18,7 @@ import { autoSelect } from './selection';
 import type { Club, ClubSize, EmblemSpec, GameState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -168,7 +169,9 @@ export function createWorld(seed: number): GameState {
       training: defaultClubTraining(),
       familiarity: defaultFamiliarity(tactics.formation, tactics.instructions),
       finance: emptyFinance(),
+      fanClub: emptyFanClub(),
     };
+    clubs[clubSeed.id]!.fanClub = createFanClub(clubs[clubSeed.id]!);
   });
 
   // ライバル：2クラブずつ組にする
@@ -232,6 +235,7 @@ export function createWorld(seed: number): GameState {
   };
   for (const id of ids) assignSquadRoles(state, id);
   initFinances(state, rng, START_YEAR, true);
+  for (const club of Object.values(state.clubs)) bookOpeningFees(club);
   return state;
 }
 

@@ -55,7 +55,7 @@ export function App() {
     case 'meeting': content = <Meeting />; break;
     case 'press': content = <Press key={screen.fixtureId} fixtureId={screen.fixtureId} />; break;
     case 'finance': content = <Finance key={screen.tab ?? 'finance'} initialTab={screen.tab} />; break;
-    case 'myClub': content = <MyClub />; break;
+    case 'myClub': content = <MyClub key={screen.tab ?? 'owner'} initialTab={screen.tab} />; break;
     case 'dismissed': content = <Dismissed />; break;
     case 'conversation': content = <ConversationScreen key={`${screen.messageId ?? ''}-${screen.topic ?? ''}-${s.history.length}`} screen={screen} />; break;
     case 'later': content = <Later key={screen.title} title={screen.title} phase={screen.phase} />; break;

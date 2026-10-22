@@ -53,10 +53,13 @@ export function roleFit(player: Player, role: Role, position: Position): RoleFit
   return 'ok';
 }
 
-/** その位置で、選手に一番向いている役割（同じくらいなら初期の役割） */
+/** 初期の役割から変えるのは、これだけ向いているとき */
+const SWITCH_MARGIN = 0.5;
+
+/** その位置で、選手に一番向いている役割（はっきりした差がなければ初期の役割） */
 export function bestRole(player: Player, position: Position, fallback: Role = ROLE_OPTIONS[position][0] ?? 'boxToBox'): Role {
   let best = fallback;
-  let bestScore = roleFitScore(player, fallback, position) + 0.3;
+  let bestScore = roleFitScore(player, fallback, position) + SWITCH_MARGIN;
   for (const role of ROLE_OPTIONS[position]) {
     const score = roleFitScore(player, role, position);
     if (score > bestScore) {

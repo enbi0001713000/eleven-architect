@@ -49,12 +49,14 @@ export interface Club {
   };
   /** お金（フェーズ3） */
   finance: ClubFinance;
+  /** ファンクラブ（フェーズ3.5） */
+  fanClub: FanClub;
 }
 
 // ---- フェーズ3：財務 ----
 
-export type IncomeKind = 'tickets' | 'broadcast' | 'sponsor' | 'merchandise' | 'prize' | 'transfers';
-export type ExpenseKind = 'wages' | 'operations' | 'matchday' | 'merchandiseCost' | 'interest' | 'transfers' | 'agentFees';
+export type IncomeKind = 'tickets' | 'broadcast' | 'sponsor' | 'merchandise' | 'fanClub' | 'prize' | 'transfers';
+export type ExpenseKind = 'wages' | 'operations' | 'matchday' | 'merchandiseCost' | 'fanClubCost' | 'interest' | 'transfers' | 'agentFees';
 
 /** 収支の集計。income と expense が損益で、financing は借り入れなどお金の出入りだけのもの */
 export interface Ledger {
@@ -302,7 +304,8 @@ export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'med
 export type InboxAction =
   | { kind: 'playerRequest'; requestId: string }
   | { kind: 'press'; fixtureId: string }
-  | { kind: 'sponsorOffer' };
+  | { kind: 'sponsorOffer' }
+  | { kind: 'fanThanksDay'; year: number };
 
 /** 受信箱の知らせ（要件定義書「時間の進め方」） */
 export interface InboxMessage {
@@ -329,7 +332,54 @@ export interface InboxMessage {
 }
 
 /** 会話画面で開く知らせの種類（オーナーの予算と目標、お金が足りない、スポンサーの提案、オーナーの警告、解任） */
-export type MessageTopic = 'budget' | 'shortfall' | 'sponsorOffer' | 'ownerWarning' | 'dismissal';
+export type MessageTopic = 'budget' | 'shortfall' | 'sponsorOffer' | 'ownerWarning' | 'dismissal' | 'fanThanksDay';
+
+// ---- フェーズ3.5：ファンクラブ ----
+
+export type FanClubRank = 'regular' | 'gold' | 'platinum';
+export type FanEventKind = 'thanksDay' | 'signing' | 'openTraining' | 'community';
+export type ThanksDayScale = 'small' | 'large';
+
+/** 12月1日に決める、次の年の会員の見込み（会費は12月、1月、2月に分けて入る） */
+export interface FanClubRenewal {
+  year: number;
+  members: Record<FanClubRank, number>;
+  /** 前の年から更新した人 */
+  renewed: number;
+  /** 新しく入った人 */
+  joined: number;
+  /** この期間の年会費 */
+  fees: Record<FanClubRank, number>;
+  /** 入った会費の割合（0〜1） */
+  paid: number;
+}
+
+export interface FanEventRecord {
+  date: string;
+  kind: FanEventKind;
+  playerIds: string[];
+  /** 入会した人（地域の活動では、増えたファンの数） */
+  gained: number;
+  mood: number;
+  cost: number;
+}
+
+export interface FanClub {
+  /** 今の会員数 */
+  members: Record<FanClubRank, number>;
+  /** 今の会員が払った年会費 */
+  activeFees: Record<FanClubRank, number>;
+  /** 次の入会と更新の期間に使う年会費（11月末まで変えられる） */
+  fees: Record<FanClubRank, number>;
+  renewal: FanClubRenewal | null;
+  /** ファン感謝デーの予定（11月に決める） */
+  thanksDay: { year: number; scale: ThanksDayScale | null } | null;
+  /** 公開練習をする日 */
+  openTrainingDate: string | null;
+  /** 月末の会員数 */
+  history: { month: string; total: number }[];
+  events: FanEventRecord[];
+}
 
 // ---- フェーズ3-B：オーナーの評価 ----
 

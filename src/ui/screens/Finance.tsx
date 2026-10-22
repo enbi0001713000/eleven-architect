@@ -23,8 +23,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'history', label: '過去の決算' },
 ];
 
-const INCOME_KEYS: IncomeKind[] = ['tickets', 'sponsor', 'merchandise', 'broadcast', 'prize', 'transfers'];
-const EXPENSE_KEYS: ExpenseKind[] = ['wages', 'operations', 'matchday', 'merchandiseCost', 'interest', 'transfers', 'agentFees'];
+const INCOME_KEYS: IncomeKind[] = ['tickets', 'sponsor', 'merchandise', 'fanClub', 'broadcast', 'prize', 'transfers'];
+const EXPENSE_KEYS: ExpenseKind[] = ['wages', 'operations', 'matchday', 'merchandiseCost', 'fanClubCost', 'interest', 'transfers', 'agentFees'];
 /** フェーズ4で使い始める項目 */
 const LATER: ReadonlySet<string> = new Set(['income.transfers', 'expense.transfers', 'expense.agentFees']);
 
@@ -91,7 +91,8 @@ function ledgerRows(ledgers: { label: string; ledger: Ledger | null }[]) {
     <tr key={`${side}.${key}`} className={LATER.has(`${side}.${key}`) ? 'muted' : ''}>
       <td>{label}{LATER.has(`${side}.${key}`) ? '（フェーズ4）' : ''}</td>
       {ledgers.map((l, i) => {
-        const value = l.ledger ? (side === 'income' ? l.ledger.income[key as IncomeKind] : l.ledger.expense[key as ExpenseKind]) : null;
+        // 古い記録（フェーズ3.5より前）には、ファンクラブの項目がない
+        const value = l.ledger ? (side === 'income' ? l.ledger.income[key as IncomeKind] : l.ledger.expense[key as ExpenseKind]) ?? 0 : null;
         return <td key={i} className="num">{value === null ? '' : value === 0 ? '—' : yenText(value)}</td>;
       })}
     </tr>

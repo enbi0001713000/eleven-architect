@@ -4,6 +4,7 @@ import { overallRating } from '../../engine/ratings';
 import { injuryName, moraleLabel, teamFamiliarity } from '../../game/condition';
 import { daysBetween } from '../../game/dates';
 import { debtOf, netResult, payrollOf, yearToDate, yenText } from '../../game/finance';
+import { totalMembers } from '../../game/fanClub';
 import { financeGoalStatus, goalLabel, trustLabel } from '../../game/owner';
 import { FINANCE_GOAL_LABEL } from '../../game/ownerBalance';
 import { pendingActions } from '../../game/inbox';
@@ -215,6 +216,11 @@ export function Home() {
                 <dt>手元のお金</dt><dd className={fin.balance < 0 ? 'tone-low' : ''}>{yenText(fin.balance)}{debtOf(fin) > 0 ? `（借り入れの残り ${yenText(debtOf(fin))}）` : ''}</dd>
                 <dt>今年の差し引き</dt><dd className={net < 0 ? 'tone-low' : ''}>{yenText(net)}（{net >= 0 ? '黒字' : '赤字'}）</dd>
                 <dt>年俸 ／ 年俸予算</dt><dd className={payroll > fin.budget.wages ? 'tone-low' : ''}>{yenText(payroll)} ／ {yenText(fin.budget.wages)}</dd>
+                <dt>ファンクラブ</dt>
+                <dd>
+                  会員 {totalMembers(club.fanClub.members).toLocaleString('ja-JP')}人
+                  <button type="button" className="link" onClick={() => store.open({ name: 'myClub', tab: 'fanClub' })}>ファンクラブへ</button>
+                </dd>
               </dl>
             );
           })()}

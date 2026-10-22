@@ -6,6 +6,7 @@ import { createRng } from '../engine/rng';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
 import { initFinances } from './finance';
+import { createFanClub, totalMembers } from './fanClub';
 import { addMessage } from './inbox';
 import { goalLabel, initialOwner } from './owner';
 import type { GameState } from './types';
@@ -29,6 +30,7 @@ function migrate(state: GameState, fromVersion: number): GameState {
     if (v === 1) current = migrateV1toV2(current);
     if (v === 2) current = migrateV2toV3(current);
     if (v === 3) current = migrateV3toV4(current);
+    if (v === 4) current = migrateV4toV5(current);
     current = { ...current, version: v + 1 };
   }
   return current;
@@ -91,6 +93,19 @@ function migrateV2toV3(state: GameState): GameState {
 }
 
 /** フェーズ3-A（版3）→ フェーズ3-B（版4）：オーナー（目標と信頼度）を足す */
+/** 版4（フェーズ3-B）→ 版5（フェーズ3.5）：ファンクラブを足す。会員はファンの数から作る */
+function migrateV4toV5(state: GameState): GameState {
+  for (const club of Object.values(state.clubs)) club.fanClub ??= createFanClub(club);
+  const mine = state.clubs[state.manager.clubId];
+  addMessage(state, {
+    category: 'club', from: 'ファンクラブ担当', important: false,
+    subject: 'ファンクラブの機能が使えるようになりました',
+    body: `ファンクラブの会員は今、約${(mine ? totalMembers(mine.fanClub.members) : 0).toLocaleString('ja-JP')}人です。`
+      + '年会費は12月から2月に入ります。クラブの画面の「ファンクラブ」で、会費やイベントを決められます。',
+  });
+  return state;
+}
+
 function migrateV3toV4(state: GameState): GameState {
   state.owner = initialOwner(state);
   addMessage(state, {

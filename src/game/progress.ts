@@ -15,6 +15,8 @@ import { applyInjury, canPlay, createInjury, injuryName } from './condition';
 import { addDays, daySeed, weekday } from './dates';
 import { developWeek } from './development';
 import { financeAfterEvents, financeBeforeEvents } from './finance';
+import { fanClubEvents } from './fanClub';
+import { FAN_EVENTS } from './fanClubBalance';
 import { addMessage } from './inbox';
 import { afterMatchMorale, checkPromises, dailyMorale, maybePlayerRequest } from './morale';
 import { seasonEvents } from './offseason';
@@ -65,8 +67,10 @@ function dailyClub(state: GameState, club: Club, ctx: DayContext): void {
   const intensity = TRAINING_INTENSITY[intensityKey];
   settleInstructions(club);
 
+  // 公開練習の日は、練習の効果が少し下がる
+  const openTraining = club.fanClub.openTrainingDate === state.date ? FAN_EVENTS.openTraining.trainingFactor : 1;
   if (!ctx.matchDay) {
-    const gain = BALANCE.familiarityGain * focus.familiarity * intensity.growth;
+    const gain = BALANCE.familiarityGain * focus.familiarity * intensity.growth * openTraining;
     for (const formation of Object.keys(club.familiarity.formations) as (keyof Club['familiarity']['formations'])[]) {
       const value = club.familiarity.formations[formation] ?? BALANCE.familiarityFloor;
       club.familiarity.formations[formation] = round1(formation === club.tactics.formation
@@ -114,7 +118,7 @@ function dailyClub(state: GameState, club: Club, ctx: DayContext): void {
       // 練習：疲労がたまり、戦術に慣れ、まれにケガをする
       s.fatigue += BALANCE.trainingLoad * focus.load * intensity.load;
       s.condition += intensity.condition;
-      s.integration = Math.min(100, s.integration + 1.2 * focus.familiarity);
+      s.integration = Math.min(100, s.integration + 1.2 * focus.familiarity * openTraining);
       recovery = focus.recovery;
       const chance = BALANCE.trainingInjury * focus.injury * intensity.injury
         * (0.5 + player.hidden.injuryProneness / 20) * (1 + s.fatigue / 50)
@@ -199,6 +203,7 @@ export function advanceDay(state: GameState): void {
   const rng = createRng(daySeed(state.seed, state.date, 'day'));
   financeBeforeEvents(state);
   ownerBeforeEvents(state);
+  fanClubEvents(state);
   seasonEvents(state, rng);
   ownerAfterEvents(state, financeAfterEvents(state, rng));
   const matchDates = new Set(state.fixtures.filter((f) => f.result === null).map((f) => f.date));

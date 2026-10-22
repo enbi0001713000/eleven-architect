@@ -7,11 +7,13 @@
 //   12月10日（シーズンの総括）：賞金。成績で評判とファンの数が変わる
 //   1月1日：年度（1月〜12月）を締め、新しい年のスポンサー、配分、運営費、オーナーの予算を決める
 //   12月1日：契約が今年で切れるスポンサーの枠に、提案が届く（自分のクラブ。選ばなければ標準の契約になる）
+//   ファンクラブの会費（12月、1月、2月）とイベントの費用は fanClub.ts で動く
 // 手元のお金が足りなくなったら、自動で緊急の借り入れをし、上限を超える分はオーナーが入れる（破産はしない）。
 
 import { overallRating } from '../engine/ratings';
 import { createRng, type Rng } from '../engine/rng';
 import { daySeed, monthDay, weekday, yearOf } from './dates';
+import { FAN_CLUB } from './fanClubBalance';
 import {
   FINANCE, REPUTATION_BASE, SEAT_KINDS, SEATS, SPONSOR_DEALS, SPONSOR_PREFIXES, SPONSOR_SLOT_ORDER, SPONSOR_SLOTS, SPONSOR_SUFFIXES,
 } from './financeBalance';
@@ -32,8 +34,8 @@ const isMine = (state: GameState, club: Club): boolean => club.id === state.mana
 
 export function emptyLedger(): Ledger {
   return {
-    income: { tickets: 0, broadcast: 0, sponsor: 0, merchandise: 0, prize: 0, transfers: 0 },
-    expense: { wages: 0, operations: 0, matchday: 0, merchandiseCost: 0, interest: 0, transfers: 0, agentFees: 0 },
+    income: { tickets: 0, broadcast: 0, sponsor: 0, merchandise: 0, fanClub: 0, prize: 0, transfers: 0 },
+    expense: { wages: 0, operations: 0, matchday: 0, merchandiseCost: 0, fanClubCost: 0, interest: 0, transfers: 0, agentFees: 0 },
     financing: { borrowed: 0, repaid: 0, owner: 0 },
   };
 }
@@ -41,8 +43,9 @@ export function emptyLedger(): Ledger {
 export function sumLedgers(ledgers: readonly Ledger[]): Ledger {
   const total = emptyLedger();
   for (const l of ledgers) {
-    for (const k of Object.keys(total.income) as IncomeKind[]) total.income[k] += l.income[k];
-    for (const k of Object.keys(total.expense) as ExpenseKind[]) total.expense[k] += l.expense[k];
+    // 古い記録（フェーズ3.5より前）には、ファンクラブの項目がない
+    for (const k of Object.keys(total.income) as IncomeKind[]) total.income[k] += l.income[k] ?? 0;
+    for (const k of Object.keys(total.expense) as ExpenseKind[]) total.expense[k] += l.expense[k] ?? 0;
     total.financing.borrowed += l.financing.borrowed;
     total.financing.repaid += l.financing.repaid;
     total.financing.owner += l.financing.owner;
@@ -60,13 +63,13 @@ export function yearToDate(fin: ClubFinance): Ledger {
   return sumLedgers([...fin.months.map((m) => m.ledger), fin.current]);
 }
 
-function earn(fin: ClubFinance, kind: IncomeKind, yen: number): void {
+export function earn(fin: ClubFinance, kind: IncomeKind, yen: number): void {
   const value = Math.round(yen);
   fin.current.income[kind] += value;
   fin.balance += value;
 }
 
-function spend(fin: ClubFinance, kind: ExpenseKind, yen: number): void {
+export function spend(fin: ClubFinance, kind: ExpenseKind, yen: number): void {
   const value = Math.round(yen);
   fin.current.expense[kind] += value;
   fin.balance -= value;
@@ -100,9 +103,27 @@ export function priceLevel(club: Club, prices: Record<SeatKind, number>): number
   return SEAT_KINDS.reduce((n, s) => n + SEATS[s].share * (prices[s] / listPrice(club, s)), 0);
 }
 
+/** ファンクラブの会員の割合が基準より何ポイント高いか（フェーズ3.5） */
+function memberPoints(club: Club): number {
+  const m = club.fanClub?.members;
+  if (!m || club.fans <= 0) return 0;
+  return ((m.regular + m.gold + m.platinum) / club.fans - FAN_CLUB.baseRate) * 100;
+}
+
+/** 会員が多いほど、スタジアムに人が来て、グッズも売れる */
+const memberDemand = (club: Club): number => clamp(1 + FAN_CLUB.attendancePerPoint * memberPoints(club), 0.85, 1.2);
+const memberMerch = (club: Club): number => clamp(1 + FAN_CLUB.merchPerPoint * memberPoints(club), 0.85, 1.2);
+
+/** ゴールド以上の会員はチケットとグッズが割引になる。観客のうち、その会員の割合 */
+function premiumShare(club: Club, spectators: number): number {
+  const m = club.fanClub?.members;
+  if (!m || spectators <= 0) return 0;
+  return Math.min(0.4, FAN_CLUB.premiumAttendance * (m.gold + m.platinum) / spectators);
+}
+
 /** 普通の条件で、スタジアムに来たい人の数（収容人数で切る前） */
 export function baseDemand(club: Club, mood: number): number {
-  return FINANCE.attendanceScale * club.fans ** FINANCE.attendanceExponent * (0.85 + 0.3 * mood / 100);
+  return FINANCE.attendanceScale * club.fans ** FINANCE.attendanceExponent * (0.85 + 0.3 * mood / 100) * memberDemand(club);
 }
 
 export interface Gate {
@@ -181,8 +202,9 @@ export function settleHomeMatch(state: GameState, fixture: Fixture, table: reado
   if (!club) return 0;
   const fin = club.finance;
   const gate = matchGate(state, fixture, table);
-  earn(fin, 'tickets', gate.tickets);
-  const merch = gate.total * FINANCE.merchPerSpectator * starFactor(state, club);
+  const discount = 1 - FAN_CLUB.premiumDiscount * premiumShare(club, gate.total);
+  earn(fin, 'tickets', gate.tickets * discount);
+  const merch = gate.total * FINANCE.merchPerSpectator * starFactor(state, club) * memberMerch(club) * discount;
   earn(fin, 'merchandise', merch);
   spend(fin, 'merchandiseCost', merch * FINANCE.merchCostRate);
   spend(fin, 'matchday', FINANCE.matchdayFixed + FINANCE.matchdayPerSpectator * gate.total);
@@ -201,7 +223,7 @@ export function settleHomeMatch(state: GameState, fixture: Fixture, table: reado
 // ---- 毎月 ----
 
 function monthlyMerch(state: GameState, club: Club, mood = moodOf(state, club)): number {
-  return club.fans * FINANCE.merchPerFanMonthly * starFactor(state, club) * (0.85 + 0.3 * mood / 100);
+  return club.fans * FINANCE.merchPerFanMonthly * starFactor(state, club) * (0.85 + 0.3 * mood / 100) * memberMerch(club);
 }
 
 export function addMonths(month: string, n: number): string {
@@ -366,9 +388,10 @@ export const sponsorIncome = (fin: ClubFinance): number => fin.sponsors.reduce((
 /** ホームゲーム1試合のお金の見込み（普通の条件） */
 function expectedMatchMoney(state: GameState, club: Club): { income: number; costs: number } {
   const gate = expectedGate(club);
-  const merch = gate.total * FINANCE.merchPerSpectator * starFactor(state, club);
+  const discount = 1 - FAN_CLUB.premiumDiscount * premiumShare(club, gate.total);
+  const merch = gate.total * FINANCE.merchPerSpectator * starFactor(state, club) * memberMerch(club) * discount;
   return {
-    income: gate.tickets + merch,
+    income: gate.tickets * discount + merch,
     costs: merch * FINANCE.merchCostRate + FINANCE.matchdayFixed + FINANCE.matchdayPerSpectator * gate.total,
   };
 }
@@ -388,9 +411,13 @@ function incomeAndCosts(state: GameState, club: Club): { income: number; costs: 
   const fin = club.finance;
   const match = expectedMatchMoney(state, club);
   const merch = 12 * monthlyMerch(state, club, 50);
+  // ファンクラブの会費は、今の会員がそのまま続く見込みで数える
+  const m = club.fanClub?.members;
+  const fees = club.fanClub?.activeFees;
+  const fanClub = m && fees ? m.regular * fees.regular + m.gold * fees.gold + m.platinum * fees.platinum : 0;
   return {
-    income: sponsorIncome(fin) + fin.broadcast + HOME_MATCHES * match.income + merch,
-    costs: HOME_MATCHES * match.costs + merch * FINANCE.merchCostRate,
+    income: sponsorIncome(fin) + fin.broadcast + HOME_MATCHES * match.income + merch + fanClub,
+    costs: HOME_MATCHES * match.costs + merch * FINANCE.merchCostRate + fanClub * FAN_CLUB.costRate,
   };
 }
 

@@ -1,14 +1,16 @@
-// 会話画面：オーナー、営業担当、経理担当とのやり取り。
-// 受信箱の知らせ（目標と予算、オーナーの警告、解任、お金が足りない、スポンサーの提案）と、
-// 財務やクラブの画面からの相談（予算の増額、借り入れ、目標の話し合い）を会話で見せる。
+// 会話画面：オーナー、営業担当、経理担当、ファンクラブ担当とのやり取り。
+// 受信箱の知らせ（目標と予算、オーナーの警告、解任、お金が足りない、スポンサーの提案、ファン感謝デーの提案）と、
+// 財務やクラブの画面からの相談（予算の増額、借り入れ、目標の話し合い、ファンクラブのイベント）を会話で見せる。
 
 import { useEffect, useState } from 'react';
 import { budgetIncreaseRoom, chooseSponsorOffer, payrollOf, requestBudgetIncrease, yenText } from '../../game/finance';
+import { canHoldEvent, decideThanksDay, eventCandidates, eventPreview, holdEvent, popularity, type HeldEventKind } from '../../game/fanClub';
+import { EVENT_LABEL, FAN_EVENTS, THANKS_DAY } from '../../game/fanClubBalance';
 import { SPONSOR_DEALS, SPONSOR_SLOT_ORDER, SPONSOR_SLOTS } from '../../game/financeBalance';
 import { markRead } from '../../game/inbox';
 import { canNegotiate, goalLabel, negotiateGoal } from '../../game/owner';
 import { FINANCE_GOAL_LABEL, OWNER } from '../../game/ownerBalance';
-import type { Club, GameState, InboxMessage, SponsorOffer } from '../../game/types';
+import type { Club, GameState, InboxMessage, PlayerRecord, SponsorOffer, ThanksDayScale } from '../../game/types';
 import { Conversation, type ConversationChoice, type ConversationLine, type Speaker } from '../components/Conversation';
 import { store, useGame, type Screen } from '../store';
 
@@ -38,6 +40,8 @@ export function ConversationScreen({ screen }: { screen: ConversationTopic }) {
   if (topic === 'sponsorOffer' || topic === 'sponsor') body = <SponsorTalk game={game} club={club} message={message} />;
   else if (topic === 'budget' || topic === 'budgetIncrease' || topic === 'goals') body = <OwnerBudgetTalk game={game} club={club} message={message} goals={topic === 'goals'} />;
   else if (topic === 'loan') body = <LoanTalk game={game} club={club} screen={screen} />;
+  else if (topic === 'fanThanksDay' && message) body = <ThanksDayTalk game={game} club={club} message={message} />;
+  else if (topic === 'fanEvent' && screen.eventKind) body = <FanEventTalk game={game} club={club} kind={screen.eventKind} />;
   else if (message) body = <MessageTalk game={game} club={club} message={message} />;
   else body = <p className="muted">話す相手がいません。</p>;
 
@@ -45,7 +49,8 @@ export function ConversationScreen({ screen }: { screen: ConversationTopic }) {
     <div className="page conversation-page">
       <header className="page-header">
         <button type="button" className="secondary" onClick={() => store.back()}>← 戻る</button>
-        <h1>{message?.subject ?? (topic === 'loan' ? '借り入れの相談' : topic === 'sponsor' ? 'スポンサーの相談' : topic === 'goals' ? '目標の相談' : '予算の相談')}</h1>
+        <h1>{message?.subject ?? (topic === 'loan' ? '借り入れの相談' : topic === 'sponsor' ? 'スポンサーの相談' : topic === 'goals' ? '目標の相談'
+          : topic === 'fanEvent' && screen.eventKind ? `${EVENT_LABEL[screen.eventKind]}の相談` : '予算の相談')}</h1>
       </header>
       {body}
     </div>
@@ -278,5 +283,130 @@ function SponsorTalk({ game, club, message }: { game: GameState; club: Club; mes
   return (
     <Conversation speaker={speakerFor('営業担当', club)} me={game.manager.name} lines={lines}
       choices={choices} onChoose={choose} footer={slots.length === 0 ? <BackButtons finance /> : undefined} />
+  );
+}
+
+const FAN_STAFF = 'ファンクラブ担当';
+
+/** ファン感謝デーの提案：規模を選ぶ（開かないこともできる） */
+function ThanksDayTalk({ game, club, message }: { game: GameState; club: Club; message: InboxMessage }) {
+  const plan = club.fanClub.thanksDay;
+  const decided = message.resolved === true;
+  const [lines, setLines] = useState<ConversationLine[]>(() => [
+    ...messageLines(message),
+    ...(decided ? [them(plan?.scale ? `今年のファン感謝デーは、${THANKS_DAY[plan.scale].label}ことで準備しています。` : '今年は開かないことになっています。')] : []),
+  ]);
+  const [ended, setEnded] = useState(decided);
+  const choices: ConversationChoice[] = (['small', 'large'] as ThanksDayScale[]).map((scale) => ({
+    id: scale,
+    label: `「${THANKS_DAY[scale].label}ことにしよう」`,
+    description: `費用 ${yenText(THANKS_DAY[scale].cost[club.size])}。来年の更新と入会が増え、ファンの雰囲気が上がる（${scale === 'large' ? '大きく' : '少し'}）`,
+  }));
+  choices.push({ id: 'none', label: '「今年は見送ろう」', description: '費用はかからないが、更新と入会は増えない' });
+  const choose = (id: string) => {
+    const scale = id === 'none' ? null : (id as ThanksDayScale);
+    store.update((g) => decideThanksDay(g, scale));
+    setLines([
+      ...lines,
+      me(scale ? `${THANKS_DAY[scale].label}ことにしよう。選手にも伝えておく。` : '今年は見送ろう。'),
+      them(scale ? 'ありがとうございます！12月の頭に開けるよう、準備を進めます。' : 'わかりました。来年はぜひお願いします。'),
+    ]);
+    setEnded(true);
+  };
+  return (
+    <Conversation speaker={speakerFor(FAN_STAFF, club)} me={game.manager.name} lines={lines}
+      choices={ended ? undefined : choices} onChoose={choose} footer={ended ? <FanBackButtons /> : undefined} />
+  );
+}
+
+const FanBackButtons = () => (
+  <div className="button-row">
+    <button type="button" className="secondary" onClick={() => store.open({ name: 'myClub', tab: 'fanClub' })}>ファンクラブの画面へ</button>
+    <button type="button" className="primary" onClick={() => store.back()}>戻る</button>
+  </div>
+);
+
+type FanStage = 'first' | 'second' | 'confirm' | 'done';
+
+const popularityStars = (p: PlayerRecord): string => '★'.repeat(Math.max(1, Math.min(5, Math.round(popularity(p) * 4) + 1)));
+
+/** ファンクラブのイベント：選手を選び（サイン会と地域の活動）、効果を聞いてから開く */
+function FanEventTalk({ game, club, kind }: { game: GameState; club: Club; kind: HeldEventKind }) {
+  const needsPlayers = kind !== 'openTraining';
+  const check = canHoldEvent(game, kind);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [stage, setStage] = useState<FanStage>(!check.ok ? 'done' : needsPlayers ? 'first' : 'confirm');
+  const players = picked.map((id) => game.players[id]).filter((p): p is PlayerRecord => p !== undefined);
+  const previewLine = (chosen: PlayerRecord[]): ConversationLine => {
+    const p = eventPreview(game, kind, chosen);
+    const effect = kind === 'community' ? `ファンが約${p.gain.toLocaleString('ja-JP')}人増えそう` : `約${p.gain.toLocaleString('ja-JP')}人が入会しそう`;
+    const tired = kind === 'signing' ? `出た選手のコンディションが${-FAN_EVENTS.signing.condition}下がります。` : kind === 'community' ? `出た選手のコンディションが${-FAN_EVENTS.community.condition}下がります。` : '明日の練習の効果は、2割ほど下がります。';
+    return them(`見込みは、${effect}です。費用は${yenText(p.cost)}。${tired}`);
+  };
+  const intro: ConversationLine[] = !check.ok
+    ? [me(`${EVENT_LABEL[kind]}を開きたいんだが。`), them(`すみません、今は開けません。${check.reason ?? ''}`), ...(check.nextDate ? [them(`次に開けるのは${check.nextDate.slice(5).replace('-', '月')}日です。`)] : [])]
+    : kind === 'signing'
+      ? [me('サイン会かトークショーを開きたい。'), them('いいですね！誰に出てもらいましょう？人気のある選手ほど、たくさんの人が来ます。')]
+      : kind === 'community'
+        ? [me('地域の学校や病院を訪ねたい。'), them('喜ばれると思います。誰に行ってもらいましょう？')]
+        : [me('明日の練習を、会員に公開したい。'), them('会員の方はきっと喜びます。'), previewLine([])];
+  const [lines, setLines] = useState<ConversationLine[]>(intro);
+
+  const candidates = eventCandidates(game).filter((p) => !picked.includes(p.id)).slice(0, 6);
+  const playerChoices: ConversationChoice[] = candidates.map((p) => ({
+    id: p.id,
+    label: `${p.name}`,
+    description: `人気 ${popularityStars(p)}　コンディション ${Math.round(p.status.condition)}%　今季 ${p.season.appearances}試合 ${p.season.goals}点`,
+  }));
+  let choices: ConversationChoice[] | undefined;
+  if (stage === 'first') choices = playerChoices;
+  if (stage === 'second') choices = [{ id: 'enough', label: '「1人で十分だ」' }, ...playerChoices];
+  if (stage === 'confirm') choices = [{ id: 'hold', label: '「それで開こう」' }, { id: 'cancel', label: '「やっぱりやめておく」' }];
+
+  const choose = (id: string) => {
+    if (stage === 'first' || stage === 'second') {
+      if (id === 'enough') {
+        setLines([...lines, me('1人で十分だ。'), previewLine(players)]);
+        setStage('confirm');
+        return;
+      }
+      const player = game.players[id];
+      if (!player) return;
+      const next = [...picked, id];
+      setPicked(next);
+      const chosen = next.map((pid) => game.players[pid]).filter((p): p is PlayerRecord => p !== undefined);
+      if (stage === 'first') {
+        setLines([...lines, me(`${player.name}に頼もう。`), them(`${player.name}選手ですね。もう1人呼びますか？`)]);
+        setStage('second');
+      } else {
+        setLines([...lines, me(`${player.name}にも来てもらおう。`), previewLine(chosen)]);
+        setStage('confirm');
+      }
+      return;
+    }
+    if (id === 'cancel') {
+      setLines([...lines, me('やっぱりやめておく。'), them('わかりました。またいつでも声をかけてください。')]);
+      setStage('done');
+      return;
+    }
+    let held = false;
+    store.update((g) => {
+      held = holdEvent(g, kind, picked) !== null;
+    });
+    setLines([
+      ...lines,
+      me('それで開こう。'),
+      held
+        ? them(kind === 'openTraining' ? '明日の練習を公開します。準備しておきますね！'
+          : kind === 'community' ? '訪問先の皆さん、とても喜んでいました。地元での評判も上がりそうです。結果は受信箱に送っておきます。'
+            : '大成功でした！会場はファンでいっぱいでしたよ。結果は受信箱に送っておきます。')
+        : them('すみません、今日はもう開けなくなってしまいました。'),
+    ]);
+    setStage('done');
+  };
+
+  return (
+    <Conversation speaker={speakerFor(FAN_STAFF, club)} me={game.manager.name} lines={lines}
+      choices={choices} onChoose={choose} footer={stage === 'done' ? <FanBackButtons /> : undefined} />
   );
 }

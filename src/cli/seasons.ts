@@ -8,6 +8,7 @@ import { simulateMatch } from '../engine/match';
 import { overallRating } from '../engine/ratings';
 import type { MatchResult } from '../engine/types';
 import { debtOf, netResult, payrollOf, totalIncome } from '../game/finance';
+import { totalMembers } from '../game/fanClub';
 import { goalLabel, initialOwner, isDismissed, verdictLabel } from '../game/owner';
 import { advanceDay, todaysFixture } from '../game/progress';
 import { applyMatchday, isSeasonOver, prepareMatchday } from '../game/season';
@@ -68,6 +69,10 @@ function financeReport(s: GameState, year: number): { deficits: number; ownerFun
     log(`  お金（${SIZE_NAME[size]}）：収入 ${oku(income)}億（入場料${share('tickets')} スポンサー${share('sponsor')} グッズ${share('merchandise')} 配分${share('broadcast')} 賞金${share('prize')}）`
       + `  年俸 ${oku(mean((h) => h.ledger.expense.wages))}億  差し引き ${oku(avg(nets))}億（${oku(Math.min(...nets))}〜${oku(Math.max(...nets))}）`
       + `  手元 ${oku(mean((h) => h.balance))}億  借り入れ ${oku(mean((h) => h.debt))}億  観客 ${Math.round(mean((h) => h.averageAttendance ?? 0)).toLocaleString('ja-JP')}人`);
+    const members = avg(clubs.map((c) => totalMembers(c.fanClub.members)));
+    const fans = avg(clubs.map((c) => c.fans));
+    log(`    ファンクラブ（${SIZE_NAME[size]}）：会員 ${Math.round(members).toLocaleString('ja-JP')}人（ファンの${(members / fans * 100).toFixed(1)}%）`
+      + `  会費 ${oku(mean((h) => h.ledger.income.fanClub ?? 0))}億（収入の${share('fanClub')}）  運営費 ${oku(mean((h) => h.ledger.expense.fanClubCost ?? 0))}億`);
   }
   log(`  赤字のクラブ ${deficits}  オーナーが穴埋めしたクラブ ${ownerFunded}  手元のお金の最低 ${oku(minBalance)}億`);
   return { deficits, ownerFunded, minBalance };

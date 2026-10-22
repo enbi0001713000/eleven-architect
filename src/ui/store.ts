@@ -2,6 +2,7 @@
 // ゲームの状態は update() の中で直接書き換え、書き換えたら画面を描き直す。変更は少し待ってから自動でセーブする。
 
 import { useSyncExternalStore } from 'react';
+import type { HeldEventKind } from '../game/fanClub';
 import { advanceDay, advanceToNextEvent } from '../game/progress';
 import type { GameState, InboxMessage } from '../game/types';
 import { applyTheme, loadSettings, saveSettings, type Settings } from './settings';
@@ -31,7 +32,9 @@ export type Screen =
     /** 受信箱の知らせを会話で見る */
     messageId?: string;
     /** 財務やクラブの画面からの相談 */
-    topic?: 'budgetIncrease' | 'loan' | 'sponsor' | 'goals';
+    topic?: 'budgetIncrease' | 'loan' | 'sponsor' | 'goals' | 'fanEvent';
+    /** ファンクラブのイベントの種類 */
+    eventKind?: HeldEventKind;
     /** 借り入れの相談の中身と、オーナーの返事 */
     amount?: number;
     months?: number;
@@ -41,7 +44,7 @@ export type Screen =
     monthly?: number;
   }
   | { name: 'later'; title: string; phase: number }
-  | { name: 'myClub' }
+  | { name: 'myClub'; tab?: 'owner' | 'fanClub' }
   | { name: 'dismissed' };
 
 class Store {

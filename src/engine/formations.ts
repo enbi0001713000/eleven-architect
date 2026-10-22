@@ -56,11 +56,11 @@ export const FORMATIONS: Record<FormationName, Slot[]> = {
   ],
   '4-1-4-1': [
     GK, ...BACK_FOUR,
-    { position: 'DM', x: 1.9, y: 2.5 },
-    { position: 'WM', x: 2.6, y: 0.7 },
-    { position: 'CM', x: 2.7, y: 1.75 },
-    { position: 'CM', x: 2.7, y: 3.25 },
-    { position: 'WM', x: 2.6, y: 4.3 },
+    { position: 'DM', x: 2.0, y: 2.5 },
+    { position: 'WM', x: 2.8, y: 0.7 },
+    { position: 'CM', x: 2.9, y: 1.75 },
+    { position: 'CM', x: 2.9, y: 3.25 },
+    { position: 'WM', x: 2.8, y: 4.3 },
     { position: 'FW', x: 3.9, y: 2.5 },
   ],
   '3-4-2-1': [
@@ -76,9 +76,9 @@ export const FORMATIONS: Record<FormationName, Slot[]> = {
   '3-5-2': [
     GK, ...BACK_THREE,
     { position: 'WB', x: 1.8, y: 0.5 },
-    { position: 'CM', x: 2.6, y: 1.6 },
+    { position: 'CM', x: 2.8, y: 1.6 },
     { position: 'DM', x: 2.0, y: 2.5 },
-    { position: 'CM', x: 2.6, y: 3.4 },
+    { position: 'CM', x: 2.8, y: 3.4 },
     { position: 'WB', x: 1.8, y: 4.5 },
     { position: 'FW', x: 3.7, y: 1.95 },
     { position: 'FW', x: 3.7, y: 3.05 },

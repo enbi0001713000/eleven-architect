@@ -411,3 +411,11 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 .pitch-slot .fit-good { color: #8ff0b8; }
 .pitch-slot .fit-ok { color: #c3ccd8; }
 .pitch-slot .fit-poor { color: #ffb38f; }
+
+/* ファンクラブ（フェーズ3.5） */
+.fan-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fan-events { display: grid; gap: 0; }
+.fan-event { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.fan-event:last-child { border-bottom: none; }
+.fan-event > button, .fan-event > span { flex: none; }
+.data-table td.wrap { white-space: normal; min-width: 160px; }
