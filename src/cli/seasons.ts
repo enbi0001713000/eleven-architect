@@ -64,7 +64,7 @@ function autoRenew(s: GameState): void {
   });
 }
 
-/** 契約満了の移籍を数える：4月1日（冬の移籍期間のあと）の所属を、前の年と比べる */
+/** 所属が変わった選手を数える：4月1日（冬の移籍期間のあと）の所属を、前の年と比べる（契約満了、移籍、レンタルを含む） */
 interface MoveStats { last: Map<string, string> | null; moves: number[]; unsigned: number[]; squadMin: number; squadMax: number }
 
 function dayHook(s: GameState, stats: MoveStats): void {
@@ -137,10 +137,10 @@ interface WorldSummary {
   trust: number[];
   /** 規模ごとの手元のお金と借り入れ（最初と最後） */
   money: Record<ClubSize, { start: number; end: number; debt: number; payrollStart: number; payrollEnd: number }>;
-  /** 契約満了の移籍（フェーズ4-A） */
+  /** 所属が変わった選手（フェーズ4-A） */
   contracts: MoveStats;
-  /** 移籍（フェーズ4-B）：年ごとの、移籍金での移籍、海外から、海外へ、レンタル、移籍金の合計 */
-  transfers: { transfer: number; fromAbroad: number; abroad: number; loan: number; fees: number }[];
+  /** 移籍（フェーズ4-B）：年ごとの、移籍金での移籍、海外から、海外へ、レンタル、契約満了、移籍金の合計 */
+  transfers: { transfer: number; fromAbroad: number; abroad: number; loan: number; free: number; fees: number }[];
 }
 
 function moneyBySize(s: GameState): Record<ClubSize, { balance: number; debt: number; payroll: number }> {
@@ -278,10 +278,10 @@ for (let year = 0; year < years; year++) {
   const t = {
     transfer: moves.filter((r) => r.kind === 'transfer').length, fromAbroad: moves.filter((r) => r.kind === 'fromAbroad').length,
     abroad: moves.filter((r) => r.kind === 'abroad').length, loan: moves.filter((r) => r.kind === 'loan').length,
-    fees: moves.reduce((n, r) => n + r.fee, 0),
+    free: moves.filter((r) => r.kind === 'free').length, fees: moves.reduce((n, r) => n + r.fee, 0),
   };
   summary.transfers.push(t);
-  log(`  移籍：国内 ${t.transfer}件、海外から ${t.fromAbroad}人、海外へ ${t.abroad}人、レンタル ${t.loan}件、移籍金の合計 ${oku(t.fees)}億`);
+  log(`  移籍：国内 ${t.transfer}件、海外から ${t.fromAbroad}人、海外へ ${t.abroad}人、レンタル ${t.loan}件、契約満了 ${t.free}人、移籍金の合計 ${oku(t.fees)}億`);
   const seasonNews = state.inbox.filter((m) => m.category === 'league' && m.date >= startDate);
   const aiSacked = seasonNews.filter((m) => m.subject.includes('解任')).length;
   const offers = state.inbox.filter((m) => m.topic === 'jobOffer' && m.date >= startDate).length;
@@ -324,8 +324,8 @@ if (worlds > 1 || quiet) {
       + `  警告 ${w.warnings}回  解任 シーズン中${w.dismissals.midSeason}・評価で${w.dismissals.seasonEnd}  信頼度（年の初め） ${w.trust.join(' ')}`);
     console.log(`    AIクラブの監督の解任（シーズンごと）：${w.aiSackings.join(' ')}`);
     const c = w.contracts;
-    console.log(`    移籍（年ごと、国内/海外から/海外へ/レンタル、移籍金）：${w.transfers.map((t) => `${t.transfer}/${t.fromAbroad}/${t.abroad}/${t.loan} ${oku(t.fees)}億`).join('  ')}`);
-    console.log(`    契約満了の移籍（1年あたり、リーグ全体）：${c.moves.join(' ') || '—'}  決まらず去った選手：${c.unsigned.join(' ') || '—'}  登録人数 ${c.squadMin}〜${c.squadMax}人`);
+    console.log(`    移籍（年ごと、国内/海外から/海外へ/レンタル/契約満了、移籍金）：${w.transfers.map((t) => `${t.transfer}/${t.fromAbroad}/${t.abroad}/${t.loan}/${t.free} ${oku(t.fees)}億`).join('  ')}`);
+    console.log(`    所属が変わった選手（4月1日で比べる）：${c.moves.join(' ') || '—'}  決まらず去った選手：${c.unsigned.join(' ') || '—'}  登録人数 ${c.squadMin}〜${c.squadMax}人`);
     console.log(`    お金：赤字のクラブ（1年あたり）${avg(w.deficits).toFixed(1)}  オーナーの穴埋め ${w.ownerFunded}回  `
       + SIZES.map((size) => {
         const m = w.money[size];

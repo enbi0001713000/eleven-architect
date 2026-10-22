@@ -72,7 +72,7 @@ export const TRANSFER = {
   overseasYoungAge: 25,
   overseasYoung: 14,
   overseasStar: 16,
-  overseasPerDate: [2, 4] as [number, number],
+  overseasPerDate: [3, 4] as [number, number],
   overseasFee: [1, 1.5] as [number, number],
   /** 行きたがる確率：0.3 + 野心×0.035 + 断られた回数×0.2 */
   overseasWant: (ambition: number, refused: number): number => Math.min(0.95, 0.3 + ambition * 0.035 + refused * 0.2),
