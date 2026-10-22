@@ -26,8 +26,8 @@ const TABS: { key: Tab; label: string }[] = [
 
 const INCOME_KEYS: IncomeKind[] = ['tickets', 'sponsor', 'merchandise', 'fanClub', 'broadcast', 'prize', 'transfers'];
 const EXPENSE_KEYS: ExpenseKind[] = ['wages', 'operations', 'matchday', 'merchandiseCost', 'fanClubCost', 'interest', 'transfers', 'agentFees'];
-/** フェーズ4で使い始める項目 */
-const LATER: ReadonlySet<string> = new Set(['income.transfers', 'expense.transfers', 'expense.agentFees']);
+/** フェーズ4-Bで使い始める項目 */
+const LATER: ReadonlySet<string> = new Set(['income.transfers', 'expense.transfers']);
 
 const Signed = ({ yen }: { yen: number }) => <span className={yen < 0 ? 'tone-low' : ''}>{yenText(yen)}</span>;
 const monthText = (month: string): string => `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;

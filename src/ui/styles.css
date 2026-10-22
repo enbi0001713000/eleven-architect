@@ -445,3 +445,16 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 .option-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .option-grid .option-card { border: 1px solid var(--control-border); background: var(--panel); }
 @media (max-width: 1000px) { .option-grid, .option-grid.three { grid-template-columns: 1fr 1fr; } }
+
+/* 移籍と契約の交渉（フェーズ4-A） */
+.notice-box { border: 1px solid var(--border); background: var(--panel-2); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.6; }
+.plain-list { margin: 0; padding-left: 18px; line-height: 1.8; }
+.offer-form { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; align-items: center; }
+.offer-form > label { color: var(--muted); }
+.offer-form .hint { grid-column: 2; margin-top: -6px; }
+.offer-form input[type="number"] { width: 140px; }
+.talk-log { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.talk-log li { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--panel-2); line-height: 1.6; }
+.talk-log li.me { background: var(--selected); align-self: flex-end; max-width: 85%; }
+.talk-log li.them { align-self: flex-start; max-width: 85%; }
+.talk-log li.accept { border-color: var(--accent-strong); font-weight: 700; }

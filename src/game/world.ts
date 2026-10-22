@@ -11,6 +11,8 @@ import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2
 import { potentialFor } from './development';
 import { newManager, startTrustFor } from './career';
 import { BACKGROUNDS, DIFFICULTIES } from './careerBalance';
+import { CONTRACT } from './contractBalance';
+import { clauseFor, createAgents } from './contracts';
 import { addDays } from './dates';
 import { emptyFinance, initFinances } from './finance';
 import { bookOpeningFees, createFanClub, emptyFanClub } from './fanClub';
@@ -21,7 +23,7 @@ import { autoSelect } from './selection';
 import type { Club, ClubSize, Difficulty, EmblemSpec, GameState, ManagerBackground, ManagerState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -139,7 +141,7 @@ export function createWorld(seed: number): GameState {
           ...base,
           clubId: clubSeed.id,
           squadNumber: squadNumber++,
-          contract: { salary: salaryFor(overallRating(base), profile.salary), endYear: START_YEAR + rng.int(0, 3), role: 'backup' },
+          contract: { salary: salaryFor(overallRating(base), profile.salary), endYear: START_YEAR + rng.int(0, 3), role: 'backup', releaseClause: null, bonus: null },
           season: emptySeason(),
           discipline: { yellowAccumulation: 0, suspendedMatches: 0 },
           ...playerPhase2Fields(),
@@ -238,7 +240,15 @@ export function createWorld(seed: number): GameState {
     managerRelations: {},
     lastTeamMeeting: null,
     owner: placeholderOwner(START_YEAR, start.toISOString().slice(0, 10)),
+    // 代理人は別の乱数で作る（世界の生成の乱数の並びを変えないため）
+    agents: createAgents(createRng(seed ^ 0xa6e7)),
+    freeAgents: [],
+    contractTalks: {},
+    contractDelegation: {},
   };
+  for (const player of Object.values(players)) {
+    if (player.contract) player.contract.releaseClause = clauseFor(player, START_YEAR, CONTRACT.defaultClause);
+  }
   for (const id of ids) assignSquadRoles(state, id);
   // AIクラブの監督の評判は、クラブの評判の近く（フェーズ3-C）
   for (const club of Object.values(state.clubs)) {

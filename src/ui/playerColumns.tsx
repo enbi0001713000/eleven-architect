@@ -3,6 +3,7 @@
 import { overallRating } from '../engine/ratings';
 import { ATTRIBUTE_KEYS, type AttributeKey } from '../engine/types';
 import { injuryName } from '../game/condition';
+import { formatValueRange, marketValue, marketValueRange } from '../game/contracts';
 import { knowledgeOf, potentialStars, viewAttribute } from '../game/knowledge';
 import { expectedPlayingTime, isUnhappyWithPlayingTime, SQUAD_ROLE_LABEL } from '../game/morale';
 import { averageRating } from '../game/season';
@@ -74,7 +75,11 @@ export function playerColumns(game: GameState): Column<PlayerRecord>[] {
       key: 'salary', label: '年俸', align: 'right', value: (p) => (p.clubId === game.manager.clubId ? p.contract?.salary ?? 0 : null),
       render: (p) => (p.clubId === game.manager.clubId && p.contract ? formatYen(p.contract.salary) : <span className="muted">非公開</span>),
     },
-    { key: 'contractEnd', label: '契約満了', align: 'right', value: (p) => p.contract?.endYear ?? null, render: (p) => (p.contract ? `${p.contract.endYear}年` : '-') },
+    { key: 'contractEnd', label: '契約満了', align: 'right', value: (p) => p.contract?.endYear ?? null, render: (p) => (p.contract ? `${p.contract.endYear}年${p.leaving ? '（退団）' : ''}` : '-') },
+    {
+      key: 'value', label: '市場価値', align: 'right', value: (p) => marketValue(p, game.season.year),
+      render: (p) => formatValueRange(marketValueRange(game, p)),
+    },
   ];
 }
 
@@ -85,5 +90,5 @@ export const COLUMN_PRESETS: { id: string; label: string; keys: string[] }[] = [
   { id: 'condition', label: '状態', keys: [...BASE, 'age', 'ovr', 'status', 'cond', 'fatigue', 'morale', 'injury', 'role', 'playing', 'stars'] },
   ...ATTRIBUTE_GROUPS.map((g) => ({ id: g.label, label: g.label, keys: [...BASE, 'ovr', ...g.keys] })),
   { id: 'records', label: '記録', keys: [...BASE, 'apps', 'starts', 'minutes', 'goals', 'assists', 'yellow', 'yellowAcc', 'red', 'avg'] },
-  { id: 'contract', label: '契約', keys: [...BASE, 'age', 'ovr', 'role', 'salary', 'contractEnd'] },
+  { id: 'contract', label: '契約', keys: [...BASE, 'age', 'ovr', 'role', 'salary', 'contractEnd', 'value'] },
 ];

@@ -253,11 +253,26 @@ export interface SeasonStats {
   ratingCount: number;
 }
 
+/** 出来高ボーナス（出場1試合ごと、ゴール1点ごとの円。フェーズ4-A） */
+export interface ContractBonus {
+  appearance: number;
+  goal: number;
+}
+
+/** 契約。年俸（円）、契約が終わる年、約束した役割、違約金、出来高ボーナス */
+export interface Contract {
+  salary: number;
+  endYear: number;
+  role: SquadRole;
+  /** 違約金（円）。この額を払えば、他クラブはクラブ間の交渉なしで選手と話せる。null は違約金なし（フェーズ4-A） */
+  releaseClause: number | null;
+  bonus: ContractBonus | null;
+}
+
 export interface PlayerRecord extends Player {
   clubId: string | null;
   squadNumber: number | null;
-  /** 年俸（円）、契約が終わる年、約束した役割 */
-  contract: { salary: number; endYear: number; role: SquadRole } | null;
+  contract: Contract | null;
   season: SeasonStats;
   status: PlayerStatus;
   /** 個人の練習で重点的に伸ばす能力（なければ null） */
@@ -269,8 +284,10 @@ export interface PlayerRecord extends Player {
   lastTalk: string | null;
   /** シーズン終了時に引退を発表した */
   retiring?: boolean;
-  /** 契約満了でクラブを離れる（シーズン終了時に発表） */
+  /** 契約満了でクラブを離れる（12月1日に決まる） */
   leaving?: boolean;
+  /** 契約満了のあと、1月1日に加入するクラブと契約（12月に仮の契約をした。フェーズ4-A） */
+  joining?: { clubId: string; contract: Contract; date: string } | null;
   /** 引退した（どのクラブにも属さない） */
   retired?: boolean;
   discipline: {
@@ -305,7 +322,7 @@ export interface Fixture {
   result: FixtureResult | null;
 }
 
-export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'media' | 'training' | 'league' | 'club' | 'finance';
+export type InboxCategory = 'match' | 'medical' | 'discipline' | 'player' | 'media' | 'training' | 'league' | 'club' | 'finance' | 'transfer';
 
 export type InboxAction =
   | { kind: 'playerRequest'; requestId: string }
@@ -386,6 +403,27 @@ export interface FanClub {
   /** 月末の会員数 */
   history: { month: string; total: number }[];
   events: FanEventRecord[];
+}
+
+// ---- フェーズ4-A：契約 ----
+
+export type AgentStyle = 'calm' | 'normal' | 'tough';
+
+/** 代理人。選手ごとに決まっていて、契約の交渉の相手になる */
+export interface Agent {
+  id: string;
+  name: string;
+  style: AgentStyle;
+}
+
+/** 自分のクラブが選手（の代理人）と話している様子 */
+export interface ContractTalk {
+  /** 今の話し合いで提示した回数 */
+  rounds: number;
+  /** 決裂して、この日まで話せない */
+  closedUntil: string | null;
+  /** 代理人が最後に返した希望の年俸 */
+  lastAsk: number | null;
 }
 
 // ---- フェーズ3-C：監督のキャリア ----
@@ -547,4 +585,12 @@ export interface GameState {
   lastTeamMeeting: string | null;
   // ---- フェーズ3-B ----
   owner: OwnerState;
+  // ---- フェーズ4-A ----
+  agents: Agent[];
+  /** 所属のない選手（契約満了で決まらなかった。冬の移籍期間の終わりまで獲れる） */
+  freeAgents: string[];
+  /** 自分のクラブが話している選手（選手ID → 様子） */
+  contractTalks: Record<string, ContractTalk>;
+  /** 契約の更新を強化部に任せるか（選手ID → 任せる）。ない選手は、控えと若手なら任せる */
+  contractDelegation: Record<string, boolean>;
 }

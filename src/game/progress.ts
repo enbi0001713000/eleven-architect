@@ -3,6 +3,7 @@
 //
 // 毎日：ケガの回復、疲労の増減、コンディションの回復、練習（疲労、ケガ、熟成度）、モラルの変化
 // 毎週（月曜日）：成長と衰え、練習のレポート、選手からの申し出
+// 契約：7月〜11月の更新の交渉、12月1日の締め切り、契約満了の選手の移籍（contracts.ts）
 // 毎月1日：前の月のお金を締める。1月1日は年度も締めて、新しい年の予算を決める（finance.ts）
 //          オーナーの信頼度が上下し、1月1日は前のシーズンを評価して、新しい目標を示す（owner.ts）
 // 試合の日：記者会見の知らせ。「次の出来事まで進める」は、試合の日と大事な知らせが届いた日に止まる
@@ -13,6 +14,7 @@ import type { MatchResult, TeamInstructions } from '../engine/types';
 import { BALANCE, TRAINING_FOCUS, TRAINING_INTENSITY } from './balance';
 import { careerEvents } from './career';
 import { backgroundOf } from './careerBalance';
+import { contractEvents, payBonus } from './contracts';
 import { applyInjury, canPlay, createInjury, injuryName } from './condition';
 import { addDays, daySeed, weekday } from './dates';
 import { developWeek } from './development';
@@ -212,6 +214,7 @@ export function advanceDay(state: GameState): void {
   ownerBeforeEvents(state);
   fanClubEvents(state);
   seasonEvents(state, rng);
+  contractEvents(state, rng);
   careerEvents(state, rng);
   ownerAfterEvents(state, financeAfterEvents(state, rng));
   const matchDates = new Set(state.fixtures.filter((f) => f.result === null).map((f) => f.date));
@@ -299,6 +302,7 @@ export function afterMatches(state: GameState, fixtures: Fixture[], results: Rec
           s.recentRatings = [line.stats.rating, ...s.recentRatings].slice(0, 5);
           s.integration = Math.min(100, s.integration + 3);
           share = line.started ? 1 : 0.5;
+          payBonus(club, player, line.stats.goals);
           if (line.injured) {
             const injury = createInjury(rng, player, fixture.date, 'contact', s.injury !== null);
             if (applyInjury(player, injury) && mine) reportInjury(state, player, '試合中に');

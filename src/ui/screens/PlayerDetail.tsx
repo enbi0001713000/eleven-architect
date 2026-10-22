@@ -8,6 +8,9 @@ import { injuryName } from '../../game/condition';
 import { knowledgeOf, potentialStars, viewAttribute } from '../../game/knowledge';
 import { expectedPlayingTime, isUnhappyWithPlayingTime, SQUAD_ROLE_LABEL } from '../../game/morale';
 import { talkCooldownLeft } from '../../game/talks';
+import { AGENT_STYLES } from '../../game/contractBalance';
+import { agentOf, formatValueRange, marketValueRange, talkStatus } from '../../game/contracts';
+import type { GameState, PlayerRecord } from '../../game/types';
 import { LEAGUE_RULES } from '../../game/rules';
 import { averageRating } from '../../game/season';
 import { AttributeValue, Bar, ClubLink, Condition, Fatigue, Morale, Panel, Rating, Stars, StatusTags } from '../components/bits';
@@ -37,7 +40,7 @@ export function PlayerDetail({ id }: { id: string }) {
             <div className="muted">
               {POSITION_NAME[player.position]}　{player.age}歳　{player.nationality}　利き足：{player.foot === 'left' ? '左' : player.foot === 'right' ? '右' : '両足'}
             </div>
-            <div>{player.clubId ? <ClubLink game={game} clubId={player.clubId} /> : <span className="muted">所属なし（海外）</span>}</div>
+            <div>{player.clubId ? <ClubLink game={game} clubId={player.clubId} /> : <span className="muted">{(game.freeAgents ?? []).includes(player.id) ? '所属なし（契約満了）' : '所属なし（海外）'}</span>}</div>
           </div>
           <div className="player-overall">
             <span className="muted small">総合力</span>
@@ -177,18 +180,36 @@ export function PlayerDetail({ id }: { id: string }) {
         </Panel>
       )}
 
-      {tab === 'contract' && (
-        <Panel title="契約">
-          {player.contract ? (
-            <dl className="facts">
-              <dt>年俸</dt><dd>{mine ? formatYen(player.contract.salary) : '非公開'}</dd>
-              <dt>契約満了</dt><dd>{player.contract.endYear}年</dd>
-              {mine && <><dt>約束した役割</dt><dd>{SQUAD_ROLE_LABEL[player.contract.role]}</dd></>}
-            </dl>
-          ) : <p className="muted">契約はありません。</p>}
-          <p className="muted small">契約の交渉はフェーズ4で追加します。</p>
-        </Panel>
-      )}
+      {tab === 'contract' && <ContractPanel game={game} player={player} mine={mine} />}
     </div>
+  );
+}
+
+function ContractPanel({ game, player, mine }: { game: GameState; player: PlayerRecord; mine: boolean }) {
+  const check = talkStatus(game, player.id);
+  const agent = agentOf(game, player);
+  const c = player.contract;
+  return (
+    <Panel title="契約" actions={check.ok ? (
+      <button type="button" className="primary small" onClick={() => store.navigate({ name: 'contract', playerId: player.id })}>
+        {check.kind === 'renewal' ? '更新の交渉をする' : '契約の話をする'}
+      </button>
+    ) : undefined}>
+      <dl className="facts">
+        <dt>市場価値</dt><dd>{formatValueRange(marketValueRange(game, player))}</dd>
+        <dt>代理人</dt><dd>{agent.name}（{AGENT_STYLES[agent.style].label}）</dd>
+        {c ? (
+          <>
+            <dt>年俸</dt><dd>{mine ? formatYen(c.salary) : '非公開'}</dd>
+            <dt>契約満了</dt><dd>{c.endYear}年{player.leaving ? '（契約満了で退団）' : ''}</dd>
+            {mine && <><dt>約束した役割</dt><dd>{SQUAD_ROLE_LABEL[c.role]}</dd></>}
+            {mine && <><dt>違約金</dt><dd>{c.releaseClause === null ? 'なし' : formatYen(c.releaseClause)}</dd></>}
+            {mine && c.bonus && <><dt>出来高</dt><dd>出場1試合 {formatYen(c.bonus.appearance)}、ゴール1点 {formatYen(c.bonus.goal)}</dd></>}
+          </>
+        ) : <><dt>契約</dt><dd>{(game.freeAgents ?? []).includes(player.id) ? '所属なし（契約満了）' : 'なし'}</dd></>}
+        {player.joining && <><dt>次の所属</dt><dd>{game.clubs[player.joining.clubId]?.name}（1月1日に加入）</dd></>}
+      </dl>
+      {!check.ok && <p className="muted small">{check.reason}</p>}
+    </Panel>
   );
 }

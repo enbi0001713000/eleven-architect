@@ -7,6 +7,8 @@
 import { simulateMatch } from '../engine/match';
 import { overallRating } from '../engine/ratings';
 import type { MatchResult } from '../engine/types';
+import { CONTRACT } from '../game/contractBalance';
+import { deservedRole, expiringPlayers, isDelegated, maxYears, neededSalary, offerContract, type ContractOffer } from '../game/contracts';
 import { debtOf, netResult, payrollOf, totalIncome } from '../game/finance';
 import { totalMembers } from '../game/fanClub';
 import { goalLabel, initialOwner, isDismissed, verdictLabel } from '../game/owner';
@@ -44,6 +46,39 @@ function snapshot(s: GameState, label: string): { age: number; strength: number 
   const ages = players.map((p) => p.age);
   log(`${label}: 選手${players.length}人  平均年齢 ${avg(ages).toFixed(1)}  上位18人の平均総合力 ${avg(strengths).toFixed(2)}（最高 ${Math.max(...strengths).toFixed(2)} 最低 ${Math.min(...strengths).toFixed(2)}）`);
   return { age: avg(ages), strength: avg(strengths) };
+}
+
+/** 自分のクラブの更新の交渉（11月15日）：序列18番目までの選手に、代理人の希望どおりの条件を出す */
+function autoRenew(s: GameState): void {
+  const myId = s.manager.clubId;
+  expiringPlayers(s).forEach((p, rank) => {
+    if (p.leaving || isDelegated(s, p) || rank >= 18) return;
+    const offer: ContractOffer = {
+      salary: 0, role: deservedRole(s, p, myId), years: Math.min(maxYears(p), CONTRACT.preferredYears(p.age)),
+      clauseMultiple: CONTRACT.defaultClause, bonus: { appearance: 0, goal: 0 },
+    };
+    const ask = neededSalary(s, p, myId, 'renewal', offer);
+    if (!ask.refuse) offerContract(s, p.id, { ...offer, salary: ask.salary });
+  });
+}
+
+/** 契約満了の移籍を数える：4月1日（冬の移籍期間のあと）の所属を、前の年と比べる */
+interface MoveStats { last: Map<string, string> | null; moves: number[]; unsigned: number[]; squadMin: number; squadMax: number }
+
+function dayHook(s: GameState, stats: MoveStats): void {
+  if (s.date.endsWith('-11-15')) autoRenew(s);
+  if (s.date.endsWith('-03-28')) {
+    const note = s.inbox.find((m) => m.date === s.date && m.subject === '冬の移籍期間が終わりました');
+    stats.unsigned.push(Number(note?.body.match(/(\d+)人/)?.[1] ?? 0));
+  }
+  if (!s.date.endsWith('-04-01')) return;
+  const now = new Map(leaguePlayers(s).map((p) => [p.id, p.clubId as string]));
+  if (stats.last) stats.moves.push([...now].filter(([id, club]) => stats.last?.has(id) && stats.last.get(id) !== club).length);
+  stats.last = now;
+  for (const c of Object.values(s.clubs)) {
+    stats.squadMin = Math.min(stats.squadMin, c.playerIds.length);
+    stats.squadMax = Math.max(stats.squadMax, c.playerIds.length);
+  }
 }
 
 const oku = (yen: number): string => (yen / 1e8).toFixed(1);
@@ -96,6 +131,8 @@ interface WorldSummary {
   trust: number[];
   /** 規模ごとの手元のお金と借り入れ（最初と最後） */
   money: Record<ClubSize, { start: number; end: number; debt: number; payrollStart: number; payrollEnd: number }>;
+  /** 契約満了の移籍（フェーズ4-A） */
+  contracts: MoveStats;
 }
 
 function moneyBySize(s: GameState): Record<ClubSize, { balance: number; debt: number; payroll: number }> {
@@ -122,6 +159,7 @@ const summary: WorldSummary = {
   seed, goals: [], champions: [], championPoints: [], start: snapshot(state, `世界${seed} 開始時`), end: { age: 0, strength: 0 },
   deficits: [], ownerFunded: 0, verdicts: [], warnings: 0, dismissals: { midSeason: 0, seasonEnd: 0 }, trust: [], aiSackings: [],
   money: Object.fromEntries(SIZES.map((size) => [size, { start: startMoney[size].balance, end: 0, debt: 0, payrollStart: startMoney[size].payroll, payrollEnd: 0 }])) as WorldSummary['money'],
+  contracts: { last: null, moves: [], unsigned: [], squadMin: Infinity, squadMax: 0 },
 };
 for (let year = 0; year < years; year++) {
   let injuries = 0;
@@ -162,6 +200,7 @@ for (let year = 0; year < years; year++) {
   while (!isSeasonOver(state)) {
     while (!todaysFixture(state)) {
       advanceDay(state);
+      dayHook(state, summary.contracts);
       if (isDismissed(state)) replaceManager('midSeason');
       for (const r of [...state.requests]) {
         requests++;
@@ -207,6 +246,7 @@ for (let year = 0; year < years; year++) {
   // 次のシーズンの開幕の前日まで進める（引退、新しい年、新人）
   while (state.season.year === seasonYear || state.date < `${state.season.year}-02-01`) {
     advanceDay(state);
+    dayHook(state, summary.contracts);
     if (isDismissed(state)) replaceManager(state.date.endsWith('-01-01') ? 'seasonEnd' : 'midSeason');
     for (const r of [...state.requests]) answerRequest(state, r.id, 'compete');
     if (state.date.endsWith('-12-31')) {
@@ -266,6 +306,8 @@ if (worlds > 1 || quiet) {
     console.log(`    オーナー：${[...verdicts].map(([v, n]) => `${v === 'dismissed' ? 'シーズン中に解任' : v === 'none' ? '評価なし' : verdictLabel(v as 'met')} ${n}`).join('、')}`
       + `  警告 ${w.warnings}回  解任 シーズン中${w.dismissals.midSeason}・評価で${w.dismissals.seasonEnd}  信頼度（年の初め） ${w.trust.join(' ')}`);
     console.log(`    AIクラブの監督の解任（シーズンごと）：${w.aiSackings.join(' ')}`);
+    const c = w.contracts;
+    console.log(`    契約満了の移籍（1年あたり、リーグ全体）：${c.moves.join(' ') || '—'}  決まらず去った選手：${c.unsigned.join(' ') || '—'}  登録人数 ${c.squadMin}〜${c.squadMax}人`);
     console.log(`    お金：赤字のクラブ（1年あたり）${avg(w.deficits).toFixed(1)}  オーナーの穴埋め ${w.ownerFunded}回  `
       + SIZES.map((size) => {
         const m = w.money[size];
