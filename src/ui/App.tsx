@@ -10,6 +10,8 @@ import { Inbox } from './screens/Inbox';
 import { Later } from './screens/Later';
 import { League } from './screens/League';
 import { Manager } from './screens/Manager';
+import { Transfers } from './screens/Transfers';
+import { ContractTalk } from './screens/ContractTalk';
 import { MatchDay } from './screens/MatchDay';
 import { MyClub } from './screens/MyClub';
 import { Meeting } from './screens/Meeting';
@@ -60,6 +62,8 @@ export function App() {
     case 'finance': content = <Finance key={screen.tab ?? 'finance'} initialTab={screen.tab} />; break;
     case 'myClub': content = <MyClub key={screen.tab ?? 'owner'} initialTab={screen.tab} />; break;
     case 'manager': content = <Manager />; break;
+    case 'transfers': content = <Transfers key={screen.tab ?? 'renewals'} initialTab={screen.tab} />; break;
+    case 'contract': content = <ContractTalk key={screen.playerId} playerId={screen.playerId} />; break;
     case 'conversation': content = <ConversationScreen key={`${screen.messageId ?? ''}-${screen.topic ?? ''}-${s.history.length}`} screen={screen} />; break;
     case 'later': content = <Later key={screen.title} title={screen.title} phase={screen.phase} />; break;
   }

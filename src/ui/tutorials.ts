@@ -5,7 +5,8 @@
 export type TutorialId =
   | 'conversation' | 'start' | 'inbox' | 'squad' | 'tactics' | 'training' | 'fixtures' | 'league' | 'finance' | 'myClub' | 'fanClub'
   | 'match' | 'talk' | 'press' | 'monthClose' | 'sponsorOffer' | 'fanClubWindow' | 'ownerWarning' | 'thanksDay'
-  | 'manager' | 'unemployed' | 'jobOffer';
+  | 'manager' | 'unemployed' | 'jobOffer'
+  | 'transfers' | 'contract' | 'renewalWindow';
 
 export interface TutorialStep {
   text: string;
@@ -177,6 +178,32 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
     title: '監督のオファー',
     steps: [
       { text: 'ほかのクラブから、監督のオファーが届きました。受けるか断るかを選べます。すぐに決めなくても、期限までに監督の画面から返事ができます。' },
+    ],
+  },
+  transfers: {
+    title: '移籍',
+    steps: [
+      { text: '移籍の画面です。今は、契約の更新と、契約満了の選手の獲得ができます。移籍金のある移籍は、これから追加されます。', target: t('transfer-tabs') },
+      { text: '年俸予算の残りと、来季の登録人数の見込みです。新しい契約は、年俸予算の残りに収まる額までしか出せません。', target: t('transfer-tiles') },
+      { text: '今年で契約が切れる選手とは、7月1日から11月30日まで更新の交渉ができます。主力とローテーションの選手は、監督が自分で交渉します。', target: t('renewal-list') },
+      { text: '控えと若手は、強化部に任せることもできます。11月30日までに更新しなかった選手は、契約満了で退団するので気をつけましょう。' },
+      { text: '12月からは、他クラブの契約満了の選手とも話ができます。移籍金がかからないので、うまく使えば安く戦力を足せます。' },
+    ],
+  },
+  contract: {
+    title: '契約の交渉',
+    steps: [
+      { text: '契約の交渉です。相手は選手の代理人で、提示すると、その場で返事が来ます。', target: t('contract-player') },
+      { text: '代理人には性格があります。強気な代理人ほど高い年俸を求め、話し合いの回数も少なくなります。決裂すると、14日間は話せません。' },
+      { text: '年俸、契約年数、約束する役割、違約金、出来高ボーナスを決めて提示します。足りなければ、代理人が希望の年俸を返してきます。', target: t('contract-offer') },
+      { text: 'ふさわしい役割より低い役割だと、年俸の希望が上がります。違約金を低くしたり、出来高ボーナスを付けたりすると、年俸を抑えられます。' },
+    ],
+  },
+  renewalWindow: {
+    title: '契約の更新の時期',
+    steps: [
+      { text: '7月になり、今年で契約が切れる選手と、更新の交渉ができるようになりました。締め切りは11月30日です。', target: t('menu-transfers') },
+      { text: '主力の選手は、早めに更新しておきましょう。更新しないと、契約満了で他クラブへ移ってしまいます。' },
     ],
   },
   thanksDay: {

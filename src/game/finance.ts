@@ -443,7 +443,10 @@ export function ownerBudget(state: GameState, club: Club, year: number): Budget 
   const plan = yearPlan(state, club);
   const payroll = payrollOf(state, club.id);
   const total = Math.max(0, plan.income - plan.costs - plan.principal + FINANCE.reserveRelease * (fin.balance - reserveOf(state, club)));
-  const wages = total <= payroll ? total : Math.min(total, payroll * FINANCE.wageBudgetHeadroom);
+  // 契約満了で選手が抜けた分も埋められるように、前の年に払った年俸と比べて大きいほうを基準にする（フェーズ4-A）
+  const lastYear = fin.history.find((h) => h.year === year - 1)?.ledger.expense.wages ?? 0;
+  const base = Math.max(payroll, lastYear);
+  const wages = total <= base ? total : Math.min(total, base * FINANCE.wageBudgetHeadroom);
   const roundedTotal = roundTo(total, 1e7);
   const roundedWages = Math.min(roundedTotal, roundTo(wages, 1e7));
   return { year, total: roundedTotal, wages: roundedWages, transfers: roundedTotal - roundedWages, transfersSpent: 0, extra: 0 };

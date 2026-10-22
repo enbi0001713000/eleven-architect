@@ -46,7 +46,9 @@ export type Screen =
   }
   | { name: 'later'; title: string; phase: number }
   | { name: 'myClub'; tab?: 'owner' | 'fanClub' }
-  | { name: 'manager' };
+  | { name: 'manager' }
+  | { name: 'transfers'; tab?: 'renewals' | 'market' }
+  | { name: 'contract'; playerId: string };
 
 class Store {
   game: GameState | null = null;
@@ -192,6 +194,7 @@ class Store {
     const ids: TutorialId[] = [];
     if (arrived.some((m) => m.from === '経理担当' && m.subject.includes('の収支'))) ids.push('monthClose');
     if (arrived.some((m) => m.from === 'ファンクラブ担当' && m.subject.includes('受付を始めました'))) ids.push('fanClubWindow');
+    if (arrived.some((m) => m.category === 'transfer' && m.subject === '契約の更新の交渉が始まりました')) ids.push('renewalWindow');
     const id = ids.find((i) => !this.seen(i));
     if (id && !this.tutorial && this.settings.tutorials) {
       this.tutorial = { id, step: 0 };

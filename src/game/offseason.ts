@@ -1,8 +1,9 @@
 // シーズンの切り替え。要件定義書「成長と衰え」の「引退はシーズン終了時に発表する」と、シーズンの暦に対応する。
 //
 // 12月10日 シーズンの総括（記録を残す、表彰）
-// 12月20日 引退の発表と、契約の自動更新（契約の交渉はフェーズ4で追加）
-// 1月1日   新しい年：年齢が1つ上がり、引退した選手が去り、新しい日程が発表される
+// 12月1日  契約の更新の締め切り（contracts.ts）
+// 12月20日 引退の発表
+// 1月1日   新しい年：年齢が1つ上がり、引退した選手が去り、契約満了の選手が移り、新しい日程が発表される
 // 1月10日  新人の加入（スカウトでの獲得はフェーズ4で追加。それまでは自動で入る）
 // 1月20日  キャンプ開始
 
@@ -15,7 +16,9 @@ import { BALANCE } from './balance';
 import { monthDay, yearOf } from './dates';
 import { assignSquadRoles, defaultStatus, playerPhase2Fields, roleByRank } from './defaults';
 import { decideRetirement, potentialFor } from './development';
-import { renewalFactor, seasonEndMoney } from './finance';
+import { CONTRACT } from './contractBalance';
+import { clauseFor, completeExpiries } from './contracts';
+import { seasonEndMoney } from './finance';
 import { addMessage } from './inbox';
 import { HOME_NATIONALITY, LEAGUE_RULES } from './rules';
 import { makeSchedule, seasonDates } from './schedule';
@@ -37,7 +40,7 @@ export function seasonEvents(state: GameState, rng: Rng): void {
   const day = monthDay(state.date);
   const done = isSeasonDone(state);
   if (day === '12-10' && done && yearOf(state.date) === state.season.year) seasonReview(state);
-  if (day === '12-20' && done && yearOf(state.date) === state.season.year) retirementsAndContracts(state, rng);
+  if (day === '12-20' && done && yearOf(state.date) === state.season.year) retirements(state, rng);
   if (day === '01-01' && done && yearOf(state.date) === state.season.year + 1) newSeason(state, rng);
   if (day === '01-10' && !done && state.season.round === 1 && yearOf(state.date) === state.season.year) newcomers(state, rng);
   if (day === '01-20' && state.season.round === 1 && yearOf(state.date) === state.season.year) campStarts(state);
@@ -81,7 +84,7 @@ export function seasonReview(state: GameState): void {
   });
 }
 
-export function retirementsAndContracts(state: GameState, rng: Rng): void {
+export function retirements(state: GameState, rng: Rng): void {
   const myId = state.manager.clubId;
   const year = state.season.year;
   const myRetiring: PlayerRecord[] = [];
@@ -94,57 +97,14 @@ export function retirementsAndContracts(state: GameState, rng: Rng): void {
     else if (player.clubId && overallRating(player) >= 13) famous.push(player);
   }
 
-  // 契約が切れる選手は、自動で更新する（交渉はフェーズ4）。
-  // AIのクラブは、序列の低いベテランとは更新せず、退団させる（自分のクラブは全員と更新する）。
-  // 更新するときの年俸は、年俸予算に収まらなければ相場より下げる
-  const renewed: PlayerRecord[] = [];
-  const left: PlayerRecord[] = [];
-  let myFactor = 1;
-  for (const club of Object.values(state.clubs)) {
-    const ranked = club.playerIds.map((id) => state.players[id]).filter((p): p is PlayerRecord => p !== undefined && !p.retiring)
-      .sort((a, b) => overallRating(b) - overallRating(a));
-    let remaining = ranked.length;
-    const renewing: { player: PlayerRecord; rank: number }[] = [];
-    ranked.forEach((player, rank) => {
-      if (!player.contract || player.contract.endYear > year) return;
-      if (club.id !== myId && releases(rank, player.age) && remaining > RELEASE_MIN_SQUAD) {
-        player.leaving = true;
-        remaining--;
-        return;
-      }
-      renewing.push({ player, rank });
-    });
-    const market = (p: PlayerRecord): number => salaryFor(overallRating(p), SIZE_PROFILE[club.size].salary);
-    const continuing = ranked.filter((p) => p.contract && p.contract.endYear > year).reduce((n, p) => n + (p.contract?.salary ?? 0), 0);
-    const factor = renewalFactor(club, continuing, renewing.reduce((n, r) => n + market(r.player), 0));
-    for (const { player, rank } of renewing) {
-      player.contract = {
-        salary: Math.max(480e4, Math.round(market(player) * factor / 1e5) * 1e5),
-        endYear: year + (player.age >= 31 ? 1 : rng.int(1, 3)),
-        role: roleByRank(rank, player.age + 1),
-      };
-      if (club.id === myId) renewed.push(player);
-    }
-    if (club.id === myId) myFactor = factor;
-    if (club.id !== myId) left.push(...ranked.filter((p) => p.leaving));
-  }
-
   addMessage(state, {
     category: 'club', from: '強化部', important: true,
-    subject: '引退する選手と、契約の更新',
+    subject: '引退する選手',
     body: [
       myRetiring.length > 0
         ? `今シーズン限りで引退する選手：${myRetiring.map((p) => `${p.name}（${p.age}歳）`).join('、')}`
         : 'このクラブから引退する選手はいません。',
       famous.length > 0 ? `他クラブの主な引退：${famous.slice(0, 6).map((p) => `${p.name}（${state.clubs[p.clubId ?? '']?.shortName ?? ''}、${p.age}歳）`).join('、')}` : '',
-      renewed.length > 0
-        ? `契約が切れる${renewed.length}人と、自動で契約を更新しました：${renewed.map((p) => p.name).join('、')}`
-        : '',
-      renewed.length > 0 && myFactor < 0.99
-        ? `年俸予算に収めるため、相場より${Math.round((1 - myFactor) * 100)}%低い年俸で更新しました。`
-        : '',
-      left.length > 0 ? `他クラブでは${left.length}人が契約満了で退団します。` : '',
-      '（契約の交渉と、契約を更新しない選択は、フェーズ4で追加します）',
     ].filter((l) => l !== '').join('\n'),
   });
 }
@@ -162,7 +122,7 @@ export function newSeason(state: GameState, rng: Rng): void {
       });
       if (player.career.length > 25) player.career.shift();
     }
-    if (player.retiring || player.leaving) {
+    if (player.retiring) {
       const club = player.clubId ? state.clubs[player.clubId] : undefined;
       if (club) club.playerIds = club.playerIds.filter((id) => id !== player.id);
       state.overseasPool = state.overseasPool.filter((id) => id !== player.id);
@@ -176,6 +136,9 @@ export function newSeason(state: GameState, rng: Rng): void {
     player.status.morale = 60 + (player.status.morale - 60) * 0.5;
     player.lastTalk = null;
   }
+
+  // 契約満了の選手：仮の契約をしたクラブへ移るか、所属なしになる
+  completeExpiries(state);
 
   // 海外の選手プールを補充する
   const names = new Set(Object.values(state.players).map((p) => p.name));
@@ -249,8 +212,8 @@ export function newcomers(state: GameState, rng: Rng): void {
   const mine: PlayerRecord[] = [];
   for (const club of Object.values(state.clubs)) {
     const count = club.playerIds.length;
-    // 引退で減った分を埋める。毎年2人以上は入れる（登録の上限まで）
-    const need = Math.min(LEAGUE_RULES.squadMax - count, Math.max(BALANCE.squadTarget - count, 2));
+    // 毎年2〜3人。登録が少なければ埋める（登録の上限まで）。残りは契約満了の選手を獲って埋める（フェーズ4-A）
+    const need = Math.min(LEAGUE_RULES.squadMax - count, Math.max(CONTRACT.newcomerMinSquad - count, rng.int(...CONTRACT.newcomers)));
     const numbers = new Set(club.playerIds.map((id) => state.players[id]?.squadNumber));
     for (let i = 0; i < need; i++) {
       const position = neededPosition(state, club.id);
@@ -269,12 +232,13 @@ export function newcomers(state: GameState, rng: Rng): void {
         ...base,
         clubId: club.id,
         squadNumber: number,
-        contract: { salary: salaryFor(overallRating(base), SIZE_PROFILE[club.size].salary), endYear: year + 2, role: 'youth' },
+        contract: { salary: salaryFor(overallRating(base), SIZE_PROFILE[club.size].salary), endYear: year + 2, role: 'youth', releaseClause: null, bonus: null },
         season: emptySeason(),
         discipline: { yellowAccumulation: 0, suspendedMatches: 0 },
         ...playerPhase2Fields(),
         status: defaultStatus(BALANCE.newcomerIntegration),
       };
+      record.contract!.releaseClause = clauseFor(record, year, CONTRACT.defaultClause);
       state.players[record.id] = record;
       club.playerIds.push(record.id);
       if (club.id === myId) mine.push(record);

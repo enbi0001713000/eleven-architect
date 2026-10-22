@@ -5,7 +5,9 @@ import { overallRating } from '../engine/ratings';
 import { createRng } from '../engine/rng';
 import { newManager } from './career';
 import { CAREER } from './careerBalance';
-import { addDays } from './dates';
+import { CONTRACT } from './contractBalance';
+import { clauseFor, contractDeadline, createAgents } from './contracts';
+import { addDays, monthDay, yearOf } from './dates';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
 import { initFinances } from './finance';
@@ -35,6 +37,7 @@ function migrate(state: GameState, fromVersion: number): GameState {
     if (v === 3) current = migrateV3toV4(current);
     if (v === 4) current = migrateV4toV5(current);
     if (v === 5) current = migrateV5toV6(current);
+    if (v === 6) current = migrateV6toV7(current);
     current = { ...current, version: v + 1 };
   }
   return current;
@@ -123,6 +126,33 @@ function migrateV5toV6(state: GameState): GameState {
     subject: '監督のキャリアの機能が使えるようになりました',
     body: `監督の評判は${Math.round(manager.reputation)}です。評判が上がると、評判の高いクラブからオファーが届きます。`
       + '\n解任されても、ほかのクラブのオファーで監督を続けられます。監督の画面で、評判と経歴を見られます。',
+  });
+  return state;
+}
+
+/**
+ * 版6（フェーズ3-C）→ 版7（フェーズ4-A）：代理人、違約金と出来高ボーナス、所属なしの選手、契約の交渉を足す。
+ * 12月1日を過ぎたセーブは、締め切りをすぐに済ませる（前の版は12月20日に自動で更新していたため）
+ */
+function migrateV6toV7(state: GameState): GameState {
+  state.agents ??= createAgents(createRng(state.seed ^ 0xa6e7));
+  state.freeAgents ??= [];
+  state.contractTalks ??= {};
+  state.contractDelegation ??= {};
+  for (const player of Object.values(state.players)) {
+    player.joining ??= null;
+    if (!player.contract) continue;
+    player.contract.releaseClause ??= clauseFor(player, state.season.year, CONTRACT.defaultClause);
+    player.contract.bonus ??= null;
+  }
+  const md = monthDay(state.date);
+  const expired = Object.values(state.players).some((p) => p.clubId && p.contract && p.contract.endYear <= yearOf(state.date) && !p.leaving && !p.retiring);
+  if (md >= CONTRACT.deadline && yearOf(state.date) === state.season.year && expired) contractDeadline(state, createRng(state.seed ^ 0x7c7c));
+  addMessage(state, {
+    category: 'transfer', from: '強化部', important: false,
+    subject: '契約の交渉の機能が使えるようになりました',
+    body: '今年で契約が切れる選手とは、7月1日から11月30日まで、更新の交渉ができます。主力とローテーションの選手は自分で交渉し、控えと若手は強化部に任せられます。'
+      + '\n12月からは、他クラブの契約満了の選手とも話ができます。移籍の画面を見てください。',
   });
   return state;
 }
