@@ -38,6 +38,7 @@ function migrate(state: GameState, fromVersion: number): GameState {
     if (v === 4) current = migrateV4toV5(current);
     if (v === 5) current = migrateV5toV6(current);
     if (v === 6) current = migrateV6toV7(current);
+    if (v === 7) current = migrateV7toV8(current);
     current = { ...current, version: v + 1 };
   }
   return current;
@@ -153,6 +154,24 @@ function migrateV6toV7(state: GameState): GameState {
     subject: '契約の交渉の機能が使えるようになりました',
     body: '今年で契約が切れる選手とは、7月1日から11月30日まで、更新の交渉ができます。主力とローテーションの選手は自分で交渉し、控えと若手は強化部に任せられます。'
       + '\n12月からは、他クラブの契約満了の選手とも話ができます。移籍の画面を見てください。',
+  });
+  return state;
+}
+
+/** 版7（フェーズ4-A）→ 版8（フェーズ4-B）：移籍の交渉と記録、レンタルを足す */
+function migrateV7toV8(state: GameState): GameState {
+  state.bids ??= [];
+  state.nextBidNumber ??= 1;
+  state.transferHistory ??= [];
+  for (const player of Object.values(state.players)) {
+    player.loan ??= null;
+    player.listed ??= null;
+  }
+  addMessage(state, {
+    category: 'transfer', from: '強化部', important: false,
+    subject: '移籍の機能が使えるようになりました',
+    body: '移籍の画面の「選手を探す」から、他クラブの選手に移籍金やレンタルを申し込めます。移籍期間は冬（1月5日〜3月27日）と夏（7月15日〜8月15日）です。'
+      + '\n自分の選手を移籍リストに載せると、他クラブから申し込みが届きやすくなります。',
   });
   return state;
 }

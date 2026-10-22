@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { markAllRead, markRead } from '../../game/inbox';
 import type { InboxMessage } from '../../game/types';
+import { BidActions } from '../components/BidActions';
 import { Panel } from '../components/bits';
 import { formatDate, INBOX_CATEGORY_LABEL } from '../format';
 import { store, useGame } from '../store';
@@ -91,6 +92,10 @@ function MessageView({ message }: { message: InboxMessage }) {
         {message.topic && message.topic !== 'sponsorOffer' && (
           <button type="button" className="primary" onClick={() => store.navigate({ name: 'conversation', messageId: message.id })}>{message.from}と話す</button>
         )}
+        {action?.kind === 'transferBid' && !message.resolved && (() => {
+          const bid = game.bids?.find((b) => b.id === action.bidId);
+          return bid ? <BidActions game={game} bid={bid} /> : null;
+        })()}
         {action && message.resolved && <span className="muted small">対応済み</span>}
         {message.category === 'finance' && <button type="button" className="secondary" onClick={() => store.open({ name: 'finance' })}>財務の画面へ</button>}
         {message.category === 'transfer' && <button type="button" className="secondary" onClick={() => store.open({ name: 'transfers' })}>移籍の画面へ</button>}

@@ -6,7 +6,7 @@ export type TutorialId =
   | 'conversation' | 'start' | 'inbox' | 'squad' | 'tactics' | 'training' | 'fixtures' | 'league' | 'finance' | 'myClub' | 'fanClub'
   | 'match' | 'talk' | 'press' | 'monthClose' | 'sponsorOffer' | 'fanClubWindow' | 'ownerWarning' | 'thanksDay'
   | 'manager' | 'unemployed' | 'jobOffer'
-  | 'transfers' | 'contract' | 'renewalWindow';
+  | 'transfers' | 'contract' | 'renewalWindow' | 'transferMarket' | 'bid' | 'incomingBid';
 
 export interface TutorialStep {
   text: string;
@@ -183,7 +183,7 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
   transfers: {
     title: '移籍',
     steps: [
-      { text: '移籍の画面です。今は、契約の更新と、契約満了の選手の獲得ができます。移籍金のある移籍は、これから追加されます。', target: t('transfer-tabs') },
+      { text: '移籍の画面です。選手を探して獲る、交渉の返事をする、契約を更新する、契約満了の選手を獲る、をタブで切り替えます。', target: t('transfer-tabs') },
       { text: '年俸予算の残りと、来季の登録人数の見込みです。新しい契約は、年俸予算の残りに収まる額までしか出せません。', target: t('transfer-tiles') },
       { text: '今年で契約が切れる選手とは、7月1日から11月30日まで更新の交渉ができます。主力とローテーションの選手は、監督が自分で交渉します。', target: t('renewal-list') },
       { text: '控えと若手は、強化部に任せることもできます。11月30日までに更新しなかった選手は、契約満了で退団するので気をつけましょう。' },
@@ -197,6 +197,31 @@ export const TUTORIALS: Record<TutorialId, Tutorial> = {
       { text: '代理人には性格があります。強気な代理人ほど高い年俸を求め、話し合いの回数も少なくなります。決裂すると、14日間は話せません。' },
       { text: '年俸、契約年数、約束する役割、違約金、出来高ボーナスを決めて提示します。足りなければ、代理人が希望の年俸を返してきます。', target: t('contract-offer') },
       { text: 'ふさわしい役割より低い役割だと、年俸の希望が上がります。違約金を低くしたり、出来高ボーナスを付けたりすると、年俸を抑えられます。' },
+    ],
+  },
+  transferMarket: {
+    title: '移籍金での移籍とレンタル',
+    steps: [
+      { text: '他クラブの選手を獲るときは「選手を探す」から。総合力と市場価値は、知識度に応じた幅で見えます。', target: t('transfer-tabs') },
+      { text: '移籍は、移籍期間（冬は1月5日〜3月27日、夏は7月15日〜8月15日）に成立します。期間の外で合意した移籍は、次の期間の初日に成立します。' },
+      { text: '移籍金は移籍予算から払います。売った移籍金の半分は、その年の移籍予算に足されます。', target: t('transfer-tiles') },
+      { text: '「交渉」には、自分の申し込みと、他クラブからの申し込みが並びます。他クラブからの申し込みは、数日のうちに返事をしてください。' },
+      { text: '「自分の選手」で、移籍リスト（売る）やレンタルのリストに載せると、他クラブから申し込みが届きやすくなります。' },
+    ],
+  },
+  bid: {
+    title: '獲得の申し込み',
+    steps: [
+      { text: '他クラブの選手を獲るには、まずクラブと話をつけます。相手の考えの目安を見て、移籍金を決めましょう。主力は高く、移籍リストの選手は安く手放してくれます。', target: t('bid-player') },
+      { text: '移籍金を出すと、数日後に返事が来ます。足りなければ、相手が希望の額を返してきます。違約金を払えば、相手は断れません。', target: t('bid-offer') },
+      { text: 'クラブと合意したら、14日以内に選手（の代理人）と契約の話をします。23歳以下の控えや若手なら、レンタルで借りることもできます。' },
+    ],
+  },
+  incomingBid: {
+    title: '他クラブからの申し込み',
+    steps: [
+      { text: '自分の選手に、他クラブ（や海外のクラブ）から申し込みが届きました。受ける、断る、もっと高い額を返すのどれかを選べます。', target: t('menu-transfers') },
+      { text: '返事をしないと、断ったことになります。海外への移籍を、行きたがっている選手に断ると、モラルが大きく下がります。違約金を払われたときは断れません。' },
     ],
   },
   renewalWindow: {

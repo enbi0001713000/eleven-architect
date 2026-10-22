@@ -23,7 +23,7 @@ import { autoSelect } from './selection';
 import type { Club, ClubSize, Difficulty, EmblemSpec, GameState, ManagerBackground, ManagerState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -245,6 +245,9 @@ export function createWorld(seed: number): GameState {
     freeAgents: [],
     contractTalks: {},
     contractDelegation: {},
+    bids: [],
+    nextBidNumber: 1,
+    transferHistory: [],
   };
   for (const player of Object.values(players)) {
     if (player.contract) player.contract.releaseClause = clauseFor(player, START_YEAR, CONTRACT.defaultClause);

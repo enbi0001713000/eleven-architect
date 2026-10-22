@@ -75,9 +75,16 @@ export function spend(fin: ClubFinance, kind: ExpenseKind, yen: number): void {
   fin.balance -= value;
 }
 
-/** 選手の年俸の合計（1年分） */
+/** 選手の年俸の合計（1年分）。レンタルの選手は、決めた割合で分ける（フェーズ4-B） */
 export function payrollOf(state: GameState, clubId: string): number {
-  return (state.clubs[clubId]?.playerIds ?? []).reduce((n, id) => n + (state.players[id]?.contract?.salary ?? 0), 0);
+  let total = (state.clubs[clubId]?.playerIds ?? []).reduce((n, id) => {
+    const p = state.players[id];
+    return n + (p?.contract?.salary ?? 0) * (p?.loan ? p.loan.wageShare : 1);
+  }, 0);
+  for (const p of Object.values(state.players)) {
+    if (p.loan?.fromClubId === clubId) total += (p.contract?.salary ?? 0) * (1 - p.loan.wageShare);
+  }
+  return total;
 }
 
 export const debtOf = (fin: ClubFinance): number => fin.loans.reduce((n, l) => n + l.remaining, 0);

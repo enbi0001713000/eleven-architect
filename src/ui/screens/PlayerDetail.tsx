@@ -10,6 +10,7 @@ import { expectedPlayingTime, isUnhappyWithPlayingTime, SQUAD_ROLE_LABEL } from 
 import { talkCooldownLeft } from '../../game/talks';
 import { AGENT_STYLES } from '../../game/contractBalance';
 import { agentOf, formatValueRange, marketValueRange, talkStatus } from '../../game/contracts';
+import { setListing } from '../../game/transfers';
 import type { GameState, PlayerRecord } from '../../game/types';
 import { LEAGUE_RULES } from '../../game/rules';
 import { averageRating } from '../../game/season';
@@ -40,7 +41,12 @@ export function PlayerDetail({ id }: { id: string }) {
             <div className="muted">
               {POSITION_NAME[player.position]}　{player.age}歳　{player.nationality}　利き足：{player.foot === 'left' ? '左' : player.foot === 'right' ? '右' : '両足'}
             </div>
-            <div>{player.clubId ? <ClubLink game={game} clubId={player.clubId} /> : <span className="muted">{(game.freeAgents ?? []).includes(player.id) ? '所属なし（契約満了）' : '所属なし（海外）'}</span>}</div>
+            <div>
+              {player.clubId ? <ClubLink game={game} clubId={player.clubId} /> : <span className="muted">{(game.freeAgents ?? []).includes(player.id) ? '所属なし（契約満了）' : '所属なし（海外）'}</span>}
+              {!mine && player.clubId && game.manager.clubId && !player.leaving && !player.loan && (
+                <button type="button" className="primary small" style={{ marginLeft: 12 }} onClick={() => store.navigate({ name: 'bid', playerId: player.id })}>獲得の交渉</button>
+              )}
+            </div>
           </div>
           <div className="player-overall">
             <span className="muted small">総合力</span>
@@ -95,7 +101,7 @@ export function PlayerDetail({ id }: { id: string }) {
         <button type="button" className={tab === 'attributes' ? 'active' : ''} onClick={() => setTab('attributes')}>能力</button>
         <button type="button" className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>記録</button>
         <button type="button" className={tab === 'contract' ? 'active' : ''} onClick={() => setTab('contract')}>契約</button>
-        <button type="button" disabled title="フェーズ4で追加">スカウトレポート</button>
+        <button type="button" disabled title="フェーズ4-Cで追加">スカウトレポート</button>
       </div>
 
       {tab === 'attributes' && (
@@ -189,12 +195,27 @@ function ContractPanel({ game, player, mine }: { game: GameState; player: Player
   const check = talkStatus(game, player.id);
   const agent = agentOf(game, player);
   const c = player.contract;
+  const canBid = !mine && !!player.clubId && player.clubId !== game.manager.clubId && !player.leaving && !player.loan && !!game.manager.clubId;
   return (
-    <Panel title="契約" actions={check.ok ? (
-      <button type="button" className="primary small" onClick={() => store.navigate({ name: 'contract', playerId: player.id })}>
-        {check.kind === 'renewal' ? '更新の交渉をする' : '契約の話をする'}
-      </button>
-    ) : undefined}>
+    <Panel title="契約" actions={
+      <>
+        {check.ok && (
+          <button type="button" className="primary small" onClick={() => store.navigate({ name: 'contract', playerId: player.id })}>
+            {check.kind === 'renewal' ? '更新の交渉をする' : '契約の話をする'}
+          </button>
+        )}
+        {canBid && !check.ok && (
+          <button type="button" className="primary small" onClick={() => store.navigate({ name: 'bid', playerId: player.id })}>獲得の交渉</button>
+        )}
+        {mine && !player.loan && !player.leaving && (
+          <select value={player.listed ?? ''} aria-label="移籍リスト" onChange={(e) => store.update((g) => setListing(g, player.id, (e.target.value || null) as 'sale' | 'loan' | null))}>
+            <option value="">リストに載せない</option>
+            <option value="sale">移籍リスト（売る）</option>
+            <option value="loan">レンタルに出す</option>
+          </select>
+        )}
+      </>
+    }>
       <dl className="facts">
         <dt>市場価値</dt><dd>{formatValueRange(marketValueRange(game, player))}</dd>
         <dt>代理人</dt><dd>{agent.name}（{AGENT_STYLES[agent.style].label}）</dd>
@@ -208,6 +229,8 @@ function ContractPanel({ game, player, mine }: { game: GameState; player: Player
           </>
         ) : <><dt>契約</dt><dd>{(game.freeAgents ?? []).includes(player.id) ? '所属なし（契約満了）' : 'なし'}</dd></>}
         {player.joining && <><dt>次の所属</dt><dd>{game.clubs[player.joining.clubId]?.name}（1月1日に加入）</dd></>}
+        {player.loan && <><dt>レンタル</dt><dd>{game.clubs[player.loan.fromClubId]?.name}から（{player.loan.until.slice(0, 4)}年{Number(player.loan.until.slice(5, 7))}月{Number(player.loan.until.slice(8, 10))}日まで）</dd></>}
+        {!player.loan && player.listed && <><dt>リスト</dt><dd>{player.listed === 'sale' ? '移籍リスト（売りに出ている）' : 'レンタルに出したい'}</dd></>}
       </dl>
       {!check.ok && <p className="muted small">{check.reason}</p>}
     </Panel>

@@ -26,8 +26,8 @@ const TABS: { key: Tab; label: string }[] = [
 
 const INCOME_KEYS: IncomeKind[] = ['tickets', 'sponsor', 'merchandise', 'fanClub', 'broadcast', 'prize', 'transfers'];
 const EXPENSE_KEYS: ExpenseKind[] = ['wages', 'operations', 'matchday', 'merchandiseCost', 'fanClubCost', 'interest', 'transfers', 'agentFees'];
-/** フェーズ4-Bで使い始める項目 */
-const LATER: ReadonlySet<string> = new Set(['income.transfers', 'expense.transfers']);
+/** まだ使っていない項目（今はない） */
+const LATER: ReadonlySet<string> = new Set<string>();
 
 const Signed = ({ yen }: { yen: number }) => <span className={yen < 0 ? 'tone-low' : ''}>{yenText(yen)}</span>;
 const monthText = (month: string): string => `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
@@ -233,7 +233,7 @@ function BudgetPanel({ game, club }: { game: GameState; club: Club }) {
         </dl>
         {payroll > budget.wages && <div className="warning small">年俸の合計が年俸予算を超えています。契約を更新するとき、年俸を相場より抑えることになります。</div>}
         <p className="muted small">
-          年俸予算を超える契約は結べません。移籍予算は、フェーズ4で選手を獲るときの移籍金に使います。
+          年俸予算を超える契約は結べません。移籍予算は、他クラブの選手を獲るときの移籍金に使います。選手を売ると、移籍金の半分が移籍予算に入ります。
           予算は毎年1月1日に、見込みの収支と手元のお金からオーナーが決め直します。
           黒字を貯めておけば、オーナーに頼んで予算を増やしてもらい、他クラブの主力に高い年俸を出すこともできます（フェーズ4）。
         </p>

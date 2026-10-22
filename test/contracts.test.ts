@@ -199,7 +199,10 @@ describe('締め切りと、契約満了の選手の移籍', () => {
     for (const club of Object.values(state.clubs)) {
       expect(club.playerIds.length).toBeGreaterThanOrEqual(CONTRACT.newcomerMinSquad);
       expect(club.playerIds.length).toBeLessThanOrEqual(30);
-      expect(projectedSquad(state, club.id).length).toBe(club.playerIds.length);
+      // 来季の見込み：レンタルで借りている選手は除き、貸している選手は足す
+      const here = club.playerIds.filter((id) => !state.players[id]!.loan).length;
+      const lent = Object.values(state.players).filter((p) => p.loan?.fromClubId === club.id).length;
+      expect(projectedSquad(state, club.id).length).toBe(here + lent);
     }
     // 背番号が重ならない
     for (const club of Object.values(state.clubs)) {
@@ -225,7 +228,7 @@ describe('古いセーブデータ（版6）', () => {
     }
     v6.version = 6;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 6, state: v6 }));
-    expect(loaded.version).toBe(7);
+    expect(loaded.version).toBe(8);
     expect(loaded.agents).toHaveLength(CONTRACT.agents);
     expect(loaded.freeAgents).toEqual([]);
     const player = Object.values(loaded.players).find((p) => p.contract)!;
