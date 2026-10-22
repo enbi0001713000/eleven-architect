@@ -160,6 +160,8 @@ export interface Budget {
   transfersSpent: number;
   /** オーナーに頼んで、手元のお金から増やしてもらった額 */
   extra: number;
+  /** AIクラブが移籍予算から年俸予算に回した額（フェーズ4-B） */
+  shifted?: number;
 }
 
 export interface ClubFinance {
@@ -288,6 +290,12 @@ export interface PlayerRecord extends Player {
   leaving?: boolean;
   /** 契約満了のあと、1月1日に加入するクラブと契約（12月に仮の契約をした。フェーズ4-A） */
   joining?: { clubId: string; contract: Contract; date: string } | null;
+  /** レンタル中（clubId は借りているクラブ。フェーズ4-B） */
+  loan?: PlayerLoan | null;
+  /** 所属クラブが、移籍リスト（売る）かレンタルに出すリストに載せている */
+  listed?: 'sale' | 'loan' | null;
+  /** 海外への移籍を断られた回数（多いほど、次に話が来たときに行きたがる） */
+  overseasRefused?: number;
   /** 引退した（どのクラブにも属さない） */
   retired?: boolean;
   discipline: {
@@ -329,7 +337,8 @@ export type InboxAction =
   | { kind: 'press'; fixtureId: string }
   | { kind: 'sponsorOffer' }
   | { kind: 'fanThanksDay'; year: number }
-  | { kind: 'jobOffer'; offerId: string };
+  | { kind: 'jobOffer'; offerId: string }
+  | { kind: 'transferBid'; bidId: string };
 
 /** 受信箱の知らせ（要件定義書「時間の進め方」） */
 export interface InboxMessage {
@@ -424,6 +433,65 @@ export interface ContractTalk {
   closedUntil: string | null;
   /** 代理人が最後に返した希望の年俸 */
   lastAsk: number | null;
+}
+
+// ---- フェーズ4-B：移籍 ----
+
+/** レンタル。借りている間は、借りたクラブの選手として出場する */
+export interface PlayerLoan {
+  fromClubId: string;
+  /** この日まで（次の日に元のクラブに戻る） */
+  until: string;
+  /** 借りたクラブが払う年俸の割合（残りは元のクラブ） */
+  wageShare: number;
+}
+
+/** 移籍金での移籍、違約金の支払い、レンタル、海外への移籍 */
+export type BidKind = 'transfer' | 'clause' | 'loan' | 'overseas';
+
+/**
+ * 交渉の段階。waiting：返事待ち、countered：売る側が額を返した、accepted：クラブ間で合意（選手との契約がまだ）、
+ * agreed：すべて合意（移籍期間に入ったら成立）、done：成立、rejected・withdrawn・failed：流れた
+ */
+export type BidStatus = 'waiting' | 'countered' | 'accepted' | 'agreed' | 'done' | 'rejected' | 'withdrawn' | 'failed';
+
+/** 自分のクラブが関わる移籍の交渉（AIクラブ同士の移籍は、その場で決まるので残さない） */
+export interface TransferBid {
+  id: string;
+  kind: BidKind;
+  playerId: string;
+  /** 売る（貸す）クラブ */
+  sellerId: string;
+  /** 買う（借りる）クラブ。海外への移籍は 'overseas' */
+  buyerId: string;
+  fee: number;
+  /** レンタル：借りるクラブが払う年俸の割合 */
+  wageShare: number;
+  status: BidStatus;
+  date: string;
+  /** 返事が来る日（相手が考えている間）、またはこの日までに決めないと流れる日（こちらが決める間） */
+  due: string;
+  /** 売る側が返した額 */
+  counter: number | null;
+  /** 選手と合意した契約（移籍が成立するまで持っておく） */
+  contract: Contract | null;
+  rounds: number;
+  /** 流れたときなどの理由 */
+  note: string;
+}
+
+export type TransferKind = 'transfer' | 'free' | 'loan' | 'loanReturn' | 'fromAbroad' | 'abroad';
+
+/** 移籍の記録 */
+export interface TransferRecord {
+  date: string;
+  playerId: string;
+  playerName: string;
+  /** null は海外か所属なし */
+  fromClubId: string | null;
+  toClubId: string | null;
+  fee: number;
+  kind: TransferKind;
 }
 
 // ---- フェーズ3-C：監督のキャリア ----
@@ -593,4 +661,8 @@ export interface GameState {
   contractTalks: Record<string, ContractTalk>;
   /** 契約の更新を強化部に任せるか（選手ID → 任せる）。ない選手は、控えと若手なら任せる */
   contractDelegation: Record<string, boolean>;
+  // ---- フェーズ4-B ----
+  bids: TransferBid[];
+  nextBidNumber: number;
+  transferHistory: TransferRecord[];
 }

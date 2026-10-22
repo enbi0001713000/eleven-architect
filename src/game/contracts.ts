@@ -21,6 +21,7 @@ import { addMessage } from './inbox';
 import { knowledgeOf } from './knowledge';
 import { SQUAD_ROLE_LABEL } from './morale';
 import { LEAGUE_RULES } from './rules';
+import { acceptedBid, onContractAgreed } from './transfers';
 import type { Agent, AgentStyle, Club, Contract, ContractBonus, GameState, PlayerRecord, SquadRole } from './types';
 import { salaryFor, SIZE_PROFILE, SQUAD_TEMPLATE } from './world';
 
@@ -130,10 +131,11 @@ export function clauseFor(player: PlayerRecord, year: number, multiple: number |
 export function projectedSquad(state: GameState, clubId: string): PlayerRecord[] {
   const club = state.clubs[clubId];
   if (!club) return [];
+  // レンタルで借りている選手は来季いない。貸している選手は戻ってくる（フェーズ4-B）
   const staying = club.playerIds.map((id) => state.players[id])
-    .filter((p): p is PlayerRecord => p !== undefined && !p.leaving && !p.retiring && !p.retired);
-  const joining = Object.values(state.players).filter((p) => p.joining?.clubId === clubId);
-  return [...staying, ...joining];
+    .filter((p): p is PlayerRecord => p !== undefined && !p.leaving && !p.retiring && !p.retired && !p.loan);
+  const others = Object.values(state.players).filter((p) => p.joining?.clubId === clubId || (p.loan?.fromClubId === clubId && !p.leaving && !p.retiring));
+  return [...staying, ...others];
 }
 
 const salaryIn = (p: PlayerRecord, clubId: string): number => (p.joining?.clubId === clubId ? p.joining.contract.salary : p.contract?.salary ?? 0);
@@ -252,7 +254,8 @@ export function talkStatus(state: GameState, playerId: string): TalkCheck {
   if (player.joining) return no(player.joining.clubId === myId ? 'すでに仮の契約をしています。1月1日に加入します。' : `${state.clubs[player.joining.clubId]?.name ?? '他クラブ'}と仮の契約をしています。`);
   if (player.leaving && player.clubId && md.startsWith('12-')) return { ok: true, kind, reason: '' };
   if ((state.freeAgents ?? []).includes(playerId) && md <= CONTRACT.freeAgencyEnds) return { ok: true, kind, reason: '' };
-  if (player.clubId && player.contract) return no('契約が残っている選手です。移籍の交渉はフェーズ4-Bで作ります。');
+  if (player.clubId && acceptedBid(state, playerId, myId)) return { ok: true, kind, reason: '' };
+  if (player.clubId && player.contract) return no('契約が残っている選手です。先にクラブと移籍の交渉（移籍金か違約金）をしてください。');
   return no('今は契約の話ができません。');
 }
 
@@ -356,6 +359,8 @@ export function joinClub(state: GameState, player: PlayerRecord, clubId: string,
   player.squadNumber = freeNumber(state, club);
   player.leaving = false;
   player.joining = null;
+  player.listed = null;
+  player.loan = null;
   player.status.integration = Math.min(player.status.integration, BALANCE.newcomerIntegration);
   player.status.morale = Math.max(player.status.morale, 65);
   club.playerIds.push(player.id);
@@ -374,6 +379,8 @@ function signContract(state: GameState, player: PlayerRecord, clubId: string, co
     player.status.morale = clamp(player.status.morale + 5, 0, 100);
     return;
   }
+  // クラブ間で合意している移籍（フェーズ4-B）
+  if (onContractAgreed(state, player, clubId, contract)) return;
   if (player.clubId && player.leaving) {
     player.joining = { clubId, contract, date: state.date };
     return;

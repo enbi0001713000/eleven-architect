@@ -161,7 +161,7 @@ describe('古いセーブデータ（版5）', () => {
     }
     v5.version = 5;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 5, state: v5 }));
-    expect(loaded.version).toBe(7);
+    expect(loaded.version).toBe(8);
     expect(loaded.manager.reputation).toBeGreaterThan(0);
     expect(loaded.manager.career).toHaveLength(1);
     expect(loaded.clubs[loaded.manager.clubId]!.vacancy).toBeNull();
