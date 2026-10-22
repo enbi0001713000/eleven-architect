@@ -112,7 +112,11 @@ export function shapePoint(slot: Slot, ins: TeamInstructions, phase: Phase, role
   let x = slot.x + ins.defensiveLine * lineShift;
   let y = slot.y;
   if (phase === 'attack') {
-    x += ATTACK_PUSH[slot.position] + ins.mentality * (slot.position === 'CB' ? 0.08 : 0.22) + (role?.attackX ?? 0);
+    // 守備的でも縦に速いチーム（カウンター）は、前線の選手を下げずにゴール前に残して、奪ったボールの出し先にする
+    const isFront = slot.position === 'FW' || slot.position === 'W' || slot.position === 'AM';
+    const outlet = isFront && ins.mentality < 0 ? clamp((ins.tempo + ins.passingLength) / 2, 0, 1) : 0;
+    x += ATTACK_PUSH[slot.position] + ins.mentality * (slot.position === 'CB' ? 0.08 : 0.22) * (1 - outlet)
+      - ins.defensiveLine * lineShift * outlet + (role?.attackX ?? 0);
     y = 2.5 + (y - 2.5) * (1 + ins.width * 0.12);
     // 役割による横の動き：＋ならサイドへ、−なら中央へ
     if (role && role.attackY !== 0) y += Math.sign(y - 2.5 || 1) * role.attackY;

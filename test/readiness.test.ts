@@ -66,7 +66,8 @@ describe('試合中の疲れと交代', () => {
     let withSubs = 0;
     let withoutSubs = 0;
     let goalDiff = 0;
-    const count = 120;
+    // 得失点差の差は0.15前後と小さく、120試合では運で符号が変わることがあるので、300試合で見る
+    const count = 300;
     for (let i = 0; i < count; i++) {
       const a = simulateMatch(home, away, { seed: 7000 + i, detailedCommentary: false, aiControl: [true, true] });
       const b = simulateMatch(home, away, { seed: 7000 + i, detailedCommentary: false, aiControl: [false, true] });

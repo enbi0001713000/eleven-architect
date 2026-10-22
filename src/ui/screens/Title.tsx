@@ -42,8 +42,9 @@ export function Title() {
   return (
     <div className="title-screen">
       <div className="title-card">
-        <h1>サッカークラブ経営ゲーム</h1>
-        <p className="muted">日本風の架空の国で、クラブの監督とGMを兼ねる</p>
+        <div className="title-logo">XI ARCHITECT</div>
+        <h1>イレブン・アーキテクト</h1>
+        <p className="muted">采配と経営で、クラブを設計する。日本風の架空の国で、監督とGMを兼ねる</p>
         <div className="title-buttons">
           <button type="button" className="primary large" onClick={() => store.open({ name: 'newGame' })}>新しいゲーム</button>
           <button type="button" className="secondary" onClick={() => fileInput.current?.click()}>ファイルから読み込む</button>

@@ -703,10 +703,27 @@ export class LiveMatch {
     return value;
   }
 
-  /** 守備の形が整っていない度合い（0〜transition.blend）。ボールを失った直後ほど大きい */
+  /** 守備の形が整っていない度合い（0〜transition.blend の前後）。ボールを失った直後ほど、前がかりのチームほど大きい */
   private transitionWeight(side: Side): number {
     const left = this.transitionUntil[side] - this.time;
-    return left > 0 ? C.transition.blend * Math.min(1, left / C.transition.seconds) : 0;
+    if (left <= 0) return 0;
+    const ins = this.sides[side].ins;
+    const exposure = clamp(1 + C.counter.exposure * (ins.mentality + ins.defensiveLine) / 2, 0.4, 1.6);
+    return C.transition.blend * exposure * Math.min(1, left / C.transition.seconds);
+  }
+
+  /** 引いて守る相手（守備ラインと攻撃の姿勢が低い）に、短いパスでつなぐチームがペナルティエリアへ入れる割合（1なら影響なし） */
+  private lowBlockFactor(ins: TeamInstructions, defIns: TeamInstructions): number {
+    const deep = clamp((-defIns.defensiveLine - defIns.mentality) / 2, 0, 2);
+    const short = clamp(-ins.passingLength / 2, 0, 1);
+    return 1 - C.counter.lowBlock * deep * short;
+  }
+
+  /** カウンターの勢い：相手が崩れている度合い × 自分の縦への速さ（テンポとパスの長さ）。0なら普通の攻撃 */
+  private counterWeight(att: Side, def: Side): number {
+    const ins = this.sides[att].ins;
+    const direct = clamp((ins.tempo + ins.passingLength) / 4, 0, 1);
+    return direct === 0 ? 0 : direct * this.transitionWeight(def) / C.transition.blend;
   }
 
   /** 走る速さ（スピードと加速） */
@@ -822,7 +839,9 @@ export class LiveMatch {
     }
 
     const ins = this.sides[att].ins;
-    const playTime = Math.max(1.5, C.secondsPerAction - 0.5 * ins.tempo + this.rng.next() * 3 - 1.5);
+    // カウンターの最中は、相手の形が整う前に速くプレーする
+    const playTime = Math.max(1.5, C.secondsPerAction - 0.5 * ins.tempo - C.counter.speedUp * this.counterWeight(att, other(att))
+      + this.rng.next() * 3 - 1.5);
     this.tick(playTime + this.stoppage, att);
     this.stoppage = 0;
   }
@@ -861,7 +880,8 @@ export class LiveMatch {
     const shootBias = SHOOT_TENDENCY[op.position] * role.shoot * (a('shooting') / 12) * (1 + 0.12 * ins.mentality);
     let shoot = 0;
     if (f.r === 5) shoot = (central ? W.shotInBox : W.shotInBoxWide) * shootBias;
-    else if (f.r === 4) shoot = (central ? W.shotOutsideBox : W.shotOutsideBoxWide) * shootBias;
+    // カウンターの最中は、遠くから打たずにゴール前まで運ぶ
+    else if (f.r === 4) shoot = (central ? W.shotOutsideBox : W.shotOutsideBoxWide) * shootBias * (1 - 0.5 * Math.min(1, this.counterWeight(att, other(att))));
 
     const cross = wide && f.r >= 3
       ? (f.r >= 4 ? W.cross : W.earlyCross) * role.cross * (a('crossing') / 12) * (1 + 0.12 * ins.width)
@@ -895,6 +915,7 @@ export class LiveMatch {
     const isKeeper = passer.position === 'GK';
     const candidates = this.active(att, (op, i) => i !== passerIndex && (op.position !== 'GK' || f.r <= 1));
     const vision = this.attr(att, passer, 'vision');
+    const counter = this.counterWeight(att, def);
     const targetInfo = (j: number) => {
       const tz = state.attackZone[j] ?? this.zone;
       const tf = this.frame(att, tz);
@@ -907,6 +928,7 @@ export class LiveMatch {
       let forward = dr > 0 ? 1 + 0.45 * dr * (1 + 0.15 * ins.tempo + 0.1 * ins.mentality) * passer.profile.forward
         : dr === 0 ? 0.75 : 0.4 * (1 - 0.12 * ins.tempo);
       if (dr >= 2) forward *= vision / 12;
+      if (dr > 0) forward *= 1 + C.counter.forward * counter;
       const receiver = this.op(att, j);
       const sup = (state.attackInfluence[j]?.[tz] ?? 0) * this.supportScore(att, receiver) / C.zoneStrengthScale;
       const open = sup / (sup + this.pressure(def, tz) + 0.1);
@@ -942,17 +964,19 @@ export class LiveMatch {
     const lineHeight = defIns.defensiveLine + C.behind.pressingShare * defIns.pressing + 2 * this.transitionWeight(def);
     const paceEdge = behind ? clamp((this.speed(att, receiver) - this.backLineSpeed(def)) / 8, -1, 1) : 0;
     const space = clamp((lineHeight + 2) / 4, 0, 1.25);
-    const behindBonus = behind ? C.behind.line * lineHeight + C.behind.pace * paceEdge * space : 0;
+    const behindBonus = behind ? C.behind.line * lineHeight + C.behind.pace * paceEdge * space + C.counter.behind * counter : 0;
+    const boxEntry = tf.r === ROWS - 1 && f.r < ROWS - 1;
     const success = clamp(
       C.pass.base - C.pass.distancePenalty * dist + 0.012 * (quality - 12)
         - passerPressure + behindBonus
         - 0.07 * (this.pressure(def, tz) - 0.8)
         - C.pass.forwardPenalty * Math.max(0, dr) + 0.004 * (this.attr(att, receiver, 'firstTouch') - 12)
-        - (tf.r === ROWS - 1 && f.r < ROWS - 1 ? C.pass.boxEntryPenalty : 0)
+        // 相手の形が整う前（ボールを失った直後）は、ペナルティエリアに入れやすい
+        - (boxEntry ? C.pass.boxEntryPenalty * (1 - C.counter.boxEntryRelief * this.transitionWeight(def) / C.transition.blend) : 0)
         // 裏へのボールは、GKの飛び出しで処理される
         - (tf.r === ROWS - 1 && dr >= 2 ? C.keeper.sweepOnThroughBall * this.keeperSweep(def, false) : 0),
       0.35, 0.97,
-    );
+    ) * (boxEntry ? this.lowBlockFactor(ins, defIns) : 1); // 引いて守る相手には、短いパスでつなぐチームほど入りにくい
 
     if (this.rng.chance(success)) {
       passer.stats.passesCompleted++;
@@ -961,7 +985,9 @@ export class LiveMatch {
       this.holder = target;
       this.zone = tz;
       this.lastPasser = passerIndex;
-      const runChance = clamp((paceEdge * space + 0.1 * lineHeight) * C.behind.breakawayRate, 0, C.behind.breakawayMax);
+      // カウンターの最中は、戻りきれていない最終ラインの裏で抜け出しやすい
+      const runChance = clamp((paceEdge * space + 0.1 * lineHeight) * C.behind.breakawayRate + C.counter.breakaway * counter,
+        0, C.behind.breakawayMax);
       if (behind && tf.r === ROWS - 1 && runChance > 0 && this.rng.chance(runChance)) {
         this.breakaway = true;
         this.say('breakaway', att, 2, { p: passer.player.name, q: receiver.player.name },
