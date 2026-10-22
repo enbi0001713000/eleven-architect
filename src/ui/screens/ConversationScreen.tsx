@@ -1,10 +1,13 @@
 // 会話画面：オーナー、営業担当、経理担当とのやり取り。
-// 受信箱の知らせ（予算、お金が足りない、スポンサーの提案）と、財務の画面からの相談（予算の増額、借り入れ）を会話で見せる。
+// 受信箱の知らせ（目標と予算、オーナーの警告、解任、お金が足りない、スポンサーの提案）と、
+// 財務やクラブの画面からの相談（予算の増額、借り入れ、目標の話し合い）を会話で見せる。
 
 import { useEffect, useState } from 'react';
 import { budgetIncreaseRoom, chooseSponsorOffer, payrollOf, requestBudgetIncrease, yenText } from '../../game/finance';
 import { SPONSOR_DEALS, SPONSOR_SLOT_ORDER, SPONSOR_SLOTS } from '../../game/financeBalance';
 import { markRead } from '../../game/inbox';
+import { canNegotiate, goalLabel, negotiateGoal } from '../../game/owner';
+import { FINANCE_GOAL_LABEL, OWNER } from '../../game/ownerBalance';
 import type { Club, GameState, InboxMessage, SponsorOffer } from '../../game/types';
 import { Conversation, type ConversationChoice, type ConversationLine, type Speaker } from '../components/Conversation';
 import { store, useGame, type Screen } from '../store';
@@ -33,7 +36,7 @@ export function ConversationScreen({ screen }: { screen: ConversationTopic }) {
   const topic = message?.topic ?? screen.topic;
   let body;
   if (topic === 'sponsorOffer' || topic === 'sponsor') body = <SponsorTalk game={game} club={club} message={message} />;
-  else if (topic === 'budget' || topic === 'budgetIncrease') body = <OwnerBudgetTalk game={game} club={club} message={message} />;
+  else if (topic === 'budget' || topic === 'budgetIncrease' || topic === 'goals') body = <OwnerBudgetTalk game={game} club={club} message={message} goals={topic === 'goals'} />;
   else if (topic === 'loan') body = <LoanTalk game={game} club={club} screen={screen} />;
   else if (message) body = <MessageTalk game={game} club={club} message={message} />;
   else body = <p className="muted">話す相手がいません。</p>;
@@ -42,7 +45,7 @@ export function ConversationScreen({ screen }: { screen: ConversationTopic }) {
     <div className="page conversation-page">
       <header className="page-header">
         <button type="button" className="secondary" onClick={() => store.back()}>← 戻る</button>
-        <h1>{message?.subject ?? (topic === 'loan' ? '借り入れの相談' : topic === 'sponsor' ? 'スポンサーの相談' : '予算の相談')}</h1>
+        <h1>{message?.subject ?? (topic === 'loan' ? '借り入れの相談' : topic === 'sponsor' ? 'スポンサーの相談' : topic === 'goals' ? '目標の相談' : '予算の相談')}</h1>
       </header>
       {body}
     </div>
@@ -59,20 +62,41 @@ const BackButtons = ({ finance }: { finance?: boolean }) => (
   </div>
 );
 
-/** ふつうの知らせ（お金が足りない、など）：相手が話して、返事をして終わる */
+/** 知らせの種類ごとの、返事とその答え */
+const REPLIES: Partial<Record<NonNullable<InboxMessage['topic']>, { id: string; label: string; say: string; answer: string }[]>> = {
+  shortfall: [
+    { id: 'ok', label: '「わかった。立て直しを考える」', say: 'わかった。立て直しを考える。', answer: 'お願いします。' },
+  ],
+  ownerWarning: [
+    { id: 'promise', label: '「必ず立て直します」', say: '必ず立て直します。', answer: '結果で示してください。期待していますよ。' },
+    { id: 'ok', label: '「わかりました」', say: 'わかりました。', answer: '……頼みますよ。' },
+  ],
+};
+
+/** ふつうの知らせ（お金が足りない、オーナーの警告、解任など）：相手が話して、返事をして終わる */
 function MessageTalk({ game, club, message }: { game: GameState; club: Club; message: InboxMessage }) {
   const [lines, setLines] = useState<ConversationLine[]>(messageLines(message));
   const [ended, setEnded] = useState(false);
   const shortfall = message.topic === 'shortfall';
-  const choices: ConversationChoice[] = shortfall
-    ? [{ id: 'ok', label: '「わかった。立て直しを考える」' }, { id: 'loans', label: '借り入れの状況を見る（財務の画面へ）' }]
-    : [{ id: 'ok', label: '「わかった」' }];
+  if (message.topic === 'dismissal') {
+    return (
+      <Conversation speaker={speakerFor(message.from, club)} me={game.manager.name} lines={lines}
+        footer={<div className="button-row"><button type="button" className="primary" onClick={() => store.open({ name: 'dismissed' })}>次へ</button></div>} />
+    );
+  }
+  const replies = (message.topic && REPLIES[message.topic]) ?? [{ id: 'ok', label: '「わかった」', say: 'わかった。', answer: 'よろしくお願いします。' }];
+  const choices: ConversationChoice[] = [
+    ...replies.map((r) => ({ id: r.id, label: r.label })),
+    ...(shortfall ? [{ id: 'loans', label: '借り入れの状況を見る（財務の画面へ）' }] : []),
+  ];
   const choose = (id: string) => {
     if (id === 'loans') {
       store.navigate({ name: 'finance' });
       return;
     }
-    setLines([...lines, me(shortfall ? 'わかった。立て直しを考える。' : 'わかった。'), them(shortfall ? 'お願いします。' : 'よろしくお願いします。')]);
+    const reply = replies.find((r) => r.id === id);
+    if (!reply) return;
+    setLines([...lines, me(reply.say), them(reply.answer)]);
     setEnded(true);
   };
   return (
@@ -83,8 +107,8 @@ function MessageTalk({ game, club, message }: { game: GameState; club: Club; mes
 
 type BudgetStage = 'menu' | 'amount' | 'target' | 'done';
 
-/** オーナーとの予算の話：予算の知らせを聞き、必要なら手元のお金から増やしてもらう */
-function OwnerBudgetTalk({ game, club, message }: { game: GameState; club: Club; message?: InboxMessage }) {
+/** オーナーとの目標と予算の話：知らせを聞き、目標を話し合い、必要なら手元のお金から予算を増やしてもらう */
+function OwnerBudgetTalk({ game, club, message, goals }: { game: GameState; club: Club; message?: InboxMessage; goals?: boolean }) {
   const room = budgetIncreaseRoom(game, club);
   const askAmount = (base: ConversationLine[]): ConversationLine[] => [
     ...base,
@@ -92,19 +116,30 @@ function OwnerBudgetTalk({ game, club, message }: { game: GameState; club: Club;
       ? them(`手元のお金から、今年はあと${yenText(room)}まで予算に足せます。いくら必要ですか。`)
       : them('今は手元のお金に余裕がありません。支払いのために残しておきたいのです。'),
   ];
-  // 財務の画面から来たときは、最初から増額の話をする
+  const goalLines = (): ConversationLine[] => [
+    them(`今シーズンの目標は、${goalLabel(game.owner.goals.position)}です。財務では「${FINANCE_GOAL_LABEL[game.owner.goals.finance]}」をお願いしています。`),
+  ];
+  // 財務の画面から来たときは、最初から増額の話をする。クラブの画面から来たときは、目標の話から
   const [lines, setLines] = useState<ConversationLine[]>(() => (message
     ? messageLines(message)
-    : askAmount([me('予算のことで、ご相談があります。'), them('どうしましたか。'), me('予算を、もう少し増やしていただけませんか。')])));
-  const [stage, setStage] = useState<BudgetStage>(message ? 'menu' : 'amount');
+    : goals
+      ? [me('今シーズンの目標について、ご相談があります。'), them('聞きましょう。'), ...goalLines()]
+      : askAmount([me('予算のことで、ご相談があります。'), them('どうしましたか。'), me('予算を、もう少し増やしていただけませんか。')])));
+  const [stage, setStage] = useState<BudgetStage>(message || goals ? 'menu' : 'amount');
   const [amount, setAmount] = useState(0);
 
   const amounts = [...new Set([room / 4, room / 2, room].map((v) => Math.floor(v / 1e7) * 1e7))].filter((v) => v > 0);
   let choices: ConversationChoice[] | undefined;
   if (stage === 'menu') {
+    const negotiable = canNegotiate(game);
+    const change = yenText(Math.round(club.finance.budget.total * OWNER.negotiationBudgetShare / 1e7) * 1e7);
     choices = [
-      { id: 'ok', label: '「わかりました。この予算でやってみます」' },
-      { id: 'more', label: '「予算を、もう少し増やしていただけませんか」', description: room > 0 ? `手元のお金から、あと${yenText(room)}まで` : '手元のお金に余裕がない' },
+      { id: 'ok', label: '「わかりました。この目標と予算でやってみます」' },
+      ...(negotiable ? [
+        { id: 'lower', label: '「目標を、もう少し下げていただけませんか」', description: `目標が1段下がり、予算が${change}減る。オーナーの信頼も少し下がる（開幕までに1回だけ）` },
+        { id: 'higher', label: '「目標を上げてもかまいません。そのかわり、予算を増やしてください」', description: `目標が1段上がり、予算が${change}増える（開幕までに1回だけ）` },
+      ] : []),
+      { id: 'more', label: '「予算を、もう少し増やしていただけませんか」', description: room > 0 ? `手元のお金から、あと${yenText(room)}まで` : '手元のお金に余裕がない、または今の成績では難しい' },
       { id: 'finance', label: '配分を見直す（財務の画面へ）' },
     ];
   } else if (stage === 'amount') {
@@ -126,8 +161,21 @@ function OwnerBudgetTalk({ game, club, message }: { game: GameState; club: Club;
         return;
       }
       if (id === 'ok') {
-        setLines([...base, me('わかりました。この予算でやってみます。'), them('期待しています。よろしく頼みます。')]);
+        setLines([...base, me('わかりました。この目標と予算でやってみます。'), them('期待しています。よろしく頼みます。')]);
         setStage('done');
+        return;
+      }
+      if (id === 'lower' || id === 'higher') {
+        let answer = { ok: false, lines: [] as string[] };
+        store.update((g) => {
+          answer = negotiateGoal(g, id);
+        });
+        setLines([
+          ...base,
+          me(id === 'lower' ? '目標を、もう少し下げていただけませんか。' : '目標を上げてもかまいません。そのかわり、予算を増やしてください。'),
+          ...answer.lines.map(them),
+          ...(answer.ok ? [them('ほかに、何かありますか。')] : []),
+        ]);
         return;
       }
       setLines(askAmount([...base, me('予算を、もう少し増やしていただけませんか。')]));

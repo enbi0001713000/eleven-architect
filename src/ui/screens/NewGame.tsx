@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import type { GameState } from '../../game/types';
-import { createWorld, expectationOf, startNewGame } from '../../game/world';
+import { goalLabel, positionGoalFor } from '../../game/owner';
+import { createWorld, startNewGame } from '../../game/world';
 import { Emblem } from '../components/Emblem';
 import { SIZE_LABEL } from '../format';
 import { newSlotId, writeSave } from '../storage';
@@ -67,7 +68,7 @@ export function NewGame() {
             <div className="club-card-text">
               <strong>{club.name}</strong>
               <span className="muted small">{club.hometown}　規模：{SIZE_LABEL[club.size]}</span>
-              <span className="small">前評判：{expectationOf(club)}</span>
+              <span className="small">オーナーの目標：{goalLabel(positionGoalFor(world, club.id))}</span>
               <span className="muted small">{club.stadium.name}（{club.stadium.capacity.toLocaleString('ja-JP')}人）</span>
             </div>
           </button>

@@ -7,6 +7,7 @@ import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2
 import { potentialFor } from './development';
 import { initFinances } from './finance';
 import { addMessage } from './inbox';
+import { goalLabel, initialOwner } from './owner';
 import type { GameState } from './types';
 import { salaryFor, SIZE_PROFILE, STATE_VERSION } from './world';
 
@@ -27,6 +28,7 @@ function migrate(state: GameState, fromVersion: number): GameState {
   for (let v = fromVersion; v < STATE_VERSION; v++) {
     if (v === 1) current = migrateV1toV2(current);
     if (v === 2) current = migrateV2toV3(current);
+    if (v === 3) current = migrateV3toV4(current);
     current = { ...current, version: v + 1 };
   }
   return current;
@@ -84,6 +86,18 @@ function migrateV2toV3(state: GameState): GameState {
     subject: 'フェーズ3-Aの機能（お金）が使えるようになりました',
     body: '入場料、スポンサー、グッズ、年俸などのお金の出入りと、予算、借り入れ、チケットの値段が加わりました。財務の画面で見られます。\n'
       + '年俸の水準を見直したため、全選手の年俸を計算し直しました。今年の収支は、今日から数えます。',
+  });
+  return state;
+}
+
+/** フェーズ3-A（版3）→ フェーズ3-B（版4）：オーナー（目標と信頼度）を足す */
+function migrateV3toV4(state: GameState): GameState {
+  state.owner = initialOwner(state);
+  addMessage(state, {
+    category: 'club', from: 'オーナー', important: false,
+    subject: 'フェーズ3-Bの機能（オーナーの評価）が使えるようになりました',
+    body: `今シーズンの目標は「${goalLabel(state.owner.goals.position)}」です。オーナーの信頼度は、成績とお金の状況で上下し、下がりすぎると解任されます。\n`
+      + 'クラブの画面で、目標と信頼度を見られます。',
   });
   return state;
 }

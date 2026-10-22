@@ -349,13 +349,14 @@ describe('古いセーブデータ', () => {
     v1.version = 1;
     const file = { ...toSaveFile(state), version: 1, state: v1 };
     const loaded = parseSaveFile(JSON.stringify(file));
-    expect(loaded.version).toBe(3);
+    expect(loaded.version).toBe(4);
     const player = Object.values(loaded.players).find((p) => p.clubId)!;
     expect(player.status.condition).toBe(100);
     expect(player.contract?.role).toBeDefined();
     expect(loaded.clubs[loaded.manager.clubId]!.training.focus).toBe('balanced');
-    // フェーズ2の知らせと、フェーズ3-Aの知らせ
-    expect(loaded.inbox.map((m) => m.category)).toEqual(['finance', 'club']);
+    // フェーズ2、フェーズ3-A、フェーズ3-Bの知らせ
+    expect(loaded.inbox.map((m) => m.category)).toEqual(['club', 'finance', 'club']);
+    expect(loaded.owner.goals.year).toBe(loaded.season.year);
     expect(loaded.clubs[loaded.manager.clubId]!.finance.budget.total).toBeGreaterThan(0);
     // 変換したデータでそのまま遊べる
     while (!todaysFixture(loaded)) advanceDay(loaded);

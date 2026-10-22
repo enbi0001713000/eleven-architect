@@ -48,7 +48,7 @@ describe('新しいゲームのお金', () => {
     expect(mean(bySize('large').map((c) => sponsorIncome(c.finance)))).toBeGreaterThan(mean(bySize('small').map((c) => sponsorIncome(c.finance))) * 2);
     expect(mean(bySize('large').map((c) => expectedGate(c).total))).toBeGreaterThan(mean(bySize('small').map((c) => expectedGate(c).total)) * 1.8);
     // オーナーからの予算の知らせが届いている
-    expect(state.inbox.some((m) => m.category === 'finance' && m.subject.includes('予算'))).toBe(true);
+    expect(state.inbox.some((m) => m.topic === 'budget' && m.subject.includes('予算'))).toBe(true);
   });
 });
 
@@ -113,7 +113,7 @@ describe('月と年度の締め', () => {
       expect(fin.budget.year).toBe(2028);
       expect(club.revenue).toBe(totalIncome(fin.history[0]!.ledger));
     }
-    expect(state.inbox.some((m) => m.subject === '2028年の予算')).toBe(true);
+    expect(state.inbox.some((m) => m.subject === '2028年の目標と予算')).toBe(true);
   });
 });
 
@@ -242,12 +242,12 @@ describe('古いセーブデータ（版2）', () => {
     for (const c of Object.values(v2.clubs as Record<string, Record<string, unknown>>)) delete c.finance;
     v2.version = 2;
     const loaded = parseSaveFile(JSON.stringify({ ...toSaveFile(state), version: 2, state: v2 }));
-    expect(loaded.version).toBe(3);
+    expect(loaded.version).toBe(4);
     for (const club of Object.values(loaded.clubs)) {
       expect(club.finance.budget.total).toBeGreaterThan(0);
       expect(club.finance.months).toEqual([]);
     }
-    expect(loaded.inbox[0]!.category).toBe('finance');
+    expect(loaded.inbox.map((m) => m.category)).toEqual(expect.arrayContaining(['finance']));
     // 変換したデータでそのまま遊べ、ホームゲームでお金が入る
     while (!todaysFixture(loaded)) advanceDay(loaded);
     playToday(loaded);

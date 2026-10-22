@@ -4,6 +4,7 @@
 // 毎日：ケガの回復、疲労の増減、コンディションの回復、練習（疲労、ケガ、熟成度）、モラルの変化
 // 毎週（月曜日）：成長と衰え、練習のレポート、選手からの申し出
 // 毎月1日：前の月のお金を締める。1月1日は年度も締めて、新しい年の予算を決める（finance.ts）
+//          オーナーの信頼度が上下し、1月1日は前のシーズンを評価して、新しい目標を示す（owner.ts）
 // 試合の日：記者会見の知らせ。「次の出来事まで進める」は、試合の日と大事な知らせが届いた日に止まる
 
 import { overallRating } from '../engine/ratings';
@@ -17,6 +18,7 @@ import { financeAfterEvents, financeBeforeEvents } from './finance';
 import { addMessage } from './inbox';
 import { afterMatchMorale, checkPromises, dailyMorale, maybePlayerRequest } from './morale';
 import { seasonEvents } from './offseason';
+import { isDismissed, ownerAfterEvents, ownerBeforeEvents } from './owner';
 import { LEAGUE_RULES } from './rules';
 import { repairSelection, validateSelection } from './selection';
 import { closePress, schedulePress } from './talks';
@@ -196,8 +198,9 @@ export function advanceDay(state: GameState): void {
   state.date = addDays(state.date, 1);
   const rng = createRng(daySeed(state.seed, state.date, 'day'));
   financeBeforeEvents(state);
+  ownerBeforeEvents(state);
   seasonEvents(state, rng);
-  financeAfterEvents(state, rng);
+  ownerAfterEvents(state, financeAfterEvents(state, rng));
   const matchDates = new Set(state.fixtures.filter((f) => f.result === null).map((f) => f.date));
   const ctx: DayContext = {
     rng,
@@ -231,12 +234,13 @@ function prepareSelection(state: GameState): void {
   });
 }
 
-export type StopReason = 'match' | 'message' | 'limit';
+export type StopReason = 'match' | 'message' | 'limit' | 'dismissed';
 
 /** 「次の出来事まで進める」：試合の日か、大事な知らせが届いた日まで進める */
 export function advanceToNextEvent(state: GameState, maxDays = 120): { reason: StopReason; days: number } {
   const startNumber = state.nextMessageNumber;
   for (let days = 0; days < maxDays; days++) {
+    if (isDismissed(state)) return { reason: 'dismissed', days };
     if (todaysFixture(state)) return { reason: 'match', days };
     advanceDay(state);
     if (todaysFixture(state)) return { reason: 'match', days: days + 1 };

@@ -7,7 +7,6 @@ const DESCRIPTION: Record<string, string> = {
   練習: 'チームの練習方針と強度、選手ごとに伸ばしたい能力を決めます。',
   移籍: '選手の検索、移籍金と契約の交渉、放出したい選手の一覧を扱います。',
   スカウト: 'スカウトを派遣して、他クラブや海外の選手を調べます。',
-  クラブ: 'オーナーの目標と交渉、スタジアム、スタッフを扱います。',
 };
 
 export function Later({ title, phase }: { title: string; phase: number }) {

@@ -27,12 +27,12 @@ const MENU: MenuItem[] = [
   { label: '移籍', screen: { name: 'later', title: '移籍', phase: 4 }, phase: 4 },
   { label: 'スカウト', screen: { name: 'later', title: 'スカウト', phase: 4 }, phase: 4 },
   { label: '財務', screen: { name: 'finance' } },
-  { label: 'クラブ', screen: { name: 'later', title: 'クラブ', phase: 3 }, phase: 3 },
+  { label: 'クラブ', screen: { name: 'myClub' } },
 ];
 
 const MENU_SCREENS: Record<string, string> = {
   home: 'ホーム', squad: '選手', player: '選手', tactics: '戦術', fixtures: '日程と結果', league: 'リーグ', club: 'リーグ',
-  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', finance: '財務', conversation: '受信箱',
+  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', finance: '財務', conversation: '受信箱', myClub: 'クラブ', dismissed: 'クラブ',
 };
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -43,6 +43,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const over = isSeasonOver(game);
   const today = todaysFixture(game);
   const unread = attentionCount(game);
+  const dismissed = game.owner?.dismissed != null;
   const activeLabel = s.screen.name === 'later' ? s.screen.title : MENU_SCREENS[s.screen.name];
 
   return (
@@ -79,14 +80,14 @@ export function Layout({ children }: { children: ReactNode }) {
             <button type="button" className="secondary" disabled={s.locked}
               onClick={() => { void store.saveNow(); store.setGame(null, null); store.open({ name: 'title' }); }}>タイトルへ</button>
             {!today && (
-              <button type="button" className="secondary" disabled={s.locked} title="1日だけ進める" onClick={() => store.advanceOneDay()}>＋1日</button>
+              <button type="button" className="secondary" disabled={s.locked || dismissed} title="1日だけ進める" onClick={() => store.advanceOneDay()}>＋1日</button>
             )}
             {today ? (
               <button type="button" className="primary" disabled={s.locked || s.screen.name === 'match'} onClick={() => store.open({ name: 'match' })}>
                 試合へ ▶
               </button>
             ) : (
-              <button type="button" className="primary" disabled={s.locked} onClick={() => store.advance()}>
+              <button type="button" className="primary" disabled={s.locked || dismissed} onClick={() => store.advance()}>
                 次の出来事まで進める ▶
               </button>
             )}

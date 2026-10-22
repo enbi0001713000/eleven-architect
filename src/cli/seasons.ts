@@ -1,4 +1,5 @@
-// 何シーズンも続けて回して、進行の数値（ケガ、疲労、成長と衰え、引退と新人）と、クラブのお金が釣り合っているかを確かめる。
+// 何シーズンも続けて回して、進行の数値（ケガ、疲労、成長と衰え、引退と新人）、クラブのお金、オーナーの評価が釣り合っているかを確かめる。
+// 自分のクラブ（最初のクラブ）は自動でメンバーを選ぶ。解任されたら、新しい監督が来たことにして続ける。
 //   npm run seasons                       … 1つの世界で3シーズン
 //   npm run seasons -- --years=8          … シーズン数を変える
 //   npm run seasons -- --worlds=4 --quiet … 違うシードの世界をいくつも回して、最後に比べる（--quiet で途中の表示を省く）
@@ -7,12 +8,13 @@ import { simulateMatch } from '../engine/match';
 import { overallRating } from '../engine/ratings';
 import type { MatchResult } from '../engine/types';
 import { debtOf, netResult, payrollOf, totalIncome } from '../game/finance';
+import { goalLabel, initialOwner, isDismissed, verdictLabel } from '../game/owner';
 import { advanceDay, todaysFixture } from '../game/progress';
 import { applyMatchday, isSeasonOver, prepareMatchday } from '../game/season';
 import { autoSelect } from '../game/selection';
 import { standingsOf } from '../game/standings';
 import { answerRequest } from '../game/talks';
-import type { ClubSize, GameState, PlayerRecord } from '../game/types';
+import type { ClubSize, GameState, PlayerRecord, SeasonEvaluation } from '../game/types';
 import { createWorld, startNewGame } from '../game/world';
 import { numberArg, readArgs } from './args';
 
@@ -80,6 +82,11 @@ interface WorldSummary {
   end: { age: number; strength: number };
   deficits: number[];
   ownerFunded: number;
+  /** オーナーの評価：シーズンごとの結果、警告の回数、解任（シーズン中、シーズンの評価で） */
+  verdicts: string[];
+  warnings: number;
+  dismissals: { midSeason: number; seasonEnd: number };
+  trust: number[];
   /** 規模ごとの手元のお金と借り入れ（最初と最後） */
   money: Record<ClubSize, { start: number; end: number; debt: number; payrollStart: number; payrollEnd: number }>;
 }
@@ -99,12 +106,14 @@ function moneyBySize(s: GameState): Record<ClubSize, { balance: number; debt: nu
 
 function runWorld(seed: number): WorldSummary {
 const world = createWorld(seed);
-const myId = Object.keys(world.clubs)[0] as string;
+// 世界ごとに、違う規模のクラブを受け持つ
+const myId = Object.keys(world.clubs)[(seed * 7) % Object.keys(world.clubs).length] as string;
 const state: GameState = startNewGame(world, 'テスト', myId);
 const startMoney = moneyBySize(state);
+const pastEvaluations: SeasonEvaluation[] = [];
 const summary: WorldSummary = {
   seed, goals: [], champions: [], championPoints: [], start: snapshot(state, `世界${seed} 開始時`), end: { age: 0, strength: 0 },
-  deficits: [], ownerFunded: 0,
+  deficits: [], ownerFunded: 0, verdicts: [], warnings: 0, dismissals: { midSeason: 0, seasonEnd: 0 }, trust: [],
   money: Object.fromEntries(SIZES.map((size) => [size, { start: startMoney[size].balance, end: 0, debt: 0, payrollStart: startMoney[size].payroll, payrollEnd: 0 }])) as WorldSummary['money'],
 };
 for (let year = 0; year < years; year++) {
@@ -122,10 +131,22 @@ for (let year = 0; year < years; year++) {
   let requests = 0;
   const seasonYear = state.season.year;
   const startDate = state.date;
+  const trustStart = state.owner.trust;
+  const warningsBefore = state.inbox.filter((m) => m.topic === 'ownerWarning').length;
+  let dismissedMid = false;
+  /** 解任されたら、新しい監督が来たことにして続ける（それまでの評価は残しておく） */
+  const replaceManager = (when: 'midSeason' | 'seasonEnd') => {
+    summary.dismissals[when]++;
+    if (when === 'midSeason') dismissedMid = true;
+    log(`  ★ 解任（${when === 'midSeason' ? 'シーズン中' : 'シーズンの評価'}）：${state.date} 信頼度 ${state.owner.trust}`);
+    pastEvaluations.push(...state.owner.evaluations);
+    state.owner = initialOwner(state);
+  };
 
   while (!isSeasonOver(state)) {
     while (!todaysFixture(state)) {
       advanceDay(state);
+      if (isDismissed(state)) replaceManager('midSeason');
       for (const r of [...state.requests]) {
         requests++;
         answerRequest(state, r.id, 'compete');
@@ -170,6 +191,7 @@ for (let year = 0; year < years; year++) {
   // 次のシーズンの開幕の前日まで進める（引退、新しい年、新人）
   while (state.season.year === seasonYear || state.date < `${state.season.year}-02-01`) {
     advanceDay(state);
+    if (isDismissed(state)) replaceManager(state.date.endsWith('-01-01') ? 'seasonEnd' : 'midSeason');
     for (const r of [...state.requests]) answerRequest(state, r.id, 'compete');
     if (state.date.endsWith('-12-31')) {
       retiring = leaguePlayers(state).filter((p) => p.retiring).length;
@@ -187,6 +209,13 @@ for (let year = 0; year < years; year++) {
   log(`  先発の状態：コンディション ${avg(conditionAtKickoff).toFixed(1)}  疲労 ${avg(fatigueAtKickoff).toFixed(1)}（70以上 ${(fatigueAtKickoff.filter((f) => f >= 70).length / fatigueAtKickoff.length * 100).toFixed(1)}%）`);
   log(`  モラル 平均 ${avg(morale).toFixed(1)}（35未満 ${(morale.filter((m) => m < 35).length / morale.length * 100).toFixed(1)}%）  申し出 ${requests}件`);
   log(`  オフ：引退 ${retiring}人、契約満了で退団 ${leaving}人、新人 ${joined}人 → ${leaguePlayers(state).length}人`);
+  const evaluation = [...pastEvaluations, ...state.owner.evaluations].find((e) => e.year === seasonYear);
+  const warnings = state.inbox.filter((m) => m.topic === 'ownerWarning').length - warningsBefore;
+  summary.warnings += warnings;
+  summary.verdicts.push(evaluation ? evaluation.verdict : dismissedMid ? 'dismissed' : 'none');
+  summary.trust.push(state.owner.trust);
+  log(`  オーナー：${evaluation ? `目標 ${goalLabel(evaluation.goal)} → ${evaluation.position}位（${verdictLabel(evaluation.verdict)}）、財務の目標 ${evaluation.financeMet ? '達成' : '未達'}` : '評価なし（シーズン中に交代）'}`
+    + `  信頼度 ${trustStart} → ${state.owner.trust}  警告 ${warnings}回`);
   const money = financeReport(state, seasonYear);
   summary.deficits.push(money.deficits);
   summary.ownerFunded += money.ownerFunded;
@@ -211,6 +240,10 @@ if (worlds > 1 || quiet) {
     const most = Math.max(...counts.values());
     console.log(`  世界${w.seed}：ゴール ${avg(w.goals).toFixed(2)}（${Math.min(...w.goals).toFixed(2)}〜${Math.max(...w.goals).toFixed(2)}）  優勝 ${counts.size}クラブ（最多${most}回、勝ち点 ${Math.min(...w.championPoints)}〜${Math.max(...w.championPoints)}）`
       + `  平均年齢 ${w.start.age.toFixed(1)}→${w.end.age.toFixed(1)}  強さ ${w.start.strength.toFixed(2)}→${w.end.strength.toFixed(2)}`);
+    const verdicts = new Map<string, number>();
+    for (const v of w.verdicts) verdicts.set(v, (verdicts.get(v) ?? 0) + 1);
+    console.log(`    オーナー：${[...verdicts].map(([v, n]) => `${v === 'dismissed' ? 'シーズン中に解任' : v === 'none' ? '評価なし' : verdictLabel(v as 'met')} ${n}`).join('、')}`
+      + `  警告 ${w.warnings}回  解任 シーズン中${w.dismissals.midSeason}・評価で${w.dismissals.seasonEnd}  信頼度（年の初め） ${w.trust.join(' ')}`);
     console.log(`    お金：赤字のクラブ（1年あたり）${avg(w.deficits).toFixed(1)}  オーナーの穴埋め ${w.ownerFunded}回  `
       + SIZES.map((size) => {
         const m = w.money[size];

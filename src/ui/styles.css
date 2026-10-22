@@ -325,3 +325,7 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 .avatar-press { background: #5b6472; }
 .conv-continued { margin-top: -4px; }
 .avatar-space { width: 32px; flex: none; }
+
+/* オーナーの信頼度（フェーズ3-B） */
+.trust-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.trust-value { font-size: 1.8rem; font-variant-numeric: tabular-nums; }

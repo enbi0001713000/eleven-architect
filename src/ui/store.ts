@@ -30,8 +30,8 @@ export type Screen =
     name: 'conversation';
     /** 受信箱の知らせを会話で見る */
     messageId?: string;
-    /** 財務の画面からの相談 */
-    topic?: 'budgetIncrease' | 'loan' | 'sponsor';
+    /** 財務やクラブの画面からの相談 */
+    topic?: 'budgetIncrease' | 'loan' | 'sponsor' | 'goals';
     /** 借り入れの相談の中身と、オーナーの返事 */
     amount?: number;
     months?: number;
@@ -40,7 +40,9 @@ export type Screen =
     rate?: number;
     monthly?: number;
   }
-  | { name: 'later'; title: string; phase: number };
+  | { name: 'later'; title: string; phase: number }
+  | { name: 'myClub' }
+  | { name: 'dismissed' };
 
 class Store {
   game: GameState | null = null;
@@ -137,7 +139,7 @@ class Store {
 
   /** 「次の出来事まで進める」。大事な知らせが届いたら受信箱（か会話画面）を、試合の日ならホームを開く */
   advance(): void {
-    if (!this.game || this.locked) return;
+    if (!this.game || this.locked || this.game.owner?.dismissed) return;
     const before = this.game.nextMessageNumber;
     let reason = 'match';
     this.update((g) => {
@@ -149,7 +151,7 @@ class Store {
 
   /** 1日だけ進める */
   advanceOneDay(): void {
-    if (!this.game || this.locked) return;
+    if (!this.game || this.locked || this.game.owner?.dismissed) return;
     const before = this.game.nextMessageNumber;
     this.update((g) => advanceDay(g));
     const important = this.game.inbox.some((m) => Number(m.id.slice(1)) >= before && m.important);

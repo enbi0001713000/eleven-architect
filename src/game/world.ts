@@ -9,14 +9,15 @@ import type { FormationName, Position, TeamInstructions } from '../engine/types'
 import { CLUB_SEEDS, type ClubSeed } from './clubData';
 import { assignSquadRoles, defaultClubTraining, defaultFamiliarity, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
-import { emptyFinance, firstBudgetMessage, initFinances } from './finance';
+import { emptyFinance, initFinances } from './finance';
 import { addMessage } from './inbox';
+import { goalLabel, placeholderOwner, positionGoalFor, startOwner } from './owner';
 import { makeSchedule, seasonDates } from './schedule';
 import { autoSelect } from './selection';
 import type { Club, ClubSize, EmblemSpec, GameState, PlayerRecord } from './types';
 
 export const START_YEAR = 2027;
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 /** 1クラブ28人の内訳 */
 export const SQUAD_TEMPLATE: [Position, number][] = [
@@ -226,6 +227,7 @@ export function createWorld(seed: number): GameState {
     fanMood: 50,
     managerRelations: {},
     lastTeamMeeting: null,
+    owner: placeholderOwner(START_YEAR, start.toISOString().slice(0, 10)),
   };
   for (const id of ids) assignSquadRoles(state, id);
   initFinances(state, rng, START_YEAR, true);
@@ -240,19 +242,13 @@ export function startNewGame(world: GameState, managerName: string, clubId: stri
   club.selection = autoSelect(world, clubId, club.tactics.formation);
   const state: GameState = { ...world, manager: { name: managerName, clubId } };
   addMessage(state, {
-    category: 'club', from: 'クラブ会長', important: false,
+    category: 'club', from: 'オーナー', important: false,
     subject: `${club.name}へようこそ`,
-    body: `${managerName}監督、${club.name}へようこそ。今シーズンの目標は「${expectationOf(club)}」です。\n`
+    body: `${managerName}監督、${club.name}へようこそ。今シーズンの目標は「${goalLabel(positionGoalFor(state, clubId))}」です。\n`
       + '開幕まで1週間あります。練習の方針と戦術を決めて、チームミーティングで目標を共有しておいてください。\n'
       + '画面右上の「次の出来事まで進める」で時間が進みます。試合の日や、大事な知らせが届いた日に止まります。',
   });
-  firstBudgetMessage(state);
+  startOwner(state);
   return state;
 }
 
-/** 新しいゲームの画面で使う、クラブの前評判 */
-export function expectationOf(club: Club): string {
-  if (club.size === 'large') return '優勝争い';
-  if (club.size === 'small') return '残留争い';
-  return club.level >= 12.4 ? '上位進出' : '中位';
-}
