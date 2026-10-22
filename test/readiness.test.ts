@@ -2,7 +2,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { generateTeam } from '../src/data/generate';
-import { LiveMatch, simulateMatch } from '../src/engine/match';
+import { ENGINE_CONFIG } from '../src/engine/config';
+import { LiveMatch, simulateMatch, SUBSTITUTION_RULES, tirednessFactor } from '../src/engine/match';
 import { createRng } from '../src/engine/rng';
 import type { MatchReadiness, Team } from '../src/engine/types';
 
@@ -42,10 +43,39 @@ describe('試合前の状態', () => {
     expect(worse).toBeLessThan(normal - 0.25);
   });
 
-  it('コンディションが試合開始時のスタミナになる', () => {
+  it('コンディションが悪いと、試合開始時のスタミナが下がる', () => {
     const live = new LiveMatch(withReadiness(home, { condition: 75, fatigue: 0, morale: 60, familiarity: 1 }), away, { seed: 3 });
     const players = live.snapshot().sides[0].onPitch;
-    expect(players.every((p) => p.stamina === 75)).toBe(true);
+    const expected = 100 - 25 * ENGINE_CONFIG.conditionWeight;
+    expect(players.every((p) => p.stamina === expected)).toBe(true);
+    expect(expected).toBeLessThan(100);
+  });
+});
+
+describe('試合中の疲れと交代', () => {
+  it('スタミナが減ると能力が下がり、65を切ると急に落ちる', () => {
+    const values = [100, 90, 80, 70, 65, 60, 50, 40, 30].map(tirednessFactor);
+    for (let i = 1; i < values.length; i++) expect(values[i]).toBeLessThan(values[i - 1]!);
+    expect(tirednessFactor(100)).toBe(1);
+    // 65までの35で下がる分より、そこからの15で下がる分のほうが大きい
+    expect(tirednessFactor(65) - tirednessFactor(50)).toBeGreaterThan(tirednessFactor(100) - tirednessFactor(65));
+    expect(tirednessFactor(0)).toBe(ENGINE_CONFIG.tiredness.min);
+  });
+
+  it('AIは疲れた選手を代える。交代すると、終盤のピッチの選手は元気で、結果も良くなる', () => {
+    let withSubs = 0;
+    let withoutSubs = 0;
+    let goalDiff = 0;
+    const count = 120;
+    for (let i = 0; i < count; i++) {
+      const a = simulateMatch(home, away, { seed: 7000 + i, detailedCommentary: false, aiControl: [true, true] });
+      const b = simulateMatch(home, away, { seed: 7000 + i, detailedCommentary: false, aiControl: [false, true] });
+      withSubs += a.stats[0].staminaAtEnd / count;
+      withoutSubs += b.stats[0].staminaAtEnd / count;
+      goalDiff += ((a.score[0] - a.score[1]) - (b.score[0] - b.score[1])) / count;
+    }
+    expect(withSubs).toBeGreaterThan(withoutSubs + 5);
+    expect(goalDiff).toBeGreaterThan(0);
   });
 });
 
@@ -65,11 +95,11 @@ describe('試合中のケガ', () => {
     for (const r of results) {
       for (const line of r.players.filter((l) => l.injured)) {
         expect(r.events.some((e) => e.type === 'injury' && e.text.includes(line.player.name))).toBe(true);
-        const subs = r.players.filter((l) => l.side === line.side && l.minuteOn !== null).length;
         const injuryEvent = r.events.find((e) => e.type === 'injury' && e.text.includes(line.player.name))!;
-        // ケガの時点で交代枠が残っていたなら、その選手は途中で下がっている
-        const subsBefore = r.events.filter((e) => e.type === 'substitution' && e.side === line.side && e.clock < injuryEvent.clock).length;
-        if (subsBefore < 3 && subs < 5) {
+        // ケガの時点で交代の人数と回数が残っていたなら、その選手は途中で下がっている
+        const before = r.events.filter((e) => e.type === 'substitution' && e.side === line.side && e.clock < injuryEvent.clock);
+        const windows = new Set(before.map((e) => e.clock)).size;
+        if (before.length < SUBSTITUTION_RULES.maxSubs && windows < SUBSTITUTION_RULES.maxWindows) {
           expect(line.minuteOff).not.toBeNull();
           checked++;
         }
