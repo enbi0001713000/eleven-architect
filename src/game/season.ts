@@ -4,6 +4,7 @@ import type { MatchResult, Team } from '../engine/types';
 import { clubReadiness } from './condition';
 import { settleHomeMatch } from './finance';
 import { afterMatches } from './progress';
+import { bestRoles } from './roleFit';
 import { LEAGUE_RULES } from './rules';
 import { autoSelect, clubPlayers, validateSelection } from './selection';
 import { standingsOf } from './standings';
@@ -43,14 +44,19 @@ export function buildTeam(state: GameState, clubId: string): Team {
   const selection = chosen && validateSelection(state, clubId, formation, chosen).length === 0
     ? chosen
     : autoSelect(state, clubId, formation);
+  const players = clubPlayers(state, clubId);
+  // AIのクラブは、先発の一人ひとりに一番向いている役割を選ぶ
+  const tactics = clubId === state.manager.clubId
+    ? club.tactics
+    : { ...club.tactics, roles: bestRoles(formation, selection.lineup.map((id) => state.players[id])) };
   return {
     id: club.id,
     name: club.name,
-    players: clubPlayers(state, clubId),
+    players,
     readiness: clubReadiness(state, clubId),
     lineup: selection.lineup,
     bench: selection.bench,
-    tactics: club.tactics,
+    tactics,
   };
 }
 

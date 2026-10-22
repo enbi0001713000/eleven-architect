@@ -12,13 +12,14 @@ import { FOREIGN_NAMES, GIVEN_NAMES, SURNAMES } from './names';
 const GK_KEYS: readonly AttributeKey[] = ['reflexes', 'handling', 'oneOnOne', 'rushingOut'];
 
 /** ポジションごとの、能力値の得意・不得意（チームの水準からの差） */
-const PROFILES: Record<Position, Partial<Record<AttributeKey, number>>> = {
+export const POSITION_PROFILES: Record<Position, Partial<Record<AttributeKey, number>>> = {
   GK: {
     reflexes: 4, handling: 4, oneOnOne: 3, rushingOut: 2, positioning: 2, concentration: 2, jumping: 1,
     shooting: -7, dribbling: -6, crossing: -6, tackling: -6, heading: -5, passing: -3, firstTouch: -3, offTheBall: -6,
   },
   CB: { tackling: 3, heading: 3, positioning: 3, strength: 3, jumping: 2, concentration: 1, shooting: -4, dribbling: -3, crossing: -3, offTheBall: -3 },
   SB: { pace: 2, acceleration: 2, stamina: 2, crossing: 2, tackling: 1, workRate: 1, heading: -1, shooting: -3 },
+  WB: { pace: 2, acceleration: 2, stamina: 3, crossing: 2, workRate: 2, dribbling: 1, heading: -1, shooting: -2 },
   DM: { tackling: 3, positioning: 2, passing: 1, workRate: 2, decisions: 1, concentration: 1, shooting: -2, dribbling: -1, offTheBall: -2 },
   CM: { passing: 2, vision: 1, decisions: 1, workRate: 2, stamina: 2 },
   AM: { passing: 2, vision: 3, dribbling: 2, firstTouch: 2, offTheBall: 1, shooting: 1, tackling: -3, heading: -2, strength: -1 },
@@ -54,7 +55,7 @@ export interface PlayerOptions {
  * @param level チームの水準（1〜20）。能力値はこの値を中心にばらつく。
  */
 export function generatePlayer(rng: Rng, position: Position, level: number, options: PlayerOptions = {}): Player {
-  const profile = PROFILES[position];
+  const profile = POSITION_PROFILES[position];
   const attributes = {} as Attributes;
   for (const key of ATTRIBUTE_KEYS) {
     const isKeeperSkill = GK_KEYS.includes(key);

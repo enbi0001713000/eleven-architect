@@ -18,7 +18,9 @@ export function defaultClubTraining(): Club['training'] {
 
 /** 今使っている形はよく慣れていて、ほかの形はあまり慣れていない */
 export function defaultFamiliarity(formation: FormationName, instructions: TeamInstructions): Club['familiarity'] {
-  const formations: Partial<Record<FormationName, number>> = { '4-4-2': 45, '4-3-3': 45, '4-2-3-1': 45 };
+  const formations: Partial<Record<FormationName, number>> = {
+    '4-4-2': 45, '4-3-3': 45, '4-2-3-1': 45, '4-1-4-1': 40, '3-4-2-1': 35, '3-5-2': 35,
+  };
   formations[formation] = 85;
   return { formations, instructions: 85, instructionsRef: { ...instructions } };
 }

@@ -1,6 +1,6 @@
-// 設定：観戦の速さ、実況の表示、会話画面（遊ぶ人ごとにブラウザへ保存）
+// 設定：配色、観戦の速さ、実況の表示、会話画面（遊ぶ人ごとにブラウザへ保存）
 
-import type { CommentaryMode, MatchSpeed } from '../settings';
+import type { CommentaryMode, MatchSpeed, Theme } from '../settings';
 import { store, useStore } from '../store';
 
 export function Settings() {
@@ -13,6 +13,13 @@ export function Settings() {
       </header>
       <section className="panel">
         <div className="panel-body settings">
+          <label>
+            配色
+            <select value={s.settings.theme} onChange={(e) => store.updateSettings({ theme: e.target.value as Theme })}>
+              <option value="light">明るい</option>
+              <option value="dark">暗い</option>
+            </select>
+          </label>
           <label>
             観戦の速さ（最初の値）
             <select value={s.settings.matchSpeed} onChange={(e) => store.updateSettings({ matchSpeed: Number(e.target.value) as MatchSpeed })}>

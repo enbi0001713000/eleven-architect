@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from 'react';
 import { advanceDay, advanceToNextEvent } from '../game/progress';
 import type { GameState, InboxMessage } from '../game/types';
-import { loadSettings, saveSettings, type Settings } from './settings';
+import { applyTheme, loadSettings, saveSettings, type Settings } from './settings';
 import { writeSave } from './storage';
 
 export type Screen =
@@ -161,6 +161,7 @@ class Store {
   updateSettings(change: Partial<Settings>): void {
     this.settings = { ...this.settings, ...change };
     saveSettings(this.settings);
+    applyTheme(this.settings.theme);
     this.emit();
   }
 

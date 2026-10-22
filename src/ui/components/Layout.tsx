@@ -76,6 +76,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
           <div className="topbar-actions">
             <span className="muted small">{s.saving ? '保存中…' : s.lastSavedAt ? `自動保存 ${s.lastSavedAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+            <button type="button" className="secondary" disabled={s.locked} title="配色、観戦の速さなど" onClick={() => store.navigate({ name: 'settings' })}>設定</button>
             <button type="button" className="secondary" disabled={s.locked} onClick={() => void store.saveNow()}>セーブ</button>
             <button type="button" className="secondary" disabled={s.locked}
               onClick={() => { void store.saveNow(); store.setGame(null, null); store.open({ name: 'title' }); }}>タイトルへ</button>

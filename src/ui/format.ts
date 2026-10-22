@@ -4,16 +4,16 @@ import type { AttributeKey, FormationName, Position, TeamInstructions } from '..
 import type { ClubSize, InboxCategory } from '../game/types';
 
 export const POSITION_LABEL: Record<Position, string> = {
-  GK: 'GK', CB: 'CB', SB: 'SB', DM: 'DM', CM: 'CM', AM: 'AM', WM: 'SM', W: 'WG', FW: 'FW',
+  GK: 'GK', CB: 'CB', SB: 'SB', WB: 'WB', DM: 'DM', CM: 'CM', AM: 'AM', WM: 'SM', W: 'WG', FW: 'FW',
 };
 
 export const POSITION_NAME: Record<Position, string> = {
-  GK: 'ゴールキーパー', CB: 'センターバック', SB: 'サイドバック', DM: '守備的MF', CM: 'センターMF',
+  GK: 'ゴールキーパー', CB: 'センターバック', SB: 'サイドバック', WB: 'ウイングバック', DM: '守備的MF', CM: 'センターMF',
   AM: '攻撃的MF', WM: 'サイドMF', W: 'ウイング', FW: 'フォワード',
 };
 
 /** 守備→中盤→前線の並び順 */
-export const POSITION_ORDER: Position[] = ['GK', 'CB', 'SB', 'DM', 'CM', 'WM', 'AM', 'W', 'FW'];
+export const POSITION_ORDER: Position[] = ['GK', 'CB', 'SB', 'WB', 'DM', 'CM', 'WM', 'AM', 'W', 'FW'];
 
 export const ATTRIBUTE_LABEL: Record<AttributeKey, string> = {
   shooting: 'シュート', passing: 'パス', dribbling: 'ドリブル', crossing: 'クロス', firstTouch: 'トラップ',
@@ -48,7 +48,7 @@ export const INSTRUCTION_LABELS: { key: keyof TeamInstructions; label: string; l
   { key: 'tempo', label: '攻めのテンポ', low: '遅い', high: '速い' },
 ];
 
-export const FORMATIONS_LIST: FormationName[] = ['4-4-2', '4-3-3', '4-2-3-1'];
+export { FORMATION_NAMES as FORMATIONS_LIST } from '../engine/formations';
 
 export const SIZE_LABEL: Record<ClubSize, string> = { large: '大', medium: '中', small: '小' };
 

@@ -37,7 +37,8 @@ export const SIZE_PROFILE: Record<ClubSize, {
 /** 規模ごとのクラブ数（大4・中10・小4） */
 const SIZE_COUNTS: [ClubSize, number][] = [['large', 4], ['medium', 10], ['small', 4]];
 
-const FORMATION_CHOICES: FormationName[] = ['4-4-2', '4-3-3', '4-2-3-1'];
+/** AIのクラブの形。4バックの3つを多めにし、フェーズ3.5で足した形も使う */
+const FORMATION_CHOICES: FormationName[] = ['4-4-2', '4-4-2', '4-3-3', '4-3-3', '4-2-3-1', '4-2-3-1', '4-1-4-1', '3-4-2-1', '3-5-2'];
 
 const between = (rng: Rng, [lo, hi]: [number, number]): number => lo + rng.next() * (hi - lo);
 
