@@ -64,8 +64,11 @@ export function downloadSave(state: GameState): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = `xi-architect_${club?.shortName ?? 'save'}_${state.date}.json`;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // すぐに消すと、ブラウザによってはファイル名が付かずにダウンロードされるので、少し待つ
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /** ファイルから読み込んで、新しいセーブ枠に入れる */

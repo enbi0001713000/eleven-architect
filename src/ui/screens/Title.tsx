@@ -1,6 +1,7 @@
 // タイトル画面：新しいゲーム、続きから、ファイルから読み込む、設定
 
 import { useEffect, useRef, useState } from 'react';
+import { APP_VERSION, ISSUES_URL } from '../about';
 import { formatDate } from '../format';
 import { deleteSave, downloadSave, importSave, listSaves, loadSave, type SaveRecord } from '../storage';
 import { store } from '../store';
@@ -49,7 +50,7 @@ export function Title() {
           <button type="button" className="primary large" onClick={() => store.open({ name: 'newGame' })}>新しいゲーム</button>
           <button type="button" className="secondary" onClick={() => fileInput.current?.click()}>ファイルから読み込む</button>
           <button type="button" className="secondary" onClick={() => store.navigate({ name: 'settings' })}>設定</button>
-          <button type="button" className="secondary" disabled title="フェーズ4以降で追加">エディタ（準備中）</button>
+          <button type="button" className="secondary" disabled title="1.1以降で追加">エディタ（準備中）</button>
         </div>
         <input ref={fileInput} type="file" accept="application/json,.json" hidden
           onChange={(e) => void onImport(e.target.files?.[0])} />
@@ -78,6 +79,13 @@ export function Title() {
             </li>
           ))}
         </ul>
+
+        <div className="title-notes muted small">
+          <p>PCのブラウザ向けです（Chrome、Edge、Firefox、Safari の新しい版）。</p>
+          <p>セーブはこのブラウザの中にだけ残ります。ブラウザのデータを消すと消えるので、ときどき「書き出す」でファイルに残してください。別のPCで続けるときも、書き出したファイルを読み込みます。</p>
+          <p>舞台は日本風の架空の国のリーグです。クラブ、選手、人物は、実在のものとは関係ありません。</p>
+          <p>版 {APP_VERSION}　<a href={ISSUES_URL} target="_blank" rel="noreferrer">不具合や要望を知らせる</a></p>
+        </div>
       </div>
     </div>
   );

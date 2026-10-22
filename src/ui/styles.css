@@ -143,6 +143,8 @@ label.inline select, label.block select { color: var(--text); }
 .topbar-date { display: flex; flex-direction: column; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .content { padding: 18px; }
+.save-error { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 18px; border-bottom: 1px solid var(--draw); background: var(--warning-bg); color: var(--warning-text); }
+.save-error span { flex: 1 1 360px; }
 .page { max-width: 1400px; }
 .page-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .page-header h1 { margin: 0; }
@@ -265,6 +267,9 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 .title-card { width: min(760px, 100%); }
 .title-card h1 { font-size: 2rem; }
 .title-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; }
+.title-notes { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--border); line-height: 1.7; }
+.title-notes p { margin: 4px 0; }
+.title-notes a, .title-card a { color: var(--accent); }
 .save-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
 .save-open { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: none; text-align: left; flex: 1; }
 .save-actions { display: flex; gap: 6px; }

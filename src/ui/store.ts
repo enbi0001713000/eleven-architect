@@ -67,6 +67,8 @@ class Store {
   tutorialContext: TutorialId | null = null;
   saving = false;
   lastSavedAt: Date | null = null;
+  /** 最後の保存に失敗したときの理由（プライベートモード、容量不足など）。成功したら消す */
+  saveError: string | null = null;
   private version = 0;
   private listeners = new Set<() => void>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -114,6 +116,7 @@ class Store {
   setGame(game: GameState | null, slotId: string | null): void {
     this.game = game;
     this.slotId = slotId;
+    this.saveError = null;
     this.emit();
   }
 
@@ -260,6 +263,10 @@ class Store {
     try {
       await writeSave(this.slotId, this.game);
       this.lastSavedAt = new Date();
+      this.saveError = null;
+    } catch (e) {
+      const error = e as Error;
+      this.saveError = error.name === 'QuotaExceededError' ? '空き容量が足りません' : error.message || '理由はわかりません';
     } finally {
       this.saving = false;
       this.emit();

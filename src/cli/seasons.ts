@@ -163,6 +163,8 @@ interface WorldSummary {
   seed: number;
   goals: number[];
   champions: string[];
+  /** いちばん多く優勝したクラブの説明（規模と、自分のクラブかどうか） */
+  topChampion: string;
   championPoints: number[];
   start: { age: number; strength: number };
   end: { age: number; strength: number };
@@ -213,7 +215,7 @@ const state: GameState = startNewGame(world, 'テスト', myId);
 const startMoney = moneyBySize(state);
 const pastEvaluations: SeasonEvaluation[] = [];
 const summary: WorldSummary = {
-  seed, goals: [], champions: [], championPoints: [], start: snapshot(state, `世界${seed} 開始時`), end: { age: 0, strength: 0 },
+  seed, goals: [], champions: [], topChampion: '', championPoints: [], start: snapshot(state, `世界${seed} 開始時`), end: { age: 0, strength: 0 },
   deficits: [], ownerFunded: 0, verdicts: [], warnings: 0, dismissals: { midSeason: 0, seasonEnd: 0 }, trust: [], aiSackings: [],
   money: Object.fromEntries(SIZES.map((size) => [size, { start: startMoney[size].balance, end: 0, debt: 0, payrollStart: startMoney[size].payroll, payrollEnd: 0 }])) as WorldSummary['money'],
   contracts: { last: null, moves: [], unsigned: [], squadMin: Infinity, squadMax: 0 },
@@ -322,7 +324,7 @@ for (let year = 0; year < years; year++) {
   }
   const joined = leaguePlayers(state).filter((p) => !idsBefore.has(p.id)).length;
   summary.goals.push(goals / matches);
-  summary.champions.push(state.clubs[table[0]?.clubId ?? '']?.name ?? '');
+  summary.champions.push(table[0]?.clubId ?? '');
   summary.championPoints.push(table[0]?.points ?? 0);
   summary.top3.push(table.slice(0, 3).map((r) => r.clubId));
   summary.bottom3.push(table.slice(-3).map((r) => r.clubId));
@@ -372,6 +374,11 @@ for (const size of SIZES) {
   summary.money[size].debt = endMoney[size].debt;
   summary.money[size].payrollEnd = endMoney[size].payroll;
 }
+const wins = new Map<string, number>();
+for (const id of summary.champions) wins.set(id, (wins.get(id) ?? 0) + 1);
+const [topId] = [...wins].sort((a, b) => b[1] - a[1])[0] ?? [''];
+const top = state.clubs[topId];
+summary.topChampion = top ? `${top.name}〔${SIZE_NAME[top.size]}${topId === myId ? '・自分のクラブ' : ''}〕` : '';
 return summary;
 }
 
@@ -383,7 +390,7 @@ if (worlds > 1 || quiet) {
     const counts = new Map<string, number>();
     for (const c of w.champions) counts.set(c, (counts.get(c) ?? 0) + 1);
     const most = Math.max(...counts.values());
-    console.log(`  世界${w.seed}：ゴール ${avg(w.goals).toFixed(2)}（${Math.min(...w.goals).toFixed(2)}〜${Math.max(...w.goals).toFixed(2)}）  優勝 ${counts.size}クラブ（最多${most}回、勝ち点 ${Math.min(...w.championPoints)}〜${Math.max(...w.championPoints)}）`
+    console.log(`  世界${w.seed}：ゴール ${avg(w.goals).toFixed(2)}（${Math.min(...w.goals).toFixed(2)}〜${Math.max(...w.goals).toFixed(2)}）  優勝 ${counts.size}クラブ（最多${most}回 ${w.topChampion}、勝ち点 ${Math.min(...w.championPoints)}〜${Math.max(...w.championPoints)}）`
       + `  平均年齢 ${w.start.age.toFixed(1)}→${w.end.age.toFixed(1)}  強さ ${w.start.strength.toFixed(2)}→${w.end.strength.toFixed(2)}`);
     const verdicts = new Map<string, number>();
     for (const v of w.verdicts) verdicts.set(v, (verdicts.get(v) ?? 0) + 1);
