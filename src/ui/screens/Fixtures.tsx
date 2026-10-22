@@ -9,8 +9,10 @@ import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
 import { formatDate } from '../format';
 import { scoreFor } from '../queries';
 import { useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 export function Fixtures({ initialRound }: { initialRound?: number }) {
+  useTutorial('fixtures');
   const game = useGame();
   const myId = game.manager.clubId;
   const [round, setRound] = useState(initialRound ?? Math.min(LEAGUE_RULES.rounds, Math.max(1, game.season.round - 1)));
@@ -20,7 +22,7 @@ export function Fixtures({ initialRound }: { initialRound?: number }) {
     <div className="page">
       <h1>日程と結果</h1>
       <div className="grid-2">
-        <Panel title="自分の試合">
+        <Panel title="自分の試合" tutorial="fixtures">
           <table className="data-table compact">
             <thead><tr><th>節</th><th>日付</th><th /><th>相手</th><th>結果</th></tr></thead>
             <tbody>

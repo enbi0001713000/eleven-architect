@@ -8,6 +8,7 @@ import { isSeasonOver } from '../../game/season';
 import { formatDate } from '../format';
 import { store, useStore, type Screen } from '../store';
 import { Emblem } from './Emblem';
+import { TutorialOverlay } from './TutorialOverlay';
 
 interface MenuItem {
   label: string;
@@ -56,9 +57,9 @@ export function Layout({ children }: { children: ReactNode }) {
             <div className="muted small">監督 {game.manager.name}</div>
           </div>
         </div>
-        <nav>
+        <nav data-tutorial="menu">
           {MENU.map((item) => (
-            <button key={item.label} type="button" disabled={s.locked}
+            <button key={item.label} type="button" disabled={s.locked} data-tutorial={item.phase ? undefined : `menu-${item.screen.name}`}
               className={`menu-item${activeLabel === item.label ? ' active' : ''}${item.phase ? ' later' : ''}`}
               onClick={() => store.open(item.screen)}>
               {item.label}
@@ -76,19 +77,21 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
           <div className="topbar-actions">
             <span className="muted small">{s.saving ? '保存中…' : s.lastSavedAt ? `自動保存 ${s.lastSavedAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+            <button type="button" className="secondary" data-tutorial="help" disabled={!s.tutorialContext || s.tutorial !== null}
+              title="この画面の説明をもう一度見る" aria-label="この画面の説明をもう一度見る" onClick={() => store.replayTutorial()}>？</button>
             <button type="button" className="secondary" disabled={s.locked} title="配色、観戦の速さなど" onClick={() => store.navigate({ name: 'settings' })}>設定</button>
             <button type="button" className="secondary" disabled={s.locked} onClick={() => void store.saveNow()}>セーブ</button>
             <button type="button" className="secondary" disabled={s.locked}
               onClick={() => { void store.saveNow(); store.setGame(null, null); store.open({ name: 'title' }); }}>タイトルへ</button>
             {!today && (
-              <button type="button" className="secondary" disabled={s.locked || dismissed} title="1日だけ進める" onClick={() => store.advanceOneDay()}>＋1日</button>
+              <button type="button" className="secondary" disabled={s.locked || dismissed || s.tutorial !== null} title="1日だけ進める" onClick={() => store.advanceOneDay()}>＋1日</button>
             )}
             {today ? (
               <button type="button" className="primary" disabled={s.locked || s.screen.name === 'match'} onClick={() => store.open({ name: 'match' })}>
                 試合へ ▶
               </button>
             ) : (
-              <button type="button" className="primary" disabled={s.locked || dismissed} onClick={() => store.advance()}>
+              <button type="button" className="primary" data-tutorial="advance" disabled={s.locked || dismissed || s.tutorial !== null} onClick={() => store.advance()}>
                 次の出来事まで進める ▶
               </button>
             )}
@@ -96,6 +99,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
         <main className="content">{children}</main>
       </div>
+      <TutorialOverlay />
     </div>
   );
 }

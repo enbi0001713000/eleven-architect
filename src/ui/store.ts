@@ -7,6 +7,7 @@ import { advanceDay, advanceToNextEvent } from '../game/progress';
 import type { GameState, InboxMessage } from '../game/types';
 import { applyTheme, loadSettings, saveSettings, type Settings } from './settings';
 import { writeSave } from './storage';
+import { TUTORIALS, type TutorialId } from './tutorials';
 
 export type Screen =
   | { name: 'title' }
@@ -55,6 +56,10 @@ class Store {
   settings: Settings = loadSettings();
   /** 試合中はメニューで他の画面に移れない */
   locked = false;
+  /** 今見せているチュートリアルと、その手順 */
+  tutorial: { id: TutorialId; step: number } | null = null;
+  /** 今の画面のチュートリアル（右上の「？」で見る） */
+  tutorialContext: TutorialId | null = null;
   saving = false;
   lastSavedAt: Date | null = null;
   private version = 0;
@@ -142,7 +147,7 @@ class Store {
 
   /** 「次の出来事まで進める」。大事な知らせが届いたら受信箱（か会話画面）を、試合の日ならホームを開く */
   advance(): void {
-    if (!this.game || this.locked || this.game.owner?.dismissed) return;
+    if (!this.game || this.locked || this.game.owner?.dismissed || this.tutorial) return;
     const before = this.game.nextMessageNumber;
     let reason = 'match';
     this.update((g) => {
@@ -150,15 +155,81 @@ class Store {
     });
     if (reason === 'message') this.openArrived(before);
     else this.open({ name: 'home' });
+    this.eventTutorials(before);
   }
 
   /** 1日だけ進める */
   advanceOneDay(): void {
-    if (!this.game || this.locked || this.game.owner?.dismissed) return;
+    if (!this.game || this.locked || this.game.owner?.dismissed || this.tutorial) return;
     const before = this.game.nextMessageNumber;
     this.update((g) => advanceDay(g));
     const important = this.game.inbox.some((m) => Number(m.id.slice(1)) >= before && m.important);
     if (important) this.openArrived(before);
+    this.eventTutorials(before);
+  }
+
+  // ---- チュートリアル（フェーズ3.5） ----
+
+  private seen(id: TutorialId): boolean {
+    return this.settings.tutorialSeen.includes(id);
+  }
+
+  /** 画面を開いたときに呼ぶ。まだ見ていない説明があれば始める（ids は見せたい順） */
+  screenTutorial(ids: TutorialId[]): void {
+    this.tutorialContext = ids[0] ?? null;
+    if (!this.game || this.tutorial || !this.settings.tutorials) {
+      this.emit();
+      return;
+    }
+    const id = ids.find((i) => !this.seen(i));
+    if (id) this.tutorial = { id, step: 0 };
+    this.emit();
+  }
+
+  /** 進めている間に起きた出来事の説明（初めての月の締め、ファンクラブの受付） */
+  private eventTutorials(since: number): void {
+    const arrived = (this.game?.inbox ?? []).filter((m) => Number(m.id.slice(1)) >= since);
+    const ids: TutorialId[] = [];
+    if (arrived.some((m) => m.from === '経理担当' && m.subject.includes('の収支'))) ids.push('monthClose');
+    if (arrived.some((m) => m.from === 'ファンクラブ担当' && m.subject.includes('受付を始めました'))) ids.push('fanClubWindow');
+    const id = ids.find((i) => !this.seen(i));
+    if (id && !this.tutorial && this.settings.tutorials) {
+      this.tutorial = { id, step: 0 };
+      this.emit();
+    }
+  }
+
+  /** 右上の「？」：今の画面の説明をもう一度見る */
+  replayTutorial(): void {
+    if (!this.tutorialContext) return;
+    this.tutorial = { id: this.tutorialContext, step: 0 };
+    this.emit();
+  }
+
+  tutorialStep(delta: number): void {
+    if (!this.tutorial) return;
+    const last = TUTORIALS[this.tutorial.id].steps.length - 1;
+    const step = this.tutorial.step + delta;
+    if (step > last) {
+      this.closeTutorial();
+      return;
+    }
+    this.tutorial = { ...this.tutorial, step: Math.max(0, step) };
+    this.emit();
+  }
+
+  /** 説明を閉じる（見たことにする） */
+  closeTutorial(): void {
+    const id = this.tutorial?.id;
+    this.tutorial = null;
+    if (id && !this.seen(id)) this.updateSettings({ tutorialSeen: [...this.settings.tutorialSeen, id] });
+    else this.emit();
+  }
+
+  /** チュートリアルをすべて切る（設定で戻せる） */
+  disableTutorials(): void {
+    this.tutorial = null;
+    this.updateSettings({ tutorials: false });
   }
 
   updateSettings(change: Partial<Settings>): void {

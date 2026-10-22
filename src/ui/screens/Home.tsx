@@ -18,8 +18,10 @@ import { Emblem } from '../components/Emblem';
 import { fanMoodLabel, formatDate, INBOX_CATEGORY_LABEL, POSITION_LABEL } from '../format';
 import { playedFixtures, scoreFor, topScorers } from '../queries';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 export function Home() {
+  useTutorial('start');
   const game = useGame();
   const myId = game.manager.clubId;
   const club = game.clubs[myId];
@@ -47,7 +49,7 @@ export function Home() {
     <div className="page home">
       <h1>ホーム</h1>
       <div className="grid-2">
-        <Panel title="次の試合">
+        <Panel title="次の試合" tutorial="home-next-match">
           {isSeasonOver(game) && (
             <div className="next-match">
               <p>今シーズンの全日程が終わりました。「次の出来事まで進める」で、シーズンの総括、引退の発表、新しい日程、新人の加入と進みます。</p>
@@ -127,7 +129,7 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="オーナーの評価" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
+        <Panel title="オーナーの評価" tutorial="home-owner" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
           {(() => {
             const owner = game.owner;
             const money = financeGoalStatus(game);

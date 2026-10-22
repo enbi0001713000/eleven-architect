@@ -13,10 +13,16 @@ export interface Settings {
   conversations: boolean;
   /** 配色（初めて遊ぶときは明るい配色） */
   theme: Theme;
+  /** チュートリアルを出す */
+  tutorials: boolean;
+  /** 見たチュートリアル（新しいゲームでも出さない） */
+  tutorialSeen: string[];
 }
 
 const KEY = 'soccer-manager:settings';
-const DEFAULTS: Settings = { matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light' };
+const DEFAULTS: Settings = {
+  matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [],
+};
 
 export function loadSettings(): Settings {
   try {

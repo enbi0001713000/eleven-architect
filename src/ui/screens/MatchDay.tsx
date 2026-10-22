@@ -26,6 +26,7 @@ import { FORMATIONS_LIST, formatDate, INSTRUCTION_LABELS, POSITION_LABEL, rating
 import type { CommentaryMode, MatchSpeed } from '../settings';
 import { simulateInBackground } from '../simClient';
 import { store, useGame, useStore } from '../store';
+import { useTutorial } from '../useTutorial';
 
 type Stage = 'preview' | 'loading' | 'pretalk' | 'live' | 'report';
 
@@ -58,6 +59,7 @@ function scoreUntil(result: MatchResult, half: 1 | 2, clock: number): [number, n
 }
 
 export function MatchDay() {
+  useTutorial('match');
   const game = useGame();
   const s = useStore();
   const myId = game.manager.clubId;

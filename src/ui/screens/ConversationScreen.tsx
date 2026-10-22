@@ -13,8 +13,15 @@ import { FINANCE_GOAL_LABEL, OWNER } from '../../game/ownerBalance';
 import type { Club, GameState, InboxMessage, PlayerRecord, SponsorOffer, ThanksDayScale } from '../../game/types';
 import { Conversation, type ConversationChoice, type ConversationLine, type Speaker } from '../components/Conversation';
 import { store, useGame, type Screen } from '../store';
+import type { TutorialId } from '../tutorials';
+import { useTutorial } from '../useTutorial';
 
 export type ConversationTopic = Extract<Screen, { name: 'conversation' }>;
+
+/** 初めてその話をするときの説明 */
+const TOPIC_TUTORIAL: Partial<Record<string, TutorialId>> = {
+  sponsorOffer: 'sponsorOffer', sponsor: 'sponsorOffer', ownerWarning: 'ownerWarning', fanThanksDay: 'thanksDay',
+};
 
 const them = (text: string): ConversationLine => ({ who: 'them', text });
 const me = (text: string): ConversationLine => ({ who: 'me', text });
@@ -33,9 +40,10 @@ export function ConversationScreen({ screen }: { screen: ConversationTopic }) {
   useEffect(() => {
     if (message && !message.read) store.update((g) => markRead(g, message.id));
   }, [message]);
+  const topic = message?.topic ?? screen.topic;
+  useTutorial('conversation', topic ? TOPIC_TUTORIAL[topic] : undefined);
 
   if (!club) return null;
-  const topic = message?.topic ?? screen.topic;
   let body;
   if (topic === 'sponsorOffer' || topic === 'sponsor') body = <SponsorTalk game={game} club={club} message={message} />;
   else if (topic === 'budget' || topic === 'budgetIncrease' || topic === 'goals') body = <OwnerBudgetTalk game={game} club={club} message={message} goals={topic === 'goals'} />;

@@ -7,8 +7,10 @@ import type { InboxMessage } from '../../game/types';
 import { Panel } from '../components/bits';
 import { formatDate, INBOX_CATEGORY_LABEL } from '../format';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 export function Inbox({ initialId }: { initialId?: string }) {
+  useTutorial('inbox');
   const game = useGame();
   const [onlyUnread, setOnlyUnread] = useState(false);
   const messages = game.inbox.filter((m) => !onlyUnread || !m.read || m.id === initialId);
@@ -35,7 +37,7 @@ export function Inbox({ initialId }: { initialId?: string }) {
       </div>
       {game.inbox.length === 0 ? <Panel><p className="muted">知らせはまだありません。</p></Panel> : (
         <div className="inbox">
-          <ul className="inbox-list">
+          <ul className="inbox-list" data-tutorial="inbox-list">
             {messages.map((m) => (
               <li key={m.id}>
                 <button type="button" className={`inbox-item${m.read ? '' : ' unread'}${m.id === selectedId ? ' selected' : ''}`} onClick={() => open(m)}>
@@ -69,7 +71,7 @@ function MessageView({ message }: { message: InboxMessage }) {
   const pendingSponsor = action?.kind === 'sponsorOffer' && !message.resolved && (game.clubs[game.manager.clubId]?.finance.sponsorOffers.length ?? 0) > 0;
 
   return (
-    <Panel title={message.subject}>
+    <Panel title={message.subject} tutorial="inbox-body">
       <div className="muted small" style={{ marginBottom: 10 }}>
         {formatDate(message.date)}　差出人：{message.from}　{INBOX_CATEGORY_LABEL[message.category]}
       </div>

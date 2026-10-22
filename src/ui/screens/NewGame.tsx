@@ -17,12 +17,15 @@ export function NewGame() {
   const [name, setName] = useState('');
   const [clubId, setClubId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 初めて遊ぶ人は、チュートリアルを最初から見る
+  const [tutorial, setTutorial] = useState(() => store.settings.tutorialSeen.length === 0 || !store.settings.tutorials);
   const world: GameState = useMemo(() => createWorld(seed), [seed]);
   const clubs = Object.values(world.clubs).sort((a, b) => SIZE_ORDER[a.size] - SIZE_ORDER[b.size] || b.level - a.level);
 
   const start = async () => {
     if (!clubId || !name.trim()) return;
     setBusy(true);
+    if (tutorial) store.updateSettings({ tutorials: true, tutorialSeen: [] });
     const state = startNewGame(createWorld(seed), name.trim(), clubId);
     const id = newSlotId();
     try {
@@ -76,6 +79,10 @@ export function NewGame() {
       </div>
 
       <div className="page-footer">
+        <label className="inline">
+          <input type="checkbox" checked={tutorial} onChange={(e) => setTutorial(e.target.checked)} />
+          チュートリアルを最初から見る
+        </label>
         {!name.trim() && <span className="muted">監督の名前を入れてください</span>}
         {name.trim() && !clubId && <span className="muted">クラブを選んでください</span>}
         <button type="button" className="primary large" disabled={!clubId || !name.trim() || busy} onClick={() => void start()}>

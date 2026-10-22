@@ -50,9 +50,9 @@ export function Rating({ value }: { value: number | null }) {
   return <span className={`rating ${ratingTone(value)}`}>{value.toFixed(2)}</span>;
 }
 
-export function Panel({ title, children, actions }: { title?: ReactNode; children: ReactNode; actions?: ReactNode }) {
+export function Panel({ title, children, actions, tutorial }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; tutorial?: string }) {
   return (
-    <section className="panel">
+    <section className="panel" data-tutorial={tutorial}>
       {(title || actions) && (
         <header className="panel-header">
           {title && <h2>{title}</h2>}

@@ -1,4 +1,4 @@
-// 設定：配色、観戦の速さ、実況の表示、会話画面（遊ぶ人ごとにブラウザへ保存）
+// 設定：配色、観戦の速さ、実況の表示、会話画面、チュートリアル（遊ぶ人ごとにブラウザへ保存）
 
 import type { CommentaryMode, MatchSpeed, Theme } from '../settings';
 import { store, useStore } from '../store';
@@ -39,6 +39,16 @@ export function Settings() {
             <input type="checkbox" checked={s.settings.conversations} onChange={(e) => store.updateSettings({ conversations: e.target.checked })} />
             大事な出来事（オーナーの予算、スポンサーの提案、選手の申し出など）を会話画面で開く
           </label>
+          <label className="inline">
+            <input type="checkbox" checked={s.settings.tutorials} onChange={(e) => store.updateSettings({ tutorials: e.target.checked })} />
+            チュートリアル（画面や機能を初めて使うときの説明）を出す
+          </label>
+          <div>
+            <button type="button" className="secondary small" disabled={s.settings.tutorialSeen.length === 0}
+              onClick={() => store.updateSettings({ tutorials: true, tutorialSeen: [] })}>
+              見た説明をリセットする（もう一度、最初から出す）
+            </button>
+          </div>
         </div>
       </section>
     </div>

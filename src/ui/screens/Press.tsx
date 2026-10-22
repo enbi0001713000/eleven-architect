@@ -5,10 +5,12 @@ import { answerPress, pressQuestions } from '../../game/talks';
 import { Panel } from '../components/bits';
 import { Conversation, type ConversationLine } from '../components/Conversation';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 const spoken = (label: string): string => label.match(/「(.+?)」/)?.[1] ?? label;
 
 export function Press({ fixtureId }: { fixtureId: string }) {
+  useTutorial('press');
   const game = useGame();
   const fixture = game.fixtures.find((f) => f.id === fixtureId);
   const message = game.inbox.find((m) => m.action?.kind === 'press' && m.action.fixtureId === fixtureId);

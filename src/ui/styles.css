@@ -273,7 +273,7 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 .club-card { display: flex; gap: 12px; align-items: center; text-align: left; background: var(--panel); padding: 10px 12px; }
 .club-card.selected { border-color: var(--accent); background: var(--selected); }
 .club-card-text { display: flex; flex-direction: column; gap: 2px; }
-.settings { display: flex; gap: 20px; }
+.settings { display: flex; gap: 14px 20px; flex-wrap: wrap; align-items: flex-start; }
 
 /* ホーム */
 .next-match-vs { display: flex; align-items: center; gap: 14px; margin: 10px 0; }
@@ -419,3 +419,23 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 .fan-event:last-child { border-bottom: none; }
 .fan-event > button, .fan-event > span { flex: none; }
 .data-table td.wrap { white-space: normal; min-width: 160px; }
+
+/* チュートリアル（フェーズ3.5）。説明している部品を光らせ、ほかを少し暗くする。下の画面はそのまま押せる */
+.tutorial { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
+.tutorial-dim { position: fixed; inset: 0; background: rgba(10, 14, 22, 0.35); }
+.tutorial-spotlight {
+  position: fixed; border-radius: 10px; border: 3px solid #f5b800;
+  box-shadow: 0 0 0 9999px rgba(10, 14, 22, 0.4), 0 0 18px 4px rgba(245, 184, 0, 0.6);
+  transition: top 0.2s, left 0.2s, width 0.2s, height 0.2s;
+}
+.tutorial-card {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(600px, calc(100vw - 32px));
+  background: var(--panel); color: var(--text); border: 2px solid var(--accent-strong); border-radius: 12px;
+  padding: 14px 16px; pointer-events: auto; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.tutorial-card.top { top: 70px; bottom: auto; }
+.tutorial-head { display: flex; align-items: center; gap: 10px; }
+.tutorial-count { margin-left: auto; }
+.tutorial-text { margin: 10px 0 12px; line-height: 1.75; font-size: 1.02rem; }
+.tutorial-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tutorial-spacer { flex: 1; }

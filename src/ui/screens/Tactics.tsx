@@ -16,8 +16,10 @@ import type { PlayerRecord } from '../../game/types';
 import { Condition, Panel, StatusTags } from '../components/bits';
 import { FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL } from '../format';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 export function Tactics() {
+  useTutorial('tactics');
   const game = useGame();
   const clubId = game.manager.clubId;
   const club = game.clubs[clubId];
@@ -94,7 +96,7 @@ export function Tactics() {
     <div className="page tactics">
       <div className="toolbar">
         <h1>戦術</h1>
-        <label className="inline">
+        <label className="inline" data-tutorial="formation">
           フォーメーション
           <select value={tactics.formation} onChange={(e) => changeFormation(e.target.value as FormationName)}>
             {FORMATIONS_LIST.map((f) => <option key={f} value={f}>{f}（熟成度 {Math.round(club.familiarity.formations[f] ?? 0)}%）</option>)}
@@ -106,7 +108,7 @@ export function Tactics() {
         }}>
           自動で選ぶ
         </button>
-        <button type="button" className="secondary" title="先発の全員を、一番向いている役割にする" onClick={() =>
+        <button type="button" className="secondary" data-tutorial="fit-roles" title="先発の全員を、一番向いている役割にする" onClick={() =>
           setTactics({ roles: bestRoles(tactics.formation, selection.lineup.map(byId)) })}>
           役割を選手に合わせる
         </button>
@@ -128,7 +130,7 @@ export function Tactics() {
 
       <div className="tactics-grid">
         <div>
-          <div className="pitch">
+          <div className="pitch" data-tutorial="pitch">
             <div className="pitch-lines" />
             {slots.map((s, i) => {
               const p = byId(selection.lineup[i]);
@@ -179,7 +181,7 @@ export function Tactics() {
         <div className="tactics-side">
           {slot && (
             <Panel title={`${POSITION_LABEL[slot.position]} の枠${slotPlayer ? `：${slotPlayer.name}` : ''}`}>
-              <div className="role-options">
+              <div className="role-options" data-tutorial="roles">
                 {ROLE_OPTIONS[slot.position].map((role) => {
                   const fit = slotPlayer ? roleFit(slotPlayer, role, slot.position) : null;
                   return (
@@ -221,7 +223,7 @@ export function Tactics() {
             </Panel>
           )}
 
-          <Panel title="チーム指示">
+          <Panel title="チーム指示" tutorial="instructions">
             {INSTRUCTION_LABELS.map((item) => (
               <div key={item.key} className="instruction">
                 <span className="instruction-label">{item.label}</span>

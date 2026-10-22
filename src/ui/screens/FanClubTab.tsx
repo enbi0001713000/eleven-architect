@@ -8,6 +8,7 @@ import { TrendChart } from '../components/BalanceChart';
 import { Panel } from '../components/bits';
 import { formatDate } from '../format';
 import { store } from '../store';
+import { useTutorial } from '../useTutorial';
 
 const people = (n: number): string => `${Math.round(n).toLocaleString('ja-JP')}人`;
 const yen = (n: number): string => `${n.toLocaleString('ja-JP')}円`;
@@ -19,6 +20,7 @@ const EVENT_TEXT: Record<HeldEventKind, string> = {
 };
 
 export function FanClubTab({ game, club }: { game: GameState; club: Club }) {
+  useTutorial('fanClub');
   const fc = club.fanClub;
   const total = totalMembers(fc.members);
   const thisYear = yearToDate(club.finance).income.fanClub ?? 0;

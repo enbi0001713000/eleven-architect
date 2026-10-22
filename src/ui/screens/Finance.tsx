@@ -12,6 +12,7 @@ import { BalanceChart, type BalancePoint } from '../components/BalanceChart';
 import { ClubLink, Panel } from '../components/bits';
 import { formatDate } from '../format';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 type Tab = 'overview' | 'budget' | 'sponsors' | 'tickets' | 'loans' | 'history';
 const TABS: { key: Tab; label: string }[] = [
@@ -32,6 +33,7 @@ const Signed = ({ yen }: { yen: number }) => <span className={yen < 0 ? 'tone-lo
 const monthText = (month: string): string => `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
 
 export function Finance({ initialTab }: { initialTab?: Tab }) {
+  useTutorial('finance');
   const game = useGame();
   const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
   const club = game.clubs[game.manager.clubId];
@@ -40,7 +42,7 @@ export function Finance({ initialTab }: { initialTab?: Tab }) {
     <div className="page">
       <div className="toolbar">
         <h1>財務</h1>
-        <div className="segmented">
+        <div className="segmented" data-tutorial="finance-tabs">
           {TABS.map((t) => (
             <button key={t.key} type="button" className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>{t.label}</button>
           ))}
@@ -62,7 +64,7 @@ function Summary({ game, club }: { game: GameState; club: Club }) {
   const year = yearToDate(fin);
   const payroll = payrollOf(game, club.id);
   return (
-    <div className="stat-tiles">
+    <div className="stat-tiles" data-tutorial="finance-tiles">
       <div className="stat-tile">
         <span className="muted small">手元のお金</span>
         <strong className={fin.balance < 0 ? 'tone-low' : ''}>{yenText(fin.balance)}</strong>

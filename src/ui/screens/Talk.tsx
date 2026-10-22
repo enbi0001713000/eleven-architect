@@ -12,11 +12,13 @@ import { Morale, Panel } from '../components/bits';
 import { Conversation, type ConversationLine } from '../components/Conversation';
 import { POSITION_NAME } from '../format';
 import { store, useGame } from '../store';
+import { useTutorial } from '../useTutorial';
 
 /** 「…」の中だけを、監督のセリフとして使う */
 const spoken = (label: string): string => label.match(/「(.+?)」/)?.[1] ?? label;
 
 export function Talk({ playerId, requestId }: { playerId: string; requestId?: string }) {
+  useTutorial('talk');
   const game = useGame();
   const player = game.players[playerId];
   const request = requestId ? game.requests.find((r) => r.id === requestId) : undefined;
