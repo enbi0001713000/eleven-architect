@@ -1,6 +1,7 @@
-// 戦術：フォーメーション、先発と控え、役割、チーム指示、キャプテンとキッカー（要件定義書「戦術と観戦」）
+// 戦術：戦い方、フォーメーション、先発と控え、役割、チーム指示、キャプテンとキッカー（要件定義書「戦術と観戦」）。
+// 1.1：戦い方のカードを上に置き、6つのチーム指示は「詳しく」にしまう。選手はドラッグでも入れ替えられる（押して入れ替えるのも残す）。
 
-import { useState } from 'react';
+import { useState, type DragEvent } from 'react';
 import { FORMATIONS } from '../../engine/formations';
 import { overallRating, positionFit, positionRating } from '../../engine/ratings';
 import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot, roleLabel } from '../../engine/roles';
@@ -9,14 +10,31 @@ import { teamFamiliarity } from '../../game/condition';
 import { instructionFamiliarity } from '../../game/progress';
 import { bestRoles, ROLE_FIT_MARK, ROLE_FIT_TEXT, roleFit } from '../../game/roleFit';
 import { LEAGUE_RULES } from '../../game/rules';
+import { nearestStyle } from '../../game/styles';
 import {
   arrangeForFormation, autoSelect, clubPlayers, isAvailable, isForeign, repairSelection, selectionWarnings, unavailableReason, validateSelection,
 } from '../../game/selection';
 import type { PlayerRecord } from '../../game/types';
 import { Condition, Panel, PosChip, StatusTags } from '../components/bits';
+import { PlayerFace } from '../components/Face';
+import { StylePicker } from '../components/StylePicker';
+import { Term } from '../components/Term';
 import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, ATTRIBUTE_SHORT, attributeTone, FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
+
+/** ドラッグで運ぶ選手のID */
+const DRAG_TYPE = 'text/plain';
+
+function dragFrom(playerId: string) {
+  return {
+    draggable: true,
+    onDragStart: (e: DragEvent) => {
+      e.dataTransfer.setData(DRAG_TYPE, playerId);
+      e.dataTransfer.effectAllowed = 'move';
+    },
+  };
+}
 
 export function Tactics() {
   useTutorial('tactics');
@@ -26,6 +44,8 @@ export function Tactics() {
   const [selectedSlot, setSelectedSlot] = useState<number>(0);
   /** 能力を比べる候補（枠の選手と並べて見せる） */
   const [compareId, setCompareId] = useState<string | null>(null);
+  /** ドラッグ中に、落とせる場所の上にいるとき（枠の番号か 'bench'） */
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   if (!club) return null;
 
   const tactics = club.tactics;
@@ -59,11 +79,11 @@ export function Tactics() {
     });
   };
 
-  /** 選んだ枠に選手を入れる。すでに先発か控えにいる選手なら入れ替える */
-  const assign = (playerId: string) => {
+  /** 枠に選手を入れる。すでに先発か控えにいる選手なら入れ替える */
+  const assign = (playerId: string, slotIndex: number = selectedSlot) => {
     const lineup = [...selection.lineup];
     const bench = [...selection.bench];
-    const current = lineup[selectedSlot];
+    const current = lineup[slotIndex];
     const inLineup = lineup.indexOf(playerId);
     const inBench = bench.indexOf(playerId);
     if (inLineup >= 0) {
@@ -72,8 +92,61 @@ export function Tactics() {
       if (current) bench[inBench] = current;
       else bench.splice(inBench, 1);
     }
-    lineup[selectedSlot] = playerId;
+    lineup[slotIndex] = playerId;
     save(lineup.filter((id) => id !== ''), bench);
+  };
+
+  const selectedNow = (id: string) => selection.lineup.includes(id) || selection.bench.includes(id);
+
+  /** 控えに落とした。控えの選手の上なら入れ替え、空いたところなら控えに加える */
+  const dropOnBench = (playerId: string, targetId?: string) => {
+    const p = byId(playerId);
+    if (!p || (!selectedNow(playerId) && !isAvailable(p))) return;
+    const lineup = [...selection.lineup];
+    const bench = [...selection.bench];
+    const inLineup = lineup.indexOf(playerId);
+    const inBench = bench.indexOf(playerId);
+    const target = targetId ? bench.indexOf(targetId) : -1;
+    if (target >= 0 && targetId !== playerId) {
+      if (inLineup >= 0) {
+        lineup[inLineup] = targetId as string;
+        bench[target] = playerId;
+      } else if (inBench >= 0) {
+        [bench[inBench], bench[target]] = [bench[target] as string, bench[inBench] as string];
+      } else {
+        bench[target] = playerId;
+      }
+    } else if (inLineup < 0 && inBench < 0 && bench.length < LEAGUE_RULES.benchSize) {
+      bench.push(playerId);
+    } else {
+      return;
+    }
+    save(lineup, bench);
+  };
+
+  const dropOn = (key: string, onDrop: (playerId: string) => void) => ({
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (dropTarget !== key) setDropTarget(key);
+    },
+    onDragLeave: () => setDropTarget(null),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDropTarget(null);
+      const id = e.dataTransfer.getData(DRAG_TYPE);
+      if (id) onDrop(id);
+    },
+  });
+
+  const dropOnSlot = (slotIndex: number, playerId: string) => {
+    const p = byId(playerId);
+    if (!p || (!selectedNow(playerId) && !isAvailable(p))) return;
+    if (selection.lineup[slotIndex] === playerId) return;
+    assign(playerId, slotIndex);
+    setSelectedSlot(slotIndex);
+    setCompareId(null);
   };
 
   const setRole = (role: Role) => {
@@ -133,6 +206,8 @@ export function Tactics() {
       )}
       {warnings.length > 0 && <div className="warning small">{warnings.map((w) => <div key={w}>{w}</div>)}</div>}
 
+      <StylePicker game={game} clubId={clubId} />
+
       <div className="tactics-grid">
         <div>
           <div className="pitch" data-tutorial="pitch">
@@ -144,11 +219,14 @@ export function Tactics() {
               const problem = !p || !isAvailable(p) || fit < 0.85 || p.status.injury !== null;
               return (
                 <button key={i} type="button"
-                  className={`pitch-slot${selectedSlot === i ? ' selected' : ''}${problem ? ' problem' : ''}`}
+                  className={`pitch-slot${selectedSlot === i ? ' selected' : ''}${problem ? ' problem' : ''}${dropTarget === `slot${i}` ? ' drop-target' : ''}`}
                   style={{ top: `${(1 - s.x / 4.6) * 88 + 4}%`, left: `${50 + (s.y - 2.5) * 19}%` }}
+                  title="押して選ぶ。選手をドラッグして、別の枠や控えに落とすと入れ替わる"
+                  {...(p ? dragFrom(p.id) : {})}
+                  {...dropOn(`slot${i}`, (id) => dropOnSlot(i, id))}
                   onClick={() => { setSelectedSlot(i); setCompareId(null); }}>
                   <span className="slot-pos">{POSITION_LABEL[s.position]}</span>
-                  <span className="slot-name">{p ? p.name.split(' ')[0]?.split('・')[0] : '（空き）'}</span>
+                  <span className="slot-name">{p && <PlayerFace game={game} player={p} size={22} />}{p ? p.name.split(' ')[0]?.split('・')[0] : '（空き）'}</span>
                   <span className="slot-role">{p && <span className={`fit-mark fit-${roleFit(p, role, s.position)}`}>{ROLE_FIT_MARK[roleFit(p, role, s.position)]}</span>}{roleLabel(role, s.position)}</span>
                   {p && <span className="slot-rating">{positionRating(p, s.position).toFixed(1)}　<Condition value={p.status.condition} /></span>}
                 </button>
@@ -157,12 +235,14 @@ export function Tactics() {
           </div>
 
           <Panel title={`控え（${selection.bench.length}/${LEAGUE_RULES.benchSize}）`}>
-            <ul className="bench-list">
+            <ul className={`bench-list${dropTarget === 'bench' ? ' drop-target' : ''}`} {...dropOn('bench', (id) => dropOnBench(id))}>
               {selection.bench.map((id) => {
                 const p = byId(id);
                 if (!p) return null;
                 return (
-                  <li key={id}>
+                  <li key={id} className={dropTarget === `bench:${id}` ? 'drop-target' : ''} {...dragFrom(id)} {...dropOn(`bench:${id}`, (dragged) => dropOnBench(dragged, id))}>
+                    <span className="drag-handle" aria-hidden="true">⋮⋮</span>
+                    <PlayerFace game={game} player={p} size={24} />
                     <PosChip position={p.position} />
                     <span>{p.name}</span>
                     <span className="muted small">{overallRating(p).toFixed(1)}</span>
@@ -174,7 +254,7 @@ export function Tactics() {
             </ul>
             {selection.bench.length < LEAGUE_RULES.benchSize && (
               <select value="" onChange={(e) => e.target.value && save(selection.lineup, [...selection.bench, e.target.value])}>
-                <option value="">控えに加える…</option>
+                <option value="">控えに加える…（候補の表からドラッグしても加えられます）</option>
                 {notSelected.filter(isAvailable).map((p) => (
                   <option key={p.id} value={p.id}>{POSITION_LABEL[p.position]} {p.name}（{overallRating(p).toFixed(1)}）</option>
                 ))}
@@ -212,7 +292,9 @@ export function Tactics() {
                     const where = selection.lineup.includes(p.id) ? '先発' : selection.bench.includes(p.id) ? '控え' : '';
                     return (
                       <tr key={p.id} className={`clickable${p.id === slotPlayer?.id ? ' highlight' : ''}${p.id === compareId ? ' compared' : ''}`}
-                        title="押すと、下の表で能力を比べられます" onClick={() => setCompareId(p.id === slotPlayer?.id ? null : p.id)}>
+                        title="押すと、下の表で能力を比べられます。ピッチの枠や控えにドラッグすると入れ替わります"
+                        {...(isAvailable(p) || selectedNow(p.id) ? dragFrom(p.id) : {})}
+                        onClick={() => setCompareId(p.id === slotPlayer?.id ? null : p.id)}>
                         <td><PosChip position={p.position} /></td>
                         <td>{p.name}{isForeign(p) ? <span className="muted small">（外）</span> : null}</td>
                         <td className="num">{positionRating(p, slot.position).toFixed(1)}</td>
@@ -238,6 +320,13 @@ export function Tactics() {
           )}
 
           <Panel title="チーム指示" tutorial="instructions">
+            <p className="small">
+              今の指示：<strong>{nearestStyle(tactics.instructions)?.name ?? '自分で決めた指示'}</strong>
+              {nearestStyle(tactics.instructions) && INSTRUCTION_LABELS.some((item) => tactics.instructions[item.key] !== nearestStyle(tactics.instructions)?.instructions[item.key]) ? 'に近い' : ''}
+              <span className="muted">　指示を変えると、指示の<Term k="熟成度">熟成度</Term>が少し下がります。</span>
+            </p>
+            <details className="more">
+              <summary>詳しく：6つの指示を1つずつ決める</summary>
             {INSTRUCTION_LABELS.map((item) => (
               <div key={item.key} className="instruction">
                 <span className="instruction-label">{item.label}</span>
@@ -251,6 +340,7 @@ export function Tactics() {
                 </div>
               </div>
             ))}
+            </details>
           </Panel>
 
           <Panel title="キャプテンとキッカー">

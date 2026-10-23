@@ -1,6 +1,6 @@
 // 設定：配色、観戦の速さ、実況の表示、会話画面、チュートリアル（遊ぶ人ごとにブラウザへ保存）
 
-import type { CommentaryMode, MatchSpeed, Theme } from '../settings';
+import type { CommentaryMode, MatchSpeed, Theme, UiScale } from '../settings';
 import { store, useStore } from '../store';
 
 export function Settings() {
@@ -18,6 +18,13 @@ export function Settings() {
             <select value={s.settings.theme} onChange={(e) => store.updateSettings({ theme: e.target.value as Theme })}>
               <option value="light">明るい</option>
               <option value="dark">暗い</option>
+            </select>
+          </label>
+          <label>
+            文字の大きさ
+            <select value={s.settings.uiScale} onChange={(e) => store.updateSettings({ uiScale: e.target.value as UiScale })}>
+              <option value="normal">標準</option>
+              <option value="large">大きめ</option>
             </select>
           </label>
           <label>
@@ -47,6 +54,10 @@ export function Settings() {
           <label className="inline">
             <input type="checkbox" checked={s.settings.conversations} onChange={(e) => store.updateSettings({ conversations: e.target.checked })} />
             大事な出来事（オーナーの予算、スポンサーの提案、選手の申し出など）を会話画面で開く
+          </label>
+          <label className="inline">
+            <input type="checkbox" checked={s.settings.coach} onChange={(e) => store.updateSettings({ coach: e.target.checked })} />
+            アシスタントコーチが、画面を開いたときに一言アドバイスする
           </label>
           <label className="inline">
             <input type="checkbox" checked={s.settings.tutorials} onChange={(e) => store.updateSettings({ tutorials: e.target.checked })} />

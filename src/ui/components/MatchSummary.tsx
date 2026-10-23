@@ -1,18 +1,20 @@
 // 試合のまとめ（スタッツ、得点経過、評価点）。試合後のレポートと、日程画面の結果表示で使う。
 
 import type { MatchEvent, TeamStats } from '../../engine/types';
+import type { ReactNode } from 'react';
 import type { GameState } from '../../game/types';
 import { Emblem } from './Emblem';
+import { Term } from './Term';
 
 const pct = (a: number, b: number) => `${Math.round((a / Math.max(1, a + b)) * 100)}%`;
 
 export function StatsTable({ stats, names }: { stats: [TeamStats, TeamStats]; names: [string, string] }) {
   const [h, a] = stats;
-  const rows: [string, string, string][] = [
+  const rows: [string, string, string, ReactNode?][] = [
     ['ボール支配率', pct(h.possessionSeconds, a.possessionSeconds), pct(a.possessionSeconds, h.possessionSeconds)],
     ['シュート', `${h.shots}`, `${a.shots}`],
     ['枠内シュート', `${h.shotsOnTarget}`, `${a.shotsOnTarget}`],
-    ['xG（ゴール期待値）', h.xg.toFixed(2), a.xg.toFixed(2)],
+    ['xG（ゴール期待値）', h.xg.toFixed(2), a.xg.toFixed(2), <Term k="xG">xG（ゴール期待値）</Term>],
     ['パス成功率', `${Math.round((h.passesCompleted / Math.max(1, h.passes)) * 100)}%`, `${Math.round((a.passesCompleted / Math.max(1, a.passes)) * 100)}%`],
     ['パス', `${h.passes}`, `${a.passes}`],
     ['タックル', `${h.tackles}`, `${a.tackles}`],
@@ -27,8 +29,8 @@ export function StatsTable({ stats, names }: { stats: [TeamStats, TeamStats]; na
     <table className="stats-table">
       <thead><tr><th className="num">{names[0]}</th><th /><th>{names[1]}</th></tr></thead>
       <tbody>
-        {rows.map(([label, home, away]) => (
-          <tr key={label}><td className="num">{home}</td><td className="stat-label">{label}</td><td>{away}</td></tr>
+        {rows.map(([label, home, away, shown]) => (
+          <tr key={label}><td className="num">{home}</td><td className="stat-label">{shown ?? label}</td><td>{away}</td></tr>
         ))}
       </tbody>
     </table>

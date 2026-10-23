@@ -1,6 +1,6 @@
 // 会話画面：オーナー、営業担当、経理担当、ファンクラブ担当とのやり取り。
 // 受信箱の知らせ（目標と予算、オーナーの警告、解任、お金が足りない、スポンサーの提案、ファン感謝デーの提案）と、
-// 財務やクラブの画面からの相談（予算の増額、借り入れ、目標の話し合い、ファンクラブのイベント）を会話で見せる。
+// 経営の画面からの相談（予算の増額、借り入れ、目標の話し合い、ファンクラブのイベント）を会話で見せる。
 
 import { useEffect, useState } from 'react';
 import { acceptOffer, declineOffer } from '../../game/career';
@@ -88,7 +88,7 @@ const messageLines = (message: InboxMessage): ConversationLine[] =>
 
 const BackButtons = ({ finance }: { finance?: boolean }) => (
   <div className="button-row">
-    {finance && <button type="button" className="secondary" onClick={() => store.open({ name: 'finance' })}>財務の画面へ</button>}
+    {finance && <button type="button" className="secondary" onClick={() => store.open({ name: 'management' })}>経営の画面へ</button>}
     <button type="button" className="primary" onClick={() => store.back()}>戻る</button>
   </div>
 );
@@ -118,11 +118,11 @@ function MessageTalk({ game, club, message }: { game: GameState; club: Club; mes
   const replies = (message.topic && REPLIES[message.topic]) ?? [{ id: 'ok', label: '「わかった」', say: 'わかった。', answer: 'よろしくお願いします。' }];
   const choices: ConversationChoice[] = [
     ...replies.map((r) => ({ id: r.id, label: r.label })),
-    ...(shortfall ? [{ id: 'loans', label: '借り入れの状況を見る（財務の画面へ）' }] : []),
+    ...(shortfall ? [{ id: 'loans', label: '借り入れの状況を見る（経営の画面へ）' }] : []),
   ];
   const choose = (id: string) => {
     if (id === 'loans') {
-      store.navigate({ name: 'finance' });
+      store.navigate({ name: 'management', tab: 'loans' });
       return;
     }
     const reply = replies.find((r) => r.id === id);
@@ -150,7 +150,7 @@ function OwnerBudgetTalk({ game, club, message, goals }: { game: GameState; club
   const goalLines = (): ConversationLine[] => [
     them(`今シーズンの目標は、${goalLabel(game.owner.goals.position)}です。財務では「${FINANCE_GOAL_LABEL[game.owner.goals.finance]}」をお願いしています。`),
   ];
-  // 財務の画面から来たときは、最初から増額の話をする。クラブの画面から来たときは、目標の話から
+  // 予算の欄から来たときは、最初から増額の話をする。オーナーの欄から来たときは、目標の話から
   const [lines, setLines] = useState<ConversationLine[]>(() => (message
     ? messageLines(message)
     : goals
@@ -171,7 +171,7 @@ function OwnerBudgetTalk({ game, club, message, goals }: { game: GameState; club
         { id: 'higher', label: '「目標を上げてもかまいません。そのかわり、予算を増やしてください」', description: `目標が1段上がり、予算が${change}増える（開幕までに1回だけ）` },
       ] : []),
       { id: 'more', label: '「予算を、もう少し増やしていただけませんか」', description: room > 0 ? `手元のお金から、あと${yenText(room)}まで` : '手元のお金に余裕がない、または今の成績では難しい' },
-      { id: 'finance', label: '配分を見直す（財務の画面へ）' },
+      { id: 'finance', label: '配分を見直す（経営の画面へ）' },
     ];
   } else if (stage === 'amount') {
     choices = room > 0
@@ -188,7 +188,7 @@ function OwnerBudgetTalk({ game, club, message, goals }: { game: GameState; club
     const base = lines;
     if (stage === 'menu') {
       if (id === 'finance') {
-        store.navigate({ name: 'finance' });
+        store.navigate({ name: 'management', tab: 'budget' });
         return;
       }
       if (id === 'ok') {
@@ -250,7 +250,7 @@ function OwnerBudgetTalk({ game, club, message, goals }: { game: GameState; club
   );
 }
 
-/** 借り入れの相談（財務の画面で申請したときの、オーナーの返事） */
+/** 借り入れの相談（経営の画面で申請したときの、オーナーの返事） */
 function LoanTalk({ game, club, screen }: { game: GameState; club: Club; screen: ConversationTopic }) {
   const amount = screen.amount ?? 0;
   const months = screen.months ?? 0;
@@ -347,7 +347,7 @@ function ThanksDayTalk({ game, club, message }: { game: GameState; club: Club; m
 
 const FanBackButtons = () => (
   <div className="button-row">
-    <button type="button" className="secondary" onClick={() => store.open({ name: 'myClub', tab: 'fanClub' })}>ファンクラブの画面へ</button>
+    <button type="button" className="secondary" onClick={() => store.open({ name: 'management', tab: 'fanClub' })}>ファンクラブの画面へ</button>
     <button type="button" className="primary" onClick={() => store.back()}>戻る</button>
   </div>
 );

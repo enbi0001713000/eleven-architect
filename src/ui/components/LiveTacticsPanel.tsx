@@ -1,6 +1,6 @@
 // 試合中の交代と戦術の変更。戦術画面と同じピッチの図で、枠を2つ押すと選手が入れ替わる。
 // フォーメーションを変えると、おすすめの並びが出る。そこから自分で並べ替えてから「戦術を変更する」で決める。
-// 枠を選んで控えの選手を押すと、その場で交代する。
+// 枠を選んで控えの選手を押すと、その場で交代する。戦い方（自分で残したものも）を選ぶと、チーム指示6つがまとめて変わる（1.1）。
 
 import { useState } from 'react';
 import { FORMATIONS } from '../../engine/formations';
@@ -8,13 +8,25 @@ import { SUBSTITUTION_RULES, type LiveMatch } from '../../engine/match';
 import { positionFit, positionRating } from '../../engine/ratings';
 import { ROLE_OPTIONS, roleForSlot, roleLabel } from '../../engine/roles';
 import type { FormationName, Role, Side, TeamInstructions } from '../../engine/types';
+import { instructionDistance } from '../../game/progress';
 import { ROLE_FIT_MARK, roleFit } from '../../game/roleFit';
+import { STYLES } from '../../game/styles';
+import type { SavedStyle } from '../../game/types';
 import { FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL, ratingTone } from '../format';
 import { Panel, PosChip, StaminaBar } from './bits';
 
 const sameList = <T,>(a: T[], b: T[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 
-export function LiveTacticsPanel({ live, side, onChange, onClose }: { live: LiveMatch; side: Side; onChange: () => void; onClose: () => void }) {
+/** 今の指示とぴったり同じ戦い方（選ぶ欄の値） */
+function styleValue(instructions: TeamInstructions, saved: SavedStyle[]): string {
+  const savedIndex = saved.findIndex((st) => instructionDistance(st.instructions, instructions) === 0);
+  if (savedIndex >= 0) return `saved:${savedIndex}`;
+  return STYLES.find((st) => instructionDistance(st.instructions, instructions) === 0)?.id ?? '';
+}
+
+export function LiveTacticsPanel({ live, side, saved = [], onChange, onClose }: {
+  live: LiveMatch; side: Side; saved?: SavedStyle[]; onChange: () => void; onClose: () => void;
+}) {
   const current = live.snapshot().sides[side];
   const currentOrder = current.onPitch.map((p) => p.player.id);
   const currentRoles = current.onPitch.map((p) => p.role);
@@ -171,6 +183,16 @@ export function LiveTacticsPanel({ live, side, onChange, onClose }: { live: Live
             ) : <p className="muted small">ピッチの枠を押すと、その選手の役割を変えたり、控えの選手と交代したりできます。</p>}
 
             <h3>チーム指示</h3>
+            <label className="inline">戦い方
+              <select value={styleValue(instructions, saved)} onChange={(e) => {
+                const chosen = e.target.value.startsWith('saved:') ? saved[Number(e.target.value.slice(6))]?.instructions : STYLES.find((st) => st.id === e.target.value)?.instructions;
+                if (chosen) setInstructions({ ...chosen });
+              }}>
+                <option value="">（自分で決めた指示）</option>
+                {STYLES.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+                {saved.map((st, i) => <option key={`saved:${i}`} value={`saved:${i}`}>{st.name}（自分の戦い方）</option>)}
+              </select>
+            </label>
             {INSTRUCTION_LABELS.map((item) => (
               <div key={item.key} className="instruction">
                 <span className="instruction-label">{item.label}</span>

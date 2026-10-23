@@ -44,7 +44,11 @@ export function clubVars(colors: { primary: string; secondary: string } | undefi
   const line = theme === 'dark'
     ? (luminance(primary) > 0.3 ? primary : luminance(secondary) > 0.3 ? secondary : shade(primary, -0.5))
     : (luminance(primary) < 0.85 ? primary : luminance(secondary) < 0.85 ? secondary : '#7d8797');
+  const m = /^#?([0-9a-f]{6})$/i.exec(line);
+  const v = m ? parseInt(m[1] as string, 16) : 0x7d8797;
+  const soft = `rgba(${(v >> 16) & 255}, ${(v >> 8) & 255}, ${v & 255}, ${theme === 'dark' ? 0.2 : 0.12})`;
   return {
+    '--club-soft': soft,
     '--club': primary,
     '--club-2': secondary,
     '--club-dark': shade(primary, 0.35),

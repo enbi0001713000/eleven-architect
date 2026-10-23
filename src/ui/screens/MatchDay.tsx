@@ -11,6 +11,7 @@ import { matchGate } from '../../game/finance';
 import { applyMatchday, isSeasonOver, nextFixtureOf, prepareMatchday } from '../../game/season';
 import { autoSelect, repairSelection, selectionWarnings, validateSelection } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
+import { nearestStyle } from '../../game/styles';
 import {
   applyTalkMorale, averageOverall, strengthBalance, TALK_TONES, teamTalk,
   type Reaction, type TalkMoment, type TalkTone,
@@ -19,6 +20,7 @@ import type { Fixture, PlayerRecord } from '../../game/types';
 import { FormBadges, Panel, PosChip, StaminaBar } from '../components/bits';
 import { Confetti, GOLD, useForAWhile } from '../components/Celebration';
 import { Reactions } from '../components/Reactions';
+import { Term } from '../components/Term';
 import { Emblem } from '../components/Emblem';
 import { LiveTacticsPanel } from '../components/LiveTacticsPanel';
 import { kitColors, MatchPitch } from '../components/MatchPitch';
@@ -193,6 +195,8 @@ export function MatchDay() {
                 <div>
                   <strong>{opponent.name}</strong>
                   <div className="muted">{rowOf(opponentId)?.position}位　フォーメーション {opponent.tactics.formation}</div>
+                  <div className="small"><Term k="戦い方">戦い方</Term>：{nearestStyle(opponent.tactics.instructions)?.name ?? '独自の戦い方'}
+                    {nearestStyle(opponent.tactics.instructions) && <span className="muted">（{nearestStyle(opponent.tactics.instructions)?.summary}）</span>}</div>
                   <FormBadges form={rowOf(opponentId)?.form ?? []} />
                 </div>
               </div>
@@ -391,7 +395,7 @@ export function MatchDay() {
       )}
 
       {showTactics && !finished && (
-        <LiveTacticsPanel live={m.live} side={m.mySide} onChange={() => setTick((t) => t + 1)}
+        <LiveTacticsPanel live={m.live} side={m.mySide} saved={game.savedStyles ?? []} onChange={() => setTick((t) => t + 1)}
           onClose={() => { setShowTactics(false); setTick((t) => t + 1); }} />
       )}
 

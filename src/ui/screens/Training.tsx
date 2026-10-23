@@ -1,15 +1,17 @@
-// 練習：チームの方針と強度、個人の重点、戦術の熟成度、ケガ人（要件定義書「練習」「戦術の熟成度」「ケガと疲労」）
+// 練習：この先7日間の予定、チームの方針と強度、個人の重点、戦術の熟成度、ケガ人（要件定義書「練習」「戦術の熟成度」「ケガと疲労」）。
+// 1.1：予定表で、試合の日と軽めの日、ふつうの日の方針と強度を並べ、疲れとケガのリスクを色で見せる。
 
 import { overallRating } from '../../engine/ratings';
 import { ATTRIBUTE_KEYS, type AttributeKey } from '../../engine/types';
 import { GOALKEEPING_KEYS, TRAINING_FOCUS, TRAINING_INTENSITY } from '../../game/balance';
 import { injuryName, teamFamiliarity } from '../../game/condition';
-import { addDays } from '../../game/dates';
+import { addDays, weekday } from '../../game/dates';
 import { potentialStars } from '../../game/knowledge';
-import { instructionFamiliarity } from '../../game/progress';
+import { instructionFamiliarity, trainingDayKind } from '../../game/progress';
 import { clubPlayers } from '../../game/selection';
-import type { TrainingFocus, TrainingIntensity } from '../../game/types';
+import type { Club, GameState, TrainingFocus, TrainingIntensity } from '../../game/types';
 import { Bar, Condition, Fatigue, Morale, Panel, PosChip, Stars, StatusTags } from '../components/bits';
+import { Term } from '../components/Term';
 import { ATTRIBUTE_LABEL, formatDate, FORMATIONS_LIST, POSITION_ORDER } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
@@ -40,6 +42,7 @@ export function Training() {
   return (
     <div className="page">
       <h1>練習</h1>
+      <WeekPlan game={game} club={club} />
       <div className="grid-2">
         <Panel title="チームの練習" tutorial="training-plan">
           <h3 className="small muted">方針</h3>
@@ -69,7 +72,7 @@ export function Training() {
         </Panel>
 
         <div>
-          <Panel title="戦術の熟成度">
+          <Panel title={<>戦術の<Term k="熟成度">熟成度</Term></>}>
             {FORMATIONS_LIST.map((f) => {
               const v = club.familiarity.formations[f] ?? 0;
               return (
@@ -113,7 +116,7 @@ export function Training() {
         <p className="muted small">選んだ能力は伸びやすくなり、ほかは少し伸びにくくなります。伸びしろはコーチの評価（星）で目安が分かります。</p>
         <table className="data-table compact">
           <thead>
-            <tr><th>Pos</th><th>名前</th><th className="num">年齢</th><th className="num">総合力</th><th>伸びしろ</th><th>コンディション</th><th>疲労</th><th>モラル</th><th>状態</th><th>重点的に伸ばす能力</th></tr>
+            <tr><th>Pos</th><th>名前</th><th className="num">年齢</th><th className="num"><Term k="総合力">総合力</Term></th><th>伸びしろ</th><th><Term k="コンディション">コンディション</Term></th><th><Term k="蓄積疲労">疲労</Term></th><th><Term k="モラル">モラル</Term></th><th>状態</th><th>重点的に伸ばす能力</th></tr>
           </thead>
           <tbody>
             {players.map((p) => (
@@ -141,5 +144,50 @@ export function Training() {
         </table>
       </Panel>
     </div>
+  );
+}
+
+const WEEKDAY = ['日', '月', '火', '水', '木', '金', '土'];
+type Risk = 'low' | 'mid' | 'high';
+const RISK_LABEL: Record<Risk, string> = { low: '低い', mid: '普通', high: '高い' };
+const riskOf = (v: number): Risk => (v < 0.85 ? 'low' : v < 1.15 ? 'mid' : 'high');
+
+/** この先7日間の予定。試合の日、その前日と翌日（軽め）、ふつうの日（方針と強度） */
+function WeekPlan({ game, club }: { game: GameState; club: Club }) {
+  const focus = TRAINING_FOCUS[club.training.focus];
+  const days = Array.from({ length: 7 }, (_, i) => addDays(game.date, i));
+  return (
+    <Panel title="この先7日間の予定" icon="fixtures" tutorial="training-week">
+      <ol className="week-plan">
+        {days.map((date, i) => {
+          const kind = trainingDayKind(game, date);
+          const fixture = kind === 'match' ? game.fixtures.find((f) => f.date === date && (f.homeId === club.id || f.awayId === club.id)) : undefined;
+          const opponent = fixture ? game.clubs[fixture.homeId === club.id ? fixture.awayId : fixture.homeId] : undefined;
+          const intensity = TRAINING_INTENSITY[kind === 'light' ? 'light' : club.training.intensity];
+          const load = riskOf(focus.load * intensity.load);
+          const injury = riskOf(focus.injury * intensity.injury);
+          const risk: Risk = kind === 'match' ? 'high' : load === 'high' || injury === 'high' ? 'high' : load === 'low' && injury === 'low' ? 'low' : 'mid';
+          const open = club.fanClub.openTrainingDate === date;
+          return (
+            <li key={date} className={`week-day kind-${kind} risk-${risk}${i === 0 ? ' today' : ''}`}>
+              <span className="week-date">{Number(date.slice(5, 7))}/{Number(date.slice(8))}（{WEEKDAY[weekday(date)]}）{i === 0 && <span className="muted">今日</span>}</span>
+              {kind === 'match' ? (
+                <>
+                  <strong>試合</strong>
+                  <span className="small">{opponent ? `${fixture?.homeId === club.id ? 'ホーム' : 'アウェイ'}　${opponent.shortName}` : 'リーグの試合の日'}</span>
+                </>
+              ) : (
+                <>
+                  <strong>{kind === 'light' ? '軽め' : intensity.label}</strong>
+                  <span className="small">{kind === 'light' ? (trainingDayKind(game, addDays(date, 1)) === 'match' ? '試合の前日' : '試合の翌日') : focus.label}{open ? '・公開練習' : ''}</span>
+                </>
+              )}
+              <span className="week-risk small">{kind === 'match' ? '疲れがたまる' : `疲れ ${RISK_LABEL[load]}・ケガ ${RISK_LABEL[injury]}`}</span>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="muted small">色は疲れとケガのリスクの目安です（青＝低い、黄＝普通、赤＝高い）。試合の前日と翌日は、自動で軽めの練習になります。方針と強度は下で変えられます。</p>
+    </Panel>
   );
 }

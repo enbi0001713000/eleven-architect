@@ -45,7 +45,7 @@ export function todaysFixture(state: GameState): Fixture | undefined {
 }
 
 /** 指示の違い（段階の合計） */
-function instructionDistance(a: TeamInstructions, b: TeamInstructions): number {
+export function instructionDistance(a: TeamInstructions, b: TeamInstructions): number {
   return (Object.keys(a) as (keyof TeamInstructions)[]).reduce((n, key) => n + Math.abs(a[key] - b[key]), 0);
 }
 
@@ -60,6 +60,16 @@ export function instructionFamiliarity(club: Club): number {
 function settleInstructions(club: Club): void {
   club.familiarity.instructions = instructionFamiliarity(club);
   club.familiarity.instructionsRef = { ...club.tactics.instructions };
+}
+
+export type TrainingDayKind = 'match' | 'light' | 'normal';
+
+/** その日の練習：試合の日、軽めの日（試合の前日と翌日）、ふつうの日。練習の画面の予定表で使う（dailyClub の決め方と同じ） */
+export function trainingDayKind(state: GameState, date: string): TrainingDayKind {
+  const matchOn = (d: string) => state.fixtures.some((f) => f.date === d && f.result === null);
+  if (matchOn(date)) return 'match';
+  if (matchOn(addDays(date, 1)) || state.fixtures.some((f) => f.date === addDays(date, -1))) return 'light';
+  return 'normal';
 }
 
 interface DayContext {

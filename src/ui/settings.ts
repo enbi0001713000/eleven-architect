@@ -3,6 +3,8 @@
 export type MatchSpeed = 1 | 2 | 4 | 8;
 export type CommentaryMode = 'key' | 'all';
 export type Theme = 'light' | 'dark';
+/** 文字の大きさ（標準・大きめ） */
+export type UiScale = 'normal' | 'large';
 
 export interface Settings {
   matchSpeed: MatchSpeed;
@@ -21,12 +23,23 @@ export interface Settings {
   showPitch: boolean;
   /** ゴールや勝利、優勝、選手の加入を大きく見せる（演出） */
   celebrations: boolean;
+  /** 文字の大きさと余白 */
+  uiScale: UiScale;
+  /** アシスタントコーチが画面を開いたときに一言話す */
+  coach: boolean;
+  /** コーチの一言を小さくたたんでいる */
+  coachCollapsed: boolean;
+  /** コーチがもう話したこと（同じことは繰り返さない） */
+  coachSeen: string[];
+  /** 選手の一覧の見せ方（要点のカードか、表か） */
+  squadView: 'cards' | 'table';
 }
 
 // 今までの設定を読めるように、リポジトリの名前を変えても変えない
 const KEY = 'soccer-manager:settings';
 const DEFAULTS: Settings = {
   matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [], showPitch: true, celebrations: true,
+  uiScale: 'normal', coach: true, coachCollapsed: false, coachSeen: [], squadView: 'cards',
 };
 
 export function loadSettings(): Settings {
@@ -49,4 +62,9 @@ export function saveSettings(settings: Settings): void {
 /** 配色を画面に反映する（styles.css の :root[data-theme] が切り替わる） */
 export function applyTheme(theme: Theme): void {
   if (typeof document !== 'undefined') document.documentElement.dataset.theme = theme;
+}
+
+/** 文字の大きさを画面に反映する（styles.css の :root[data-scale]） */
+export function applyScale(scale: UiScale): void {
+  if (typeof document !== 'undefined') document.documentElement.dataset.scale = scale;
 }
