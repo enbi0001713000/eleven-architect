@@ -497,22 +497,43 @@ export class LiveMatch {
   }
 
   /** 新しいフォーメーションの枠に、ピッチ上の選手を適性の高い順に割り当てる */
+  /** そのフォーメーションにしたときの、おすすめの並び（枠ごとの選手）。試合中にフォーメーションを変える画面の初期値 */
+  suggestOrder(side: Side, formation: FormationName): string[] {
+    return this.autoOrder(this.sides[side].players, FORMATIONS[formation]);
+  }
+
   private autoOrder(players: OnPitch[], slots: Slot[]): string[] {
-    const remaining = [...players];
-    const order: (string | null)[] = slots.map(() => null);
-    // GK→守備→前線の順に、空いている枠へ一番合う選手を入れる
-    const slotOrder = slots.map((slot, i) => ({ slot, i }))
-      .sort((a, b) => (a.slot.position === 'GK' ? -1 : 0) - (b.slot.position === 'GK' ? -1 : 0));
-    for (const { slot, i } of slotOrder) {
-      const candidates = remaining.filter((op) => !op.sentOff);
-      if (candidates.length === 0) break;
-      const best = candidates.reduce((a, b) =>
-        positionRating(b.player, slot.position) > positionRating(a.player, slot.position) ? b : a);
-      order[i] = best.player.id;
-      remaining.splice(remaining.indexOf(best), 1);
+    const score = (op: OnPitch, slot: Slot) => (op.sentOff ? 0 : positionRating(op.player, slot.position));
+    // まず、合う組み合わせ（選手と枠）から順に埋める。退場者は残りの枠へ
+    const order: (OnPitch | null)[] = slots.map(() => null);
+    const used = new Set<OnPitch>();
+    const pairs = slots.flatMap((slot, i) => players.filter((op) => !op.sentOff).map((op) => ({ i, op, value: score(op, slot) })))
+      .sort((a, b) => b.value - a.value);
+    for (const { i, op } of pairs) {
+      if (order[i] !== null || used.has(op)) continue;
+      order[i] = op;
+      used.add(op);
     }
-    // 退場者は残りの枠へ
-    return order.map((id) => id ?? (remaining.shift() as OnPitch).player.id);
+    const rest = players.filter((op) => !used.has(op));
+    const filled = order.map((op) => op ?? (rest.shift() as OnPitch));
+    // 2人を入れ替えて全体の力が上がるなら入れ替える（上がらなくなるまで）
+    for (let improved = true; improved;) {
+      improved = false;
+      for (let i = 0; i < filled.length; i++) {
+        for (let j = i + 1; j < filled.length; j++) {
+          const a = filled[i] as OnPitch;
+          const b = filled[j] as OnPitch;
+          const si = slots[i] as Slot;
+          const sj = slots[j] as Slot;
+          if (score(b, si) + score(a, sj) > score(a, si) + score(b, sj) + 1e-9) {
+            filled[i] = b;
+            filled[j] = a;
+            improved = true;
+          }
+        }
+      }
+    }
+    return filled.map((op) => op.player.id);
   }
 
   /** 立ち位置から、各選手が各マスに与える影響を計算し直す（開始時、交代、戦術変更、退場のとき） */

@@ -18,7 +18,8 @@ interface Props<T> {
   rows: T[];
   columns: Column<T>[];
   rowKey: (row: T) => string;
-  onRowClick?: (row: T) => void;
+  /** rows は今の並び順（並べ替えたあと）の行 */
+  onRowClick?: (row: T, rows: T[]) => void;
   initialSort?: { key: string; desc: boolean };
   highlight?: (row: T) => boolean;
   compact?: boolean;
@@ -61,7 +62,7 @@ export function DataTable<T>({ rows, columns, rowKey, onRowClick, initialSort, h
         </thead>
         <tbody>
           {sorted.map((row) => (
-            <tr key={rowKey(row)} onClick={onRowClick ? () => onRowClick(row) : undefined}
+            <tr key={rowKey(row)} onClick={onRowClick ? () => onRowClick(row, sorted) : undefined}
               className={`${onRowClick ? 'clickable' : ''}${highlight?.(row) ? ' highlight' : ''}`}>
               {columns.map((c) => (
                 <td key={c.key} style={{ textAlign: c.align ?? 'left' }}>{c.render ? c.render(row) : c.value(row)}</td>

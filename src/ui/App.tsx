@@ -49,7 +49,7 @@ export function App() {
   switch (screen.name) {
     case 'home': content = <Home />; break;
     case 'squad': content = <Squad />; break;
-    case 'player': content = <PlayerDetail key={screen.id} id={screen.id} />; break;
+    case 'player': content = <PlayerDetail key={screen.id} id={screen.id} list={screen.list} initialTab={screen.tab} />; break;
     case 'tactics': content = <Tactics />; break;
     case 'fixtures': content = <Fixtures initialRound={screen.round} />; break;
     case 'league': content = <League />; break;

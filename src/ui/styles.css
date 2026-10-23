@@ -34,7 +34,7 @@
   --negative-bg: #fcebea;
   --goal-bg: #e1f3e7;
   --red-bg: #fbe3e2;
-  --side-1: #7a4cc9;
+  --side-1: #d9480f;
   --gold: #a06f00;
   --chart-series: #1f6bd6;
   --chart-grid: #dfe4eb;
@@ -82,7 +82,7 @@
   --negative-bg: #2e1717;
   --goal-bg: #163522;
   --red-bg: #3a1b1b;
-  --side-1: #b996f2;
+  --side-1: #ff8c42;
   --gold: #e8c547;
   --chart-series: #3987e5;
   --chart-grid: #2a323d;
@@ -148,6 +148,7 @@ label.inline select, label.block select { color: var(--text); }
 .page { max-width: 1400px; }
 .page-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .page-header h1 { margin: 0; }
+.player-nav { display: inline-flex; align-items: center; gap: 6px; }
 .page-footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: 18px 0; }
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .toolbar h1 { margin: 0 12px 0 0; }
@@ -291,6 +292,14 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 .player-overall { margin-left: auto; display: flex; flex-direction: column; align-items: center; font-size: 1.4rem; }
 
 /* 戦術 */
+.attr-compare { margin-top: 12px; }
+.attr-compare h3 { margin: 0 0 6px; }
+.attr-compare-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 14px; }
+.attr-compare th, .attr-compare td { white-space: nowrap; }
+.attr-compare .key-attr td { font-weight: 700; }
+.diff-up { color: var(--win); font-size: 0.75em; }
+.diff-down { color: var(--loss); font-size: 0.75em; }
+.data-table tr.compared td { background: var(--selected); }
 .tactics-grid { display: grid; grid-template-columns: minmax(360px, 500px) 1fr; gap: 16px; align-items: start; }
 .pitch { position: relative; aspect-ratio: 68 / 90; background: linear-gradient(#1f5b34, #1a4f2d); border: 2px solid #3d7a50; border-radius: 8px; margin-bottom: 14px; }
 .pitch-lines { position: absolute; inset: 0; background:
@@ -328,9 +337,17 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 .event.imp-3 { font-weight: 700; }
 .event.type-goal, .event.type-penaltyGoal { background: var(--goal-bg); }
 .event.type-redCard { background: var(--red-bg); }
-.event.side-0 { border-left: 3px solid var(--accent); }
-.event.side-1 { border-left: 3px solid var(--side-1); }
+.event.side-0 { border-left: 4px solid var(--accent); }
+.event.side-1 { border-left: 4px solid var(--side-1); }
+.side-legend { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 0.8rem; font-weight: 400; color: var(--muted); }
+.side-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.side-legend .swatch.side-0 { background: var(--accent); }
+.side-legend .swatch.side-1 { background: var(--side-1); margin-left: 6px; }
 .tactics-overlay { margin-bottom: 12px; }
+.live-tactics { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 18px; align-items: start; }
+.pitch-small { max-width: 400px; margin-top: 8px; }
+.pitch-slot .stamina { width: 26px; height: 6px; }
+.pitch-slot.sent-off { opacity: 0.55; }
 .tactics-overlay .panel { border-color: var(--accent); }
 .stats-table { width: 100%; border-collapse: collapse; }
 .stats-table td, .stats-table th { padding: 4px 6px; border-bottom: 1px solid var(--line); }
@@ -344,7 +361,7 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 .round-picker { display: inline-flex; align-items: center; gap: 10px; }
 
 @media (max-width: 1000px) {
-  .grid-2, .tactics-grid, .live-grid, .inbox, .reactions { grid-template-columns: 1fr; }
+  .grid-2, .tactics-grid, .live-grid, .live-tactics, .inbox, .reactions { grid-template-columns: 1fr; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; }
 }
