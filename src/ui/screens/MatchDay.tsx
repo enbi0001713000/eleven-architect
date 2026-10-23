@@ -20,6 +20,7 @@ import { FormBadges, Panel, StaminaBar } from '../components/bits';
 import { Reactions } from '../components/Reactions';
 import { Emblem } from '../components/Emblem';
 import { LiveTacticsPanel } from '../components/LiveTacticsPanel';
+import { kitColors, MatchPitch } from '../components/MatchPitch';
 import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
 import { formatDate, POSITION_LABEL, ratingTone } from '../format';
 import type { CommentaryMode, MatchSpeed } from '../settings';
@@ -347,6 +348,7 @@ export function MatchDay() {
         {!finished && (
           <button type="button" className="secondary" onClick={() => { setRunning(false); setShowTactics(true); }}>交代・戦術の変更</button>
         )}
+        {!s.settings.showPitch && <button type="button" className="secondary" onClick={() => store.updateSettings({ showPitch: true })}>ピッチを見せる</button>}
         <div className="segmented small">
           <button type="button" className={mode === 'key' ? 'active' : ''} onClick={() => setMode('key')}>主な場面</button>
           <button type="button" className={mode === 'all' ? 'active' : ''} onClick={() => setMode('all')}>すべての実況</button>
@@ -365,6 +367,14 @@ export function MatchDay() {
       )}
 
       <div className="live-grid">
+        <div>
+        {s.settings.showPitch && (
+          <Panel title="ピッチ" actions={<button type="button" className="secondary small" onClick={() => store.updateSettings({ showPitch: false })}>隠す</button>}>
+            <MatchPitch snapshot={snap} events={m.live.events}
+              colors={kitColors(game.clubs[m.fixture.homeId]?.colors ?? { primary: '#1559c2', secondary: '#ffffff' }, game.clubs[m.fixture.awayId]?.colors ?? { primary: '#d9480f', secondary: '#ffffff' })}
+              numberOf={(id) => game.players[id]?.squadNumber ?? null} />
+          </Panel>
+        )}
         <Panel title={<>実況<span className="side-legend"><span className="swatch side-0" />{game.clubs[m.fixture.homeId]?.shortName}<span className="swatch side-1" />{game.clubs[m.fixture.awayId]?.shortName}</span></>}>
           <ul className="commentary">
             {events.map((e, i) => (
@@ -375,6 +385,7 @@ export function MatchDay() {
             ))}
           </ul>
         </Panel>
+        </div>
         <div>
           <Panel title="選手">
             <PlayersOnPitch side={mine} />

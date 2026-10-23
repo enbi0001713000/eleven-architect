@@ -82,6 +82,8 @@ export interface LiveSnapshot {
   phase: MatchPhase;
   score: [number, number];
   sides: [LiveSideSnapshot, LiveSideSnapshot];
+  /** ボールを持っているチームと選手、ボールのあるマスの中心（ホームが右へ攻める向き。縦0〜6、横0〜5） */
+  ball: { side: Side; holderId: string | null; x: number; y: number };
 }
 
 export function simulateMatch(home: Team, away: Team, options: MatchOptions): MatchResult {
@@ -422,6 +424,7 @@ export class LiveMatch {
       phase: this.matchPhase,
       score: [this.goals[0], this.goals[1]],
       sides: [sideSnapshot(this.sides[0]), sideSnapshot(this.sides[1])],
+      ball: { side: this.side, holderId: this.sides[this.side].players[this.holder]?.player.id ?? null, ...this.point(this.zone) },
     };
   }
 

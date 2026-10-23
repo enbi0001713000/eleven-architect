@@ -343,6 +343,25 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 .side-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .side-legend .swatch.side-0 { background: var(--accent); }
 .side-legend .swatch.side-1 { background: var(--side-1); margin-left: 6px; }
+/* 観戦の2D表示 */
+.match-pitch { position: relative; }
+.match-pitch svg { width: 100%; display: block; border-radius: 8px; }
+.mp-grass { fill: #2b7a45; }
+.mp-stripe { fill: #2f8249; }
+.mp-stripe-alt { fill: #2a7442; }
+.mp-lines rect, .mp-lines line, .mp-lines circle { fill: none; stroke: rgba(255, 255, 255, 0.78); stroke-width: 0.35; }
+.mp-player { transition: transform 0.45s ease-out; }
+.mp-player circle { stroke: #ffffff; stroke-width: 0.35; }
+.mp-player circle.mp-holder { stroke: #ffd43b; stroke-width: 0.7; }
+.mp-player text { font-size: 2.1px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+.mp-ball { transition: transform 0.45s ease-out; }
+.mp-ball circle { fill: #ffffff; stroke: #1a1a1a; stroke-width: 0.25; }
+.mp-shot { stroke: #ffd43b; stroke-width: 0.5; stroke-dasharray: 1.2 0.8; }
+.mp-shot.goal { stroke: #ffffff; stroke-width: 0.7; }
+.mp-goal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.mp-goal span { font-size: 2.4rem; font-weight: 800; letter-spacing: 0.08em; padding: 6px 26px; border-radius: 12px; border: 3px solid #ffffff; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); animation: mp-pop 0.6s ease-out; }
+@keyframes mp-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .mp-player, .mp-ball { transition: none; } .mp-goal span { animation: none; } }
 .tactics-overlay { margin-bottom: 12px; }
 .live-tactics { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 18px; align-items: start; }
 .pitch-small { max-width: 400px; margin-top: 8px; }
