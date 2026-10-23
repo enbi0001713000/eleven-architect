@@ -3,12 +3,14 @@
 import { averageRating } from '../../game/season';
 import { standingsOf } from '../../game/standings';
 import { ClubLink, Panel, Rating } from '../components/bits';
+import { Confetti, GOLD, Trophy } from '../components/Celebration';
 import { Emblem } from '../components/Emblem';
 import { topRated, topScorers } from '../queries';
-import { store, useGame } from '../store';
+import { store, useGame, useStore } from '../store';
 
 export function SeasonEnd() {
   const game = useGame();
+  const s = useStore();
   const table = standingsOf(game);
   const champion = table[0];
   const championClub = champion ? game.clubs[champion.clubId] : undefined;
@@ -16,6 +18,7 @@ export function SeasonEnd() {
   const scorer = topScorers(game, 1)[0];
   const best = topRated(game, 1, 1500)[0];
   const finished = game.season.round > 34;
+  const won = champion !== undefined && champion.clubId === game.manager.clubId;
 
   if (!finished) {
     const last = game.history.at(-1);
@@ -31,12 +34,15 @@ export function SeasonEnd() {
 
   return (
     <div className="page season-end">
-      <div className="champion">
+      <div className={`champion${won ? ' mine' : ''}`}>
+        {won && s.settings.celebrations && championClub && <Confetti colors={[championClub.colors.primary, championClub.colors.secondary, GOLD]} count={70} />}
+        <Trophy size={84} />
         {championClub && <Emblem spec={championClub.emblem} size={120} />}
         <div>
           <div className="muted">{game.season.year}年シーズン 優勝</div>
           <h1>{championClub?.name}</h1>
           <div>勝ち点{champion?.points}（{champion?.won}勝{champion?.drawn}分{champion?.lost}敗）</div>
+          {won && <div className="champion-note">あなたのクラブの優勝です。おめでとうございます！</div>}
         </div>
       </div>
 

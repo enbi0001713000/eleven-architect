@@ -2,11 +2,12 @@
 // 選手の位置は、試合エンジンと同じ立ち位置（フォーメーション、役割、チーム指示、攻めか守りか）から作り、
 // ボールの近くへ少し寄せる。ボールを持つ選手はボールの位置に立つ。動きはCSSの移り変わりでなめらかに見せる。
 
-import { useEffect, useState } from 'react';
 import { FORMATIONS, shapePoint } from '../../engine/formations';
 import type { LiveSnapshot } from '../../engine/match';
 import { ROLE_PROFILES } from '../../engine/roles';
 import type { MatchEvent, Side } from '../../engine/types';
+import { colorDistance, textOn } from '../colors';
+import { useForAWhile } from './Celebration';
 
 const W = 105;
 const H = 68;
@@ -18,24 +19,6 @@ function noise(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
   return ((h >>> 0) % 1000) / 1000;
-}
-
-/** 色の明るさ（0〜1）。背番号の文字を白にするか黒にするかに使う */
-function luminance(hex: string): number {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return 0.5;
-  const v = parseInt(m[1] as string, 16);
-  return (0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255;
-}
-
-function colorDistance(a: string, b: string): number {
-  const parse = (hex: string) => {
-    const v = parseInt(hex.replace('#', ''), 16) || 0;
-    return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
-  };
-  const [r1, g1, b1] = parse(a);
-  const [r2, g2, b2] = parse(b);
-  return Math.abs((r1 ?? 0) - (r2 ?? 0)) + Math.abs((g1 ?? 0) - (g2 ?? 0)) + Math.abs((b1 ?? 0) - (b2 ?? 0));
 }
 
 const GRASS = '#2b7a45';
@@ -82,18 +65,6 @@ interface Dot {
 }
 
 const SHOT_TYPES = new Set<MatchEvent['type']>(['goal', 'penaltyGoal', 'shotSaved', 'shotOff', 'shotBlocked']);
-
-/** 新しい出来事が来たら、決まった時間だけ返す（試合を4倍で見ていても見逃さないように） */
-function useForAWhile(event: MatchEvent | undefined, ms: number): MatchEvent | undefined {
-  const [shown, setShown] = useState<MatchEvent | undefined>(undefined);
-  useEffect(() => {
-    if (!event) return;
-    setShown(event);
-    const timer = setTimeout(() => setShown((current) => (current === event ? undefined : current)), ms);
-    return () => clearTimeout(timer);
-  }, [event, ms]);
-  return shown;
-}
 
 export function MatchPitch({ snapshot, events, colors, numberOf }: {
   snapshot: LiveSnapshot;
@@ -147,7 +118,7 @@ export function MatchPitch({ snapshot, events, colors, numberOf }: {
   const lastShot = [...events].reverse().find((e) => e.side !== null && SHOT_TYPES.has(e.type));
   const recent = useForAWhile(lastShot, 1500);
   const goal = useForAWhile(recent && (recent.type === 'goal' || recent.type === 'penaltyGoal') ? recent : undefined, 2500);
-  const textColor = (side: Side) => (luminance(colors[side]) > 0.6 ? '#111' : '#fff');
+  const textColor = (side: Side) => textOn(colors[side]);
 
   return (
     <div className="match-pitch">

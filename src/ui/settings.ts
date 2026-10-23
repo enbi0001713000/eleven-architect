@@ -19,12 +19,14 @@ export interface Settings {
   tutorialSeen: string[];
   /** 観戦中にピッチの2D表示を出す */
   showPitch: boolean;
+  /** ゴールや勝利、優勝、選手の加入を大きく見せる（演出） */
+  celebrations: boolean;
 }
 
 // 今までの設定を読めるように、リポジトリの名前を変えても変えない
 const KEY = 'soccer-manager:settings';
 const DEFAULTS: Settings = {
-  matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [], showPitch: true,
+  matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [], showPitch: true, celebrations: true,
 };
 
 export function loadSettings(): Settings {

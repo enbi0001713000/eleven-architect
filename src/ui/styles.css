@@ -377,6 +377,56 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 /* シーズン終了 */
 .champion { display: flex; align-items: center; gap: 24px; background: linear-gradient(90deg, var(--champion-bg), var(--panel)); border: 1px solid var(--draw); border-radius: 10px; padding: 18px 24px; margin-bottom: 16px; }
 .champion h1 { font-size: 2rem; margin: 4px 0; }
+.champion { position: relative; overflow: hidden; }
+.champion > :not(.confetti) { position: relative; }
+.champion.mine { border: 2px solid var(--gold); box-shadow: 0 0 0 4px rgba(224, 180, 58, 0.22); }
+.champion-note { margin-top: 6px; font-weight: 700; color: var(--gold); }
+
+/* 演出（1.0.3）：ゴール、勝敗、優勝、選手の加入 */
+.score-pop { display: inline-block; animation: score-pop 0.9s ease-out; }
+@keyframes score-pop { 0% { transform: scale(1); } 25% { transform: scale(1.7); color: var(--gold); } 100% { transform: scale(1); } }
+.goal-flash { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 6px 14px; padding: 8px 16px; border-radius: 8px; margin: -4px 0 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); animation: flash-in 0.5s ease-out; }
+.goal-flash strong { font-size: 1.5rem; letter-spacing: 0.06em; }
+.goal-flash.mine strong { font-size: 1.9rem; }
+@keyframes flash-in { 0% { transform: translateY(-8px) scale(0.9); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.result-banner { position: relative; overflow: hidden; display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 6px 16px; padding: 12px 18px; border-radius: 8px; margin: -4px 0 12px; border: 1px solid var(--border); background: var(--panel-2); }
+.result-banner strong { font-size: 1.8rem; letter-spacing: 0.06em; position: relative; }
+.result-banner span { position: relative; }
+.result-banner.win { border-color: transparent; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
+.result-banner.win strong { font-size: 2.2rem; }
+.result-banner.loss { color: var(--muted); }
+.outcome-badge { display: inline-block; font-size: 0.85rem; vertical-align: middle; padding: 2px 12px; border-radius: 999px; color: #ffffff; margin-left: 8px; }
+.outcome-badge.win { background: var(--win-bg); }
+.outcome-badge.draw { background: var(--draw-bg); }
+.outcome-badge.loss { background: var(--loss-bg); }
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti.fixed { position: fixed; z-index: 61; }
+.confetti i { position: absolute; top: -16px; animation: confetti-fall var(--duration) linear var(--delay) both; }
+@keyframes confetti-fall { 0% { top: -16px; transform: translateX(0) rotate(0deg); } 100% { top: 105%; transform: translateX(var(--drift)) rotate(var(--spin)); } }
+.moment-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(8, 12, 20, 0.62); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.moment-card { position: relative; z-index: 62; background: var(--panel); color: var(--text); border-radius: 14px; border-top: 8px solid var(--club); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); padding: 22px 26px; width: min(580px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; text-align: center; animation: card-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+@keyframes card-in { 0% { transform: scale(0.7) translateY(20px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.moment-kicker { display: inline-block; background: var(--club); color: var(--club-ink); font-weight: 700; padding: 3px 14px; border-radius: 999px; letter-spacing: 0.08em; }
+.moment-card h2 { font-size: 1.7rem; margin: 10px 0 6px; }
+.moment-card .button-row { justify-content: center; margin-top: 18px; }
+.signing { display: flex; align-items: center; justify-content: center; gap: 22px; text-align: left; margin-top: 10px; }
+.signing h2 { margin-top: 0; }
+.signing-route { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-weight: 600; }
+.signing-route .arrow { color: var(--muted); }
+.jersey { flex: none; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.25)); }
+.newcomers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+.newcomer { display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; color: var(--text); }
+.moment-title { border-top-color: var(--gold); background: linear-gradient(180deg, var(--champion-bg), var(--panel) 65%); }
+.title-trophy { display: flex; align-items: flex-end; justify-content: center; gap: 18px; }
+.moment-card .title-headline { font-size: 3rem; letter-spacing: 0.14em; color: var(--gold); margin: 4px 0; }
+.title-club { font-size: 1.35rem; font-weight: 700; margin: 0 0 8px; }
+.trophy { flex: none; animation: trophy-shine 2.4s ease-in-out infinite; }
+@keyframes trophy-shine { 0%, 100% { filter: drop-shadow(0 0 0 rgba(224, 180, 58, 0)); } 50% { filter: drop-shadow(0 0 14px rgba(224, 180, 58, 0.9)); } }
+@media (max-width: 560px) { .signing { flex-direction: column; text-align: center; } .signing-route { justify-content: center; } }
+@media (prefers-reduced-motion: reduce) {
+  .confetti { display: none; }
+  .score-pop, .goal-flash, .moment-card, .trophy { animation: none; }
+}
 .round-picker { display: inline-flex; align-items: center; gap: 10px; }
 
 @media (max-width: 1000px) {

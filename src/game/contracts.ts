@@ -19,6 +19,7 @@ import { roleByRank } from './defaults';
 import { renewalFactor, spend, yenText } from './finance';
 import { addMessage } from './inbox';
 import { knowledgeOf } from './knowledge';
+import { addMoment } from './moments';
 import { SQUAD_ROLE_LABEL } from './morale';
 import { LEAGUE_RULES } from './rules';
 import { acceptedBid, onContractAgreed, recordTransfer } from './transfers';
@@ -353,6 +354,7 @@ export function joinClub(state: GameState, player: PlayerRecord, clubId: string,
   if (!club) return;
   const from = player.clubId ? state.clubs[player.clubId] : undefined;
   recordTransfer(state, player, player.clubId, clubId, 0, 'free');
+  if (clubId === state.manager.clubId) addMoment(state, { kind: 'signing', playerId: player.id, fromClubId: player.clubId, fee: 0, via: 'free' });
   if (from) from.playerIds = from.playerIds.filter((id) => id !== player.id);
   state.freeAgents = (state.freeAgents ?? []).filter((id) => id !== player.id);
   player.clubId = clubId;

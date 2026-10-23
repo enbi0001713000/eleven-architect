@@ -15,6 +15,7 @@ import { addDays, daySeed, monthDay, yearOf } from './dates';
 import { assignSquadRoles, defaultStatus, playerPhase2Fields } from './defaults';
 import { potentialFor } from './development';
 import { addMessage } from './inbox';
+import { addMoment } from './moments';
 import { HOME_NATIONALITY, LEAGUE_RULES } from './rules';
 import { PROSPECTS } from './scoutingBalance';
 import type { GameState, PlayerRecord, ProspectOffer, ProspectSchool, SquadRole } from './types';
@@ -294,6 +295,7 @@ export function newcomers(state: GameState, rng: Rng): void {
     delete state.scouting?.knowledge[p.id];
   }
   state.prospects = [];
+  if (fromOffers.length + byStaff.length > 0) addMoment(state, { kind: 'newcomers', year, playerIds: [...fromOffers, ...byStaff].map((p) => p.id) });
   const line = (p: PlayerRecord): string => `${p.name}（${p.position}、${p.age}歳、総合力 ${overallRating(p).toFixed(1)}）`;
   addMessage(state, {
     category: 'club', from: '強化部', important: true,

@@ -342,6 +342,22 @@ export type InboxAction =
   | { kind: 'jobOffer'; offerId: string }
   | { kind: 'transferBid'; bidId: string };
 
+/**
+ * 画面で大きく見せる出来事（演出）。自分のクラブに選手が加入した、新人が入った、優勝が決まったときに積み、
+ * 見せたら消す（moments.ts）
+ */
+export type Moment =
+  | {
+    kind: 'signing';
+    playerId: string;
+    /** 前のクラブ（所属なしや海外からなら null） */
+    fromClubId: string | null;
+    fee: number;
+    via: 'transfer' | 'loan' | 'free' | 'abroad';
+  }
+  | { kind: 'newcomers'; year: number; playerIds: string[] }
+  | { kind: 'title'; year: number; round: number; points: number };
+
 /** 受信箱の知らせ（要件定義書「時間の進め方」） */
 export interface InboxMessage {
   id: string;
@@ -728,4 +744,7 @@ export interface GameState {
   scouting: ScoutingState;
   /** 新人の候補（6月に発表され、翌年1月10日に加入する） */
   prospects: string[];
+  // ---- 1.0.3 ----
+  /** 画面で大きく見せる出来事の予定（古いセーブにはない） */
+  moments?: Moment[];
 }
