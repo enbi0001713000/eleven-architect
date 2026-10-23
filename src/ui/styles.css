@@ -392,11 +392,11 @@ button.link:disabled { color: var(--muted); cursor: default; text-decoration: no
 .mp-stripe { fill: #2f8249; }
 .mp-stripe-alt { fill: #2a7442; }
 .mp-lines rect, .mp-lines line, .mp-lines circle { fill: none; stroke: rgba(255, 255, 255, 0.78); stroke-width: 0.35; }
-.mp-player { transition: transform 0.45s ease-out; }
+.mp-player { transition: transform var(--mp-move, 400ms) ease-in-out; }
 .mp-player circle { stroke: #ffffff; stroke-width: 0.35; }
 .mp-player circle.mp-holder { stroke: #ffd43b; stroke-width: 0.7; }
 .mp-player text { font-size: 2.1px; font-weight: 700; text-anchor: middle; pointer-events: none; }
-.mp-ball { transition: transform 0.45s ease-out; }
+.mp-ball { transition: transform var(--mp-move, 400ms) ease-in-out; }
 .mp-ball circle { fill: #ffffff; stroke: #1a1a1a; stroke-width: 0.25; }
 .mp-shot { stroke: #ffd43b; stroke-width: 0.5; stroke-dasharray: 1.2 0.8; }
 .mp-shot.goal { stroke: #ffffff; stroke-width: 0.7; }

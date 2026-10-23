@@ -1,6 +1,6 @@
 // 遊ぶ人ごとの設定（ブラウザに保存）。使えない環境でも動くように、読み書きの失敗は無視する。
 
-export type MatchSpeed = 1 | 2 | 4;
+export type MatchSpeed = 1 | 2 | 4 | 8;
 export type CommentaryMode = 'key' | 'all';
 export type Theme = 'light' | 'dark';
 

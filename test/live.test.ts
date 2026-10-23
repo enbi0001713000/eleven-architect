@@ -22,6 +22,22 @@ describe('少しずつ進める', () => {
     expect(live.result().events.map((e) => e.text)).toEqual(direct.events.map((e) => e.text));
   });
 
+  it('1手ずつ進めても、同じ結果になる（観戦でボールの動きを1つずつ見せるとき）', () => {
+    const live = new LiveMatch(home, away, { seed: 15, aiControl: manual });
+    let steps = 0;
+    while (live.phase !== 'finished') {
+      const clock = live.clock;
+      live.advanceStep();
+      if (live.phase !== 'halftime') expect(live.clock).toBeGreaterThan(clock);
+      steps++;
+      if (live.phase === 'halftime') live.startSecondHalf();
+    }
+    const direct = new LiveMatch(home, away, { seed: 15, aiControl: manual }).playToEnd();
+    expect(live.result().score).toEqual(direct.score);
+    expect(live.result().events.map((e) => e.text)).toEqual(direct.events.map((e) => e.text));
+    expect(steps).toBeGreaterThan(500);
+  });
+
   it('前半が終わるとハーフタイムで止まる', () => {
     const live = new LiveMatch(home, away, { seed: 6, aiControl: manual });
     live.advance(Number.POSITIVE_INFINITY);

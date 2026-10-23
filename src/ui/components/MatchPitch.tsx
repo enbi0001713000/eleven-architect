@@ -2,6 +2,7 @@
 // 選手の位置は、試合エンジンと同じ立ち位置（フォーメーション、役割、チーム指示、攻めか守りか）から作り、
 // ボールの近くへ少し寄せる。ボールを持つ選手はボールの位置に立つ。動きはCSSの移り変わりでなめらかに見せる。
 
+import type { CSSProperties } from 'react';
 import { FORMATIONS, shapePoint } from '../../engine/formations';
 import type { LiveSnapshot } from '../../engine/match';
 import { ROLE_PROFILES } from '../../engine/roles';
@@ -66,11 +67,13 @@ interface Dot {
 
 const SHOT_TYPES = new Set<MatchEvent['type']>(['goal', 'penaltyGoal', 'shotSaved', 'shotOff', 'shotBlocked']);
 
-export function MatchPitch({ snapshot, events, colors, numberOf }: {
+export function MatchPitch({ snapshot, events, colors, numberOf, moveMs = 400 }: {
   snapshot: LiveSnapshot;
   events: readonly MatchEvent[];
   colors: [string, string];
   numberOf: (playerId: string) => number | null;
+  /** 選手とボールが次の位置へ動く時間（ミリ秒）。観戦の速さに合わせる */
+  moveMs?: number;
 }) {
   const { ball } = snapshot;
   const tick = Math.floor(snapshot.clock / 6);
@@ -116,12 +119,15 @@ export function MatchPitch({ snapshot, events, colors, numberOf }: {
 
   // 直前のシュートとゴールを、観戦の速さにかかわらず少しの間（実際の時間で）見せる
   const lastShot = [...events].reverse().find((e) => e.side !== null && SHOT_TYPES.has(e.type));
-  const recent = useForAWhile(lastShot, 1500);
-  const goal = useForAWhile(recent && (recent.type === 'goal' || recent.type === 'penaltyGoal') ? recent : undefined, 2500);
+  const lastGoal = [...events].reverse().find((e) => e.side !== null && (e.type === 'goal' || e.type === 'penaltyGoal'));
+  // ピッチを出し直したときに、前のゴールをもう一度見せないように、最近の出来事だけにする
+  const fresh = (e: MatchEvent | undefined) => (e && snapshot.clock - e.clock <= 240 ? e : undefined);
+  const recent = useForAWhile(fresh(lastShot), 1500);
+  const goal = useForAWhile(fresh(lastGoal), 2500);
   const textColor = (side: Side) => textOn(colors[side]);
 
   return (
-    <div className="match-pitch">
+    <div className="match-pitch" style={{ '--mp-move': `${moveMs}ms` } as CSSProperties}>
       <svg viewBox={`-3 -3 ${W + 6} ${H + 6}`} role="img" aria-label="ピッチ上の選手とボール">
         <rect x={-3} y={-3} width={W + 6} height={H + 6} className="mp-grass" />
         {Array.from({ length: 10 }, (_, i) => <rect key={i} x={(W / 10) * i} y={0} width={W / 10} height={H} className={i % 2 ? 'mp-stripe' : 'mp-stripe-alt'} />)}
