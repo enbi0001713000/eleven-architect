@@ -13,6 +13,7 @@ import { canNegotiate, goalLabel, negotiateGoal } from '../../game/owner';
 import { FINANCE_GOAL_LABEL, OWNER } from '../../game/ownerBalance';
 import type { Club, GameState, InboxMessage, PlayerRecord, SponsorOffer, ThanksDayScale } from '../../game/types';
 import { Conversation, type ConversationChoice, type ConversationLine, type Speaker } from '../components/Conversation';
+import { StaffFace } from '../components/Face';
 import { store, useGame, type Screen } from '../store';
 import type { TutorialId } from '../tutorials';
 import { useTutorial } from '../useTutorial';
@@ -29,8 +30,11 @@ const me = (text: string): ConversationLine => ({ who: 'me', text });
 const note = (text: string): ConversationLine => ({ who: 'note', text });
 
 function speakerFor(from: string, club: Club): Speaker {
-  if (from === 'オーナー') return { name: 'オーナー', role: `${club.name}のオーナー`, kind: 'owner' };
-  return { name: from, role: `${club.name}の${from}`, kind: 'staff' };
+  const tie = club.colors.primary;
+  if (from === 'オーナー') {
+    return { name: 'オーナー', role: `${club.name}のオーナー`, kind: 'owner', portrait: (size) => <StaffFace seed={`${club.id}:owner`} age={63} tie={tie} size={size} /> };
+  }
+  return { name: from, role: `${club.name}の${from}`, kind: 'staff', portrait: (size) => <StaffFace seed={`${club.id}:${from}`} age={41} tie={tie} size={size} /> };
 }
 
 export function ConversationScreen({ screen }: { screen: ConversationTopic }) {
@@ -444,7 +448,10 @@ function JobOfferTalk({ game, message }: { game: GameState; message: InboxMessag
   const offerId = message.action?.kind === 'jobOffer' ? message.action.offerId : '';
   const offer = game.manager.offers.find((o) => o.id === offerId);
   const club = offer ? game.clubs[offer.clubId] : undefined;
-  const speaker: Speaker = { name: message.from, role: message.from, kind: 'owner', color: club?.colors.primary };
+  const speaker: Speaker = {
+    name: message.from, role: message.from, kind: 'owner', color: club?.colors.primary,
+    portrait: (size) => <StaffFace seed={`${message.from}:owner`} age={60} tie={club?.colors.primary} size={size} />,
+  };
   const [lines, setLines] = useState<ConversationLine[]>(() => [
     ...messageLines(message),
     ...(!offer ? [note('このオファーには、もう返事をしたか、期限が過ぎました。')] : []),

@@ -10,6 +10,7 @@ import {
 } from '../../game/talks';
 import { Morale, Panel } from '../components/bits';
 import { Conversation, type ConversationLine } from '../components/Conversation';
+import { PlayerFace } from '../components/Face';
 import { POSITION_NAME } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
@@ -86,7 +87,10 @@ export function Talk({ playerId, requestId }: { playerId: string; requestId?: st
           {!request && !outcome && mine && cooldown > 0 && <Panel><p className="muted">最近話をしたばかりです。あと{cooldown}日たつと、また面談できます。</p></Panel>}
           {(request || (mine && cooldown === 0) || outcome) && (
             <Conversation
-              speaker={{ name: player.name, role: `${POSITION_NAME[player.position]}・${player.age}歳`, kind: 'player', color: club?.colors.primary }}
+              speaker={{
+                name: player.name, role: `${POSITION_NAME[player.position]}・${player.age}歳`, kind: 'player', color: club?.colors.primary,
+                portrait: (size) => <PlayerFace game={game} player={player} size={size} />,
+              }}
               me={game.manager.name} lines={lines} choices={choices} onChoose={choose}
               footer={outcome ? <div className="button-row"><button type="button" className="primary" onClick={() => store.back()}>戻る</button></div> : undefined} />
           )}

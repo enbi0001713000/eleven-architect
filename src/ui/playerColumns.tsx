@@ -10,6 +10,7 @@ import { averageRating } from '../game/season';
 import type { GameState, PlayerRecord } from '../game/types';
 import { AttributeValue, Condition, Fatigue, Morale, PosChip, Rating, Stars } from './components/bits';
 import type { Column } from './components/DataTable';
+import { PlayerFace } from './components/Face';
 import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, ATTRIBUTE_SHORT, formatYen, POSITION_ORDER } from './format';
 
 export function playerColumns(game: GameState): Column<PlayerRecord>[] {
@@ -32,7 +33,7 @@ export function playerColumns(game: GameState): Column<PlayerRecord>[] {
   return [
     { key: 'no', label: '番号', align: 'right', width: 44, value: (p) => p.squadNumber },
     { key: 'pos', label: 'Pos', title: 'ポジション', width: 44, value: (p) => POSITION_ORDER.indexOf(p.position), render: (p) => <PosChip position={p.position} /> },
-    { key: 'name', label: '名前', value: (p) => p.name },
+    { key: 'name', label: '名前', value: (p) => p.name, render: (p) => <span className="name-cell"><PlayerFace game={game} player={p} size={26} />{p.name}</span> },
     { key: 'age', label: '年齢', align: 'right', value: (p) => p.age },
     { key: 'nat', label: '国籍', value: (p) => p.nationality },
     { key: 'ovr', label: '総合力', align: 'center', value: (p) => mid(overallView(p)), render: (p) => <AttributeValue view={overallView(p)} /> },
