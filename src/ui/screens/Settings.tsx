@@ -36,6 +36,10 @@ export function Settings() {
             </select>
           </label>
           <label className="inline">
+            <input type="checkbox" checked={s.settings.showPitch} onChange={(e) => store.updateSettings({ showPitch: e.target.checked })} />
+            観戦中にピッチの図（選手とボールの動き）を出す
+          </label>
+          <label className="inline">
             <input type="checkbox" checked={s.settings.conversations} onChange={(e) => store.updateSettings({ conversations: e.target.checked })} />
             大事な出来事（オーナーの予算、スポンサーの提案、選手の申し出など）を会話画面で開く
           </label>

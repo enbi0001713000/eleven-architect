@@ -17,12 +17,14 @@ export interface Settings {
   tutorials: boolean;
   /** 見たチュートリアル（新しいゲームでも出さない） */
   tutorialSeen: string[];
+  /** 観戦中にピッチの2D表示を出す */
+  showPitch: boolean;
 }
 
 // 今までの設定を読めるように、リポジトリの名前を変えても変えない
 const KEY = 'soccer-manager:settings';
 const DEFAULTS: Settings = {
-  matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [],
+  matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [], showPitch: true,
 };
 
 export function loadSettings(): Settings {
