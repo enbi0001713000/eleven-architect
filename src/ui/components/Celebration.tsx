@@ -10,6 +10,7 @@ import { colorDistance, textOn } from '../colors';
 import { formatYen, POSITION_NAME } from '../format';
 import { store, useStore } from '../store';
 import { Emblem } from './Emblem';
+import { PlayerFace } from './Face';
 
 export const GOLD = '#e0b43a';
 
@@ -102,7 +103,10 @@ function SigningCard({ game, moment, club, player }: {
     <>
       <div className="moment-kicker">{SIGNING_TITLE[moment.via]}</div>
       <div className="signing">
-        <Jersey primary={club.colors.primary} secondary={club.colors.secondary} number={player.squadNumber} size={132} />
+        <div className="signing-portrait">
+          <PlayerFace game={game} player={player} size={132} />
+          <Jersey primary={club.colors.primary} secondary={club.colors.secondary} number={player.squadNumber} size={60} />
+        </div>
         <div>
           <h2>{player.name}</h2>
           <div>{POSITION_NAME[player.position]}　{player.age}歳　{player.nationality}</div>
@@ -129,7 +133,10 @@ function NewcomersCard({ game, moment, club }: { game: GameState; moment: Extrac
         {players.map((p) => (
           <button key={p.id} type="button" className="newcomer" title="選手の詳細を見る"
             onClick={() => { store.update(dismissMoment); store.navigate({ name: 'player', id: p.id }); }}>
-            <Jersey primary={club.colors.primary} secondary={club.colors.secondary} number={p.squadNumber} size={64} />
+            <span className="signing-portrait small">
+              <PlayerFace game={game} player={p} size={72} />
+              <Jersey primary={club.colors.primary} secondary={club.colors.secondary} number={p.squadNumber} size={34} />
+            </span>
             <strong>{p.name}</strong>
             <span className="muted small">{POSITION_NAME[p.position]}</span>
             <span className="muted small">{p.age}歳　総合力 {overallRating(p).toFixed(1)}</span>

@@ -15,6 +15,7 @@ import { standingsOf } from '../../game/standings';
 import { meetingCooldownLeft } from '../../game/talks';
 import { Bar, ClubLink, FormBadges, Panel, PosChip, Rating, ResultChip } from '../components/bits';
 import { Emblem } from '../components/Emblem';
+import { PlayerFace } from '../components/Face';
 import { fanMoodLabel, formatDate, INBOX_CATEGORY_LABEL } from '../format';
 import { playedFixtures, scoreFor, topScorers } from '../queries';
 import { store, useGame } from '../store';
@@ -214,7 +215,7 @@ export function Home() {
             <tbody>
               {topScorers(game, 5, myId).map((p) => (
                 <tr key={p.id} className="clickable" onClick={() => store.navigate({ name: 'player', id: p.id })}>
-                  <td>{p.name}</td>
+                  <td><span className="name-cell"><PlayerFace game={game} player={p} size={24} />{p.name}</span></td>
                   <td><PosChip position={p.position} /></td>
                   <td className="num">{p.season.goals}</td>
                   <td className="num">{p.season.assists}</td>

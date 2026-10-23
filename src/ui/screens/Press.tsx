@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { answerPress, pressQuestions } from '../../game/talks';
 import { Panel } from '../components/bits';
 import { Conversation, type ConversationLine } from '../components/Conversation';
+import { StaffFace } from '../components/Face';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
 
@@ -54,7 +55,7 @@ export function Press({ fixtureId }: { fixtureId: string }) {
       {closed ? (
         <Panel><p className="muted">この記者会見は終わっています。</p></Panel>
       ) : (
-        <Conversation speaker={{ name: '記者', role: '試合前の記者会見', kind: 'press' }} me={game.manager.name} lines={lines}
+        <Conversation speaker={{ name: '記者', role: '試合前の記者会見', kind: 'press', portrait: (size) => <StaffFace seed="press" age={31} tie="#3b4a5a" size={size} /> }} me={game.manager.name} lines={lines}
           choices={finished || !current ? undefined : current.answers.map((a) => ({ id: a.id, label: a.label }))}
           onChoose={choose}
           footer={finished ? <div className="button-row"><button type="button" className="primary" onClick={() => store.back()}>戻る</button></div> : undefined} />

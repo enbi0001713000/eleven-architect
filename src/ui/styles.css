@@ -532,6 +532,18 @@ details summary { cursor: pointer; margin: 8px 0 4px; }
 .avatar-press { background: #5b6472; }
 .conv-continued { margin-top: -4px; }
 .avatar-space { width: 32px; flex: none; }
+.avatar-face { overflow: hidden; background: var(--panel-2); }
+.avatar-face svg { width: 100%; height: 100%; display: block; }
+/* 顔のイラスト */
+.face { display: block; flex: none; border-radius: 10px; }
+.name-cell { display: inline-flex; align-items: center; gap: 8px; }
+.name-cell .face { border-radius: 50%; }
+.player-head .face { border-radius: 14px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15); }
+.signing-portrait { position: relative; display: inline-block; flex: none; }
+.signing-portrait .face { border-radius: 16px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
+.signing-portrait .jersey { position: absolute; right: -16px; bottom: -10px; }
+.signing-portrait.small .face { border-radius: 12px; }
+.signing-portrait.small .jersey { right: -10px; bottom: -6px; }
 
 /* オーナーの信頼度（フェーズ3-B） */
 .trust-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }

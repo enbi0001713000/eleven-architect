@@ -17,6 +17,7 @@ import type { GameState, PlayerRecord } from '../../game/types';
 import { LEAGUE_RULES } from '../../game/rules';
 import { averageRating } from '../../game/season';
 import { AttributeValue, Bar, ClubLink, Condition, Fatigue, Morale, Panel, PosChip, Rating, Stars, StatusTags } from '../components/bits';
+import { PlayerFace } from '../components/Face';
 import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, formatDate, formatYen, POSITION_NAME, POSITION_ORDER } from '../format';
 import { ScoutReportView } from '../components/ScoutReport';
 import { store, useGame } from '../store';
@@ -63,6 +64,7 @@ export function PlayerDetail({ id, list, initialTab }: { id: string; list?: stri
           </div>
         )}
         <div className="player-head">
+          <PlayerFace game={game} player={player} size={76} />
           <div className="player-number">{player.squadNumber ?? '-'}</div>
           <div>
             <h1>{player.name}</h1>
