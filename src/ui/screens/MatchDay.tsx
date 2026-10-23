@@ -25,6 +25,7 @@ import { kitColors, MatchPitch } from '../components/MatchPitch';
 import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
 import { textOn } from '../colors';
 import { formatDate, ratingTone } from '../format';
+import { moveDuration, stepDelay } from '../matchPace';
 import type { CommentaryMode, MatchSpeed } from '../settings';
 import { simulateInBackground } from '../simClient';
 import { store, useGame, useStore } from '../store';
@@ -74,17 +75,27 @@ export function MatchDay() {
   const [, setTick] = useState(0);
   const match = useRef<Running | null>(null);
 
-  // 観戦中は一定の間隔で試合を進める（等倍で1分＝1秒）
+  // 観戦中は1手ずつ進め、手の場面に合わせて待つ（matchPace.ts）。速さを上げると、ボールの動きも時計も速くなる
+  const [moveMs, setMoveMs] = useState(400);
   useEffect(() => {
     if (!running || stage !== 'live') return;
-    const timer = setInterval(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
       const m = match.current;
       if (!m) return;
-      m.live.advance(m.live.clock + 6 * speed);
-      if (m.live.phase === 'halftime' || m.live.phase === 'finished') setRunning(false);
+      const before = m.live.events.length;
+      m.live.advanceStep();
+      const delay = stepDelay(speed, m.live.snapshot(), m.live.events.slice(before));
+      setMoveMs(moveDuration(delay));
       setTick((t) => t + 1);
-    }, 100);
-    return () => clearInterval(timer);
+      if (m.live.phase === 'halftime' || m.live.phase === 'finished') {
+        setRunning(false);
+        return;
+      }
+      timer = setTimeout(next, delay);
+    };
+    timer = setTimeout(next, 150);
+    return () => clearTimeout(timer);
   }, [running, stage, speed]);
 
   useEffect(() => () => store.setLocked(false), []);
@@ -346,7 +357,7 @@ export function MatchDay() {
           <button type="button" className="primary" onClick={() => { m.live.startSecondHalf(); setRunning(true); setTick((t) => t + 1); }}>▶ 後半開始</button>
         )}
         <div className="segmented small">
-          {([1, 2, 4] as MatchSpeed[]).map((v) => (
+          {([1, 2, 4, 8] as MatchSpeed[]).map((v) => (
             <button key={v} type="button" className={speed === v ? 'active' : ''} onClick={() => setSpeed(v)}>{v === 1 ? '等倍' : `${v}倍`}</button>
           ))}
         </div>
@@ -388,7 +399,7 @@ export function MatchDay() {
         <div>
         {s.settings.showPitch && (
           <Panel title="ピッチ" actions={<button type="button" className="secondary small" onClick={() => store.updateSettings({ showPitch: false })}>隠す</button>}>
-            <MatchPitch snapshot={snap} events={m.live.events} colors={kits} numberOf={(id) => game.players[id]?.squadNumber ?? null} />
+            <MatchPitch snapshot={snap} events={m.live.events} colors={kits} moveMs={moveMs} numberOf={(id) => game.players[id]?.squadNumber ?? null} />
           </Panel>
         )}
         <Panel title={<>実況<span className="side-legend"><span className="swatch side-0" />{game.clubs[m.fixture.homeId]?.shortName}<span className="swatch side-1" />{game.clubs[m.fixture.awayId]?.shortName}</span></>}>

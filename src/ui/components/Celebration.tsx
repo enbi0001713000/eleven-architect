@@ -14,15 +14,20 @@ import { PlayerFace } from './Face';
 
 export const GOLD = '#e0b43a';
 
-/** 新しい出来事が来たら、決まった時間だけ返す（試合を4倍で見ていても見逃さないように、実際の時間で数える） */
+/**
+ * 新しい出来事が来たら、決まった時間だけ返す（試合を速く見ていても見逃さないように、実際の時間で数える）。
+ * 消す時計は、次の出来事が来たときと画面を閉じたときだけ止める（出来事がなくなっても、時間が来れば消す）
+ */
 export function useForAWhile<T>(event: T | undefined, ms: number): T | undefined {
   const [shown, setShown] = useState<T | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (event === undefined) return;
     setShown(event);
-    const timer = setTimeout(() => setShown((current) => (current === event ? undefined : current)), ms);
-    return () => clearTimeout(timer);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setShown((current) => (current === event ? undefined : current)), ms);
   }, [event, ms]);
+  useEffect(() => () => clearTimeout(timer.current), []);
   return shown;
 }
 

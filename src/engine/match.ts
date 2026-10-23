@@ -269,20 +269,22 @@ export class LiveMatch {
 
   /** untilClock 秒まで進める。ハーフタイムか試合終了になったら、そこで止まる。 */
   advance(untilClock: number): void {
+    while ((this.matchPhase === 'firstHalf' || this.matchPhase === 'secondHalf') && this.time < untilClock) this.advanceStep();
+  }
+
+  /** 1手（パス、ドリブル、シュートなど1つのプレー）だけ進める。観戦でボールの動きを1つずつ見せるときに使う */
+  advanceStep(): void {
     if (this.matchPhase === 'halftime' || this.matchPhase === 'finished') return;
-    while (this.time < untilClock) {
-      this.aiTick();
-      this.step();
-      if (this.time < this.halfEnd) continue;
-      if (this.half === 1) {
-        this.say('halftime', null, 2, {});
-        this.matchPhase = 'halftime';
-      } else {
-        this.say('fulltime', null, 2, {});
-        this.matchPhase = 'finished';
-        this.finalResult = this.finish();
-      }
-      return;
+    this.aiTick();
+    this.step();
+    if (this.time < this.halfEnd) return;
+    if (this.half === 1) {
+      this.say('halftime', null, 2, {});
+      this.matchPhase = 'halftime';
+    } else {
+      this.say('fulltime', null, 2, {});
+      this.matchPhase = 'finished';
+      this.finalResult = this.finish();
     }
   }
 

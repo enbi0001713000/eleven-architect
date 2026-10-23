@@ -23,9 +23,10 @@ export function Settings() {
           <label>
             観戦の速さ（最初の値）
             <select value={s.settings.matchSpeed} onChange={(e) => store.updateSettings({ matchSpeed: Number(e.target.value) as MatchSpeed })}>
-              <option value={1}>等倍（1分＝1秒）</option>
-              <option value={2}>2倍</option>
-              <option value={4}>4倍</option>
+              <option value={1}>等倍（ボールの動きを1つずつ見られる。1試合およそ6分）</option>
+              <option value={2}>2倍（およそ3分）</option>
+              <option value={4}>4倍（およそ1分半）</option>
+              <option value={8}>8倍（およそ1分）</option>
             </select>
           </label>
           <label>
