@@ -2,11 +2,13 @@
 
 import type { ReactNode } from 'react';
 import { injuryName, isCarryingInjury, moraleLabel, moraleTone } from '../../game/condition';
+import type { Position } from '../../engine/types';
 import type { GameState, PlayerRecord } from '../../game/types';
 import { formatView, type AttributeView } from '../../game/knowledge';
 import { store } from '../store';
-import { attributeTone, ratingTone } from '../format';
+import { attributeTone, POSITION_LABEL, POSITION_NAME, ratingTone } from '../format';
 import { Emblem } from './Emblem';
+import { Icon, type IconName } from './Icon';
 
 export function FormBadges({ form }: { form: ('W' | 'D' | 'L')[] }) {
   const label = { W: '勝', D: '分', L: '負' } as const;
@@ -50,18 +52,29 @@ export function Rating({ value }: { value: number | null }) {
   return <span className={`rating ${ratingTone(value)}`}>{value.toFixed(2)}</span>;
 }
 
-export function Panel({ title, children, actions, tutorial }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; tutorial?: string }) {
+export function Panel({ title, children, actions, tutorial, icon }: {
+  title?: ReactNode; children: ReactNode; actions?: ReactNode; tutorial?: string; icon?: IconName;
+}) {
   return (
     <section className="panel" data-tutorial={tutorial}>
       {(title || actions) && (
         <header className="panel-header">
-          {title && <h2>{title}</h2>}
+          {title && <h2>{icon && <Icon name={icon} size={17} />}{title}</h2>}
           {actions && <div className="panel-actions">{actions}</div>}
         </header>
       )}
       <div className="panel-body">{children}</div>
     </section>
   );
+}
+
+const POSITION_GROUP: Record<Position, 'gk' | 'df' | 'mf' | 'fw'> = {
+  GK: 'gk', CB: 'df', SB: 'df', WB: 'df', DM: 'mf', CM: 'mf', WM: 'mf', AM: 'mf', W: 'fw', FW: 'fw',
+};
+
+/** ポジションの印。GK・DF・MF・FWで色を分ける */
+export function PosChip({ position }: { position: Position }) {
+  return <span className={`pos-chip pos-${POSITION_GROUP[position]}`} title={POSITION_NAME[position]}>{POSITION_LABEL[position]}</span>;
 }
 
 export function ResultChip({ goalsFor, goalsAgainst }: { goalsFor: number; goalsAgainst: number }) {

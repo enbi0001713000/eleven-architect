@@ -16,7 +16,7 @@ import {
   type Reaction, type TalkMoment, type TalkTone,
 } from '../../game/talks';
 import type { Fixture, PlayerRecord } from '../../game/types';
-import { FormBadges, Panel, StaminaBar } from '../components/bits';
+import { FormBadges, Panel, PosChip, StaminaBar } from '../components/bits';
 import { Confetti, GOLD, useForAWhile } from '../components/Celebration';
 import { Reactions } from '../components/Reactions';
 import { Emblem } from '../components/Emblem';
@@ -24,7 +24,7 @@ import { LiveTacticsPanel } from '../components/LiveTacticsPanel';
 import { kitColors, MatchPitch } from '../components/MatchPitch';
 import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
 import { textOn } from '../colors';
-import { formatDate, POSITION_LABEL, ratingTone } from '../format';
+import { formatDate, ratingTone } from '../format';
 import type { CommentaryMode, MatchSpeed } from '../settings';
 import { simulateInBackground } from '../simClient';
 import { store, useGame, useStore } from '../store';
@@ -192,7 +192,7 @@ export function MatchDay() {
               <ol className="lineup-list">
                 {selection.lineup.map((id) => {
                   const p = game.players[id];
-                  return p ? <li key={id}><span className="pos-chip">{POSITION_LABEL[p.position]}</span>{p.name}</li> : null;
+                  return p ? <li key={id}><PosChip position={p.position} />{p.name}</li> : null;
                 })}
               </ol>
             )}
@@ -288,7 +288,7 @@ export function MatchDay() {
                 <tbody>
                   {result.players.filter((l) => l.side === side).map((l) => (
                     <tr key={l.player.id}>
-                      <td>{POSITION_LABEL[l.position]}</td>
+                      <td><PosChip position={l.position} /></td>
                       <td>{l.player.name}{l.minuteOn !== null ? <span className="muted small">（{l.minuteOn}分〜）</span> : null}{l.minuteOff !== null ? <span className="muted small">（〜{l.minuteOff}分）</span> : null}</td>
                       <td className="small">{[l.stats.goals ? `⚽${l.stats.goals}` : '', l.stats.assists ? `A${l.stats.assists}` : '', l.stats.yellowCards ? '🟨' : '', l.stats.redCards ? '🟥' : '', l.injured ? '🩹負傷' : ''].join(' ')}</td>
                       <td className="num"><span className={`rating ${ratingTone(l.stats.rating)}`}>{l.stats.rating.toFixed(1)}</span></td>
@@ -466,7 +466,7 @@ function PlayersOnPitch({ side, compact }: { side: ReturnType<LiveMatch['snapsho
       <tbody>
         {side.onPitch.map((p) => (
           <tr key={p.player.id} className={p.sentOff ? 'sent-off' : ''}>
-            <td>{POSITION_LABEL[p.position]}</td>
+            <td><PosChip position={p.position} /></td>
             <td>{p.player.name}{p.stats.yellowCards > 0 && !p.sentOff ? ' 🟨' : ''}{p.sentOff ? ' 🟥' : ''}{p.stats.goals > 0 ? ` ⚽${p.stats.goals > 1 ? p.stats.goals : ''}` : ''}{p.injured ? ' 🩹' : ''}</td>
             {!compact && <td className="small muted">{roleLabel(p.role, p.position)}</td>}
             <td><StaminaBar value={p.stamina} /></td>

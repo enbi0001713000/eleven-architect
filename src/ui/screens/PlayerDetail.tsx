@@ -16,8 +16,8 @@ import { setListing } from '../../game/transfers';
 import type { GameState, PlayerRecord } from '../../game/types';
 import { LEAGUE_RULES } from '../../game/rules';
 import { averageRating } from '../../game/season';
-import { AttributeValue, Bar, ClubLink, Condition, Fatigue, Morale, Panel, Rating, Stars, StatusTags } from '../components/bits';
-import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, formatDate, formatYen, POSITION_LABEL, POSITION_NAME, POSITION_ORDER } from '../format';
+import { AttributeValue, Bar, ClubLink, Condition, Fatigue, Morale, Panel, PosChip, Rating, Stars, StatusTags } from '../components/bits';
+import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, formatDate, formatYen, POSITION_NAME, POSITION_ORDER } from '../format';
 import { ScoutReportView } from '../components/ScoutReport';
 import { store, useGame } from '../store';
 
@@ -162,7 +162,7 @@ export function PlayerDetail({ id, list, initialTab }: { id: string; list?: stri
                 <tbody>
                   {POSITION_ORDER.map((pos: Position) => (
                     <tr key={pos} className={pos === player.position ? 'highlight' : ''}>
-                      <td title={POSITION_NAME[pos]}>{POSITION_LABEL[pos]}</td>
+                      <td><PosChip position={pos} /></td>
                       <td className="num"><AttributeValue view={view(positionRating(player, pos), `pos-${pos}`)} /></td>
                     </tr>
                   ))}

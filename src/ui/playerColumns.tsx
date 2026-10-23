@@ -8,9 +8,9 @@ import { knowledgeOf, potentialStars, viewAttribute } from '../game/knowledge';
 import { expectedPlayingTime, isUnhappyWithPlayingTime, SQUAD_ROLE_LABEL } from '../game/morale';
 import { averageRating } from '../game/season';
 import type { GameState, PlayerRecord } from '../game/types';
-import { AttributeValue, Condition, Fatigue, Morale, Rating, Stars } from './components/bits';
+import { AttributeValue, Condition, Fatigue, Morale, PosChip, Rating, Stars } from './components/bits';
 import type { Column } from './components/DataTable';
-import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, ATTRIBUTE_SHORT, formatYen, POSITION_LABEL, POSITION_NAME, POSITION_ORDER } from './format';
+import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, ATTRIBUTE_SHORT, formatYen, POSITION_ORDER } from './format';
 
 export function playerColumns(game: GameState): Column<PlayerRecord>[] {
   const club = game.clubs[game.manager.clubId];
@@ -31,7 +31,7 @@ export function playerColumns(game: GameState): Column<PlayerRecord>[] {
 
   return [
     { key: 'no', label: '番号', align: 'right', width: 44, value: (p) => p.squadNumber },
-    { key: 'pos', label: 'Pos', title: 'ポジション', width: 44, value: (p) => POSITION_ORDER.indexOf(p.position), render: (p) => <span title={POSITION_NAME[p.position]}>{POSITION_LABEL[p.position]}</span> },
+    { key: 'pos', label: 'Pos', title: 'ポジション', width: 44, value: (p) => POSITION_ORDER.indexOf(p.position), render: (p) => <PosChip position={p.position} /> },
     { key: 'name', label: '名前', value: (p) => p.name },
     { key: 'age', label: '年齢', align: 'right', value: (p) => p.age },
     { key: 'nat', label: '国籍', value: (p) => p.nationality },

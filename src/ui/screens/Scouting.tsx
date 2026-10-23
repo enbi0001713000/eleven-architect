@@ -13,7 +13,7 @@ import {
 import { PROSPECTS, SCOUT_REGIONS, SCOUTING } from '../../game/scoutingBalance';
 import { SQUAD_ROLE_LABEL } from '../../game/morale';
 import type { GameState, PlayerRecord, ScoutAssignment, ScoutRegion } from '../../game/types';
-import { AttributeValue, ClubLink, Panel } from '../components/bits';
+import { AttributeValue, ClubLink, Panel, PosChip } from '../components/bits';
 import { GradeBadge, ScoutButton, StarRange } from '../components/ScoutReport';
 import { formatDate, POSITION_LABEL, POSITION_ORDER } from '../format';
 import { store, useGame } from '../store';
@@ -183,7 +183,7 @@ function Reports({ game }: { game: GameState }) {
                 <td>{formatDate(r.date, false)}</td>
                 <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
                 <td>{regionLabel(game, p)}</td>
-                <td>{POSITION_LABEL[p.position]}</td>
+                <td><PosChip position={p.position} /></td>
                 <td className="num">{p.age}</td>
                 <td className="num"><AttributeValue view={view.overall} /></td>
                 <td><StarRange range={view.potential} /></td>
@@ -263,7 +263,7 @@ function Prospects({ game }: { game: GameState }) {
             <tr key={p.id}>
               <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
               <td>{SCHOOL_LABEL[p.prospect!.school]}</td>
-              <td>{POSITION_LABEL[p.position]}</td>
+              <td><PosChip position={p.position} /></td>
               <td className="num">{p.age}</td>
               <td className="num"><AttributeValue view={view.overall} /></td>
               <td><StarRange range={view.potential} /></td>
@@ -302,7 +302,7 @@ function Overseas({ game }: { game: GameState }) {
                   <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
                   <td>{p.nationality}</td>
                   <td className="small">{SCOUT_REGIONS[regionOf(game, p)].label}</td>
-                  <td>{POSITION_LABEL[p.position]}</td>
+                  <td><PosChip position={p.position} /></td>
                   <td className="num">{p.age}</td>
                   <td className="num"><AttributeValue view={viewAttribute(overallRating(p), knowledge, `${p.id}:overall`)} /></td>
                   <td className="num">{formatValueRange(scoutReport(game, p).value)}</td>

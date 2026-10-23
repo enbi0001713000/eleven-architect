@@ -9,8 +9,8 @@ import { potentialStars } from '../../game/knowledge';
 import { instructionFamiliarity } from '../../game/progress';
 import { clubPlayers } from '../../game/selection';
 import type { TrainingFocus, TrainingIntensity } from '../../game/types';
-import { Bar, Condition, Fatigue, Morale, Panel, Stars, StatusTags } from '../components/bits';
-import { ATTRIBUTE_LABEL, formatDate, FORMATIONS_LIST, POSITION_LABEL, POSITION_ORDER } from '../format';
+import { Bar, Condition, Fatigue, Morale, Panel, PosChip, Stars, StatusTags } from '../components/bits';
+import { ATTRIBUTE_LABEL, formatDate, FORMATIONS_LIST, POSITION_ORDER } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
 
@@ -118,7 +118,7 @@ export function Training() {
           <tbody>
             {players.map((p) => (
               <tr key={p.id}>
-                <td>{POSITION_LABEL[p.position]}</td>
+                <td><PosChip position={p.position} /></td>
                 <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id, list: players.map((q) => q.id) })}>{p.name}</button></td>
                 <td className="num">{p.age}</td>
                 <td className="num">{overallRating(p).toFixed(1)}</td>

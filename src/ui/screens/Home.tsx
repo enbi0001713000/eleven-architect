@@ -13,9 +13,9 @@ import { averageRating, isSeasonOver, nextFixtureOf } from '../../game/season';
 import { clubPlayers, validateSelection } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
 import { meetingCooldownLeft } from '../../game/talks';
-import { Bar, ClubLink, FormBadges, Panel, Rating, ResultChip } from '../components/bits';
+import { Bar, ClubLink, FormBadges, Panel, PosChip, Rating, ResultChip } from '../components/bits';
 import { Emblem } from '../components/Emblem';
-import { fanMoodLabel, formatDate, INBOX_CATEGORY_LABEL, POSITION_LABEL } from '../format';
+import { fanMoodLabel, formatDate, INBOX_CATEGORY_LABEL } from '../format';
 import { playedFixtures, scoreFor, topScorers } from '../queries';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
@@ -47,9 +47,24 @@ export function Home() {
 
   return (
     <div className="page home">
-      <h1>ホーム</h1>
+      {club ? (
+        <div className="club-hero">
+          <Emblem spec={club.emblem} size={88} />
+          <div className="club-hero-main">
+            <div className="club-hero-kicker">{game.season.year}年シーズン</div>
+            <h1>{club.name}</h1>
+            <div className="club-hero-sub">監督 {game.manager.name}　{club.stadium.name}</div>
+          </div>
+          <dl className="club-hero-stats">
+            <div><dt>順位</dt><dd>{myRow && myRow.played > 0 ? `${myRow.position}位` : '-'}</dd></div>
+            <div><dt>勝ち点</dt><dd>{myRow?.points ?? 0}</dd></div>
+            <div><dt>成績</dt><dd className="record">{myRow?.won ?? 0}勝{myRow?.drawn ?? 0}分{myRow?.lost ?? 0}敗</dd></div>
+            {myRow && myRow.form.length > 0 && <div><dt>直近</dt><dd><FormBadges form={myRow.form} /></dd></div>}
+          </dl>
+        </div>
+      ) : <h1>ホーム</h1>}
       <div className="grid-2">
-        <Panel title="次の試合" tutorial="home-next-match">
+        <Panel title="次の試合" icon="match" tutorial="home-next-match">
           {isSeasonOver(game) && (
             <div className="next-match">
               <p>今シーズンの全日程が終わりました。「次の出来事まで進める」で、シーズンの総括、引退の発表、新しい日程、新人の加入と進みます。</p>
@@ -60,7 +75,6 @@ export function Home() {
             const home = next.homeId === myId;
             const opponentId = home ? next.awayId : next.homeId;
             const opponent = game.clubs[opponentId];
-            const oppRow = table.find((r) => r.clubId === opponentId);
             const derby = club?.rivalId === opponentId;
             return (
               <div className="next-match">
@@ -68,14 +82,22 @@ export function Home() {
                   第{next.round}節　{formatDate(next.date)}　{home ? 'ホーム' : 'アウェイ'}{derby ? '　ダービー' : ''}
                   {today ? <span className="tag tag-good" style={{ marginLeft: 8 }}>今日</span> : <span className="small">（あと{daysBetween(game.date, next.date)}日）</span>}
                 </div>
-                <div className="next-match-vs">
-                  {opponent && <Emblem spec={opponent.emblem} size={56} />}
-                  <div>
-                    <div className="vs-name">vs {opponent?.name}</div>
-                    <div className="muted">{oppRow ? `${oppRow.position}位　勝ち点${oppRow.points}` : ''}</div>
-                    {oppRow && <FormBadges form={oppRow.form} />}
-                  </div>
+                <div className="fixture-card">
+                  {[next.homeId, next.awayId].map((id, i) => {
+                    const c = game.clubs[id];
+                    const row = table.find((r) => r.clubId === id);
+                    return (
+                      <div key={id} className={`fixture-team${i === 1 ? ' away' : ''}${id === myId ? ' mine' : ''}`}>
+                        {c && <Emblem spec={c.emblem} size={60} />}
+                        <strong>{c?.name}</strong>
+                        <span className="muted small">{row && row.played > 0 ? `${row.position}位　勝ち点${row.points}` : '　'}</span>
+                        {row && <FormBadges form={row.form} />}
+                      </div>
+                    );
+                  })}
+                  <div className="fixture-vs">VS</div>
                 </div>
+                {opponent && <div className="muted small">相手：{opponent.name}（フォーメーション {opponent.tactics.formation}）</div>}
                 {problems.length > 0 && (
                   <div className="warning">
                     メンバーに問題があります：{problems.join('／')}
@@ -93,7 +115,7 @@ export function Home() {
           })()}
         </Panel>
 
-        <Panel title="順位" actions={<button type="button" className="link" onClick={() => store.open({ name: 'league' })}>順位表へ</button>}>
+        <Panel title="順位" icon="league" actions={<button type="button" className="link" onClick={() => store.open({ name: 'league' })}>順位表へ</button>}>
           <table className="data-table compact">
             <thead><tr><th>順位</th><th>クラブ</th><th className="num">試合</th><th className="num">差</th><th className="num">勝ち点</th><th>直近</th></tr></thead>
             <tbody>
@@ -111,7 +133,7 @@ export function Home() {
           </table>
         </Panel>
 
-        <Panel title="最近の結果">
+        <Panel title="最近の結果" icon="fixtures">
           {recent.length === 0 && <p className="muted">まだ試合をしていません。</p>}
           <ul className="result-list">
             {recent.map((f) => {
@@ -129,7 +151,7 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="オーナーの評価" tutorial="home-owner" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
+        <Panel title="オーナーの評価" icon="owner" tutorial="home-owner" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
           {(() => {
             const owner = game.owner;
             const money = financeGoalStatus(game);
@@ -149,7 +171,7 @@ export function Home() {
           })()}
         </Panel>
 
-        <Panel title="受信箱の新着" actions={<button type="button" className="link" onClick={() => store.open({ name: 'inbox' })}>受信箱へ</button>}>
+        <Panel title="受信箱の新着" icon="inbox" actions={<button type="button" className="link" onClick={() => store.open({ name: 'inbox' })}>受信箱へ</button>}>
           {waiting.length > 0 && <div className="warning small">返事を待っている知らせが{waiting.length}件あります。</div>}
           <ul className="notice-list">
             {latest.map((m) => (
@@ -163,7 +185,7 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="チームの状態" actions={
+        <Panel title="チームの状態" icon="heart" actions={
           <button type="button" className="link" disabled={meetingCooldownLeft(game) > 0} onClick={() => store.navigate({ name: 'meeting' })}>
             チームミーティング{meetingCooldownLeft(game) > 0 ? `（あと${meetingCooldownLeft(game)}日）` : ''}
           </button>}>
@@ -186,14 +208,14 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="チームの得点ランキング">
+        <Panel title="チームの得点ランキング" icon="chart">
           <table className="data-table compact">
             <thead><tr><th>選手</th><th>Pos</th><th className="num">得点</th><th className="num">アシスト</th><th className="num">平均評価</th></tr></thead>
             <tbody>
               {topScorers(game, 5, myId).map((p) => (
                 <tr key={p.id} className="clickable" onClick={() => store.navigate({ name: 'player', id: p.id })}>
                   <td>{p.name}</td>
-                  <td>{POSITION_LABEL[p.position]}</td>
+                  <td><PosChip position={p.position} /></td>
                   <td className="num">{p.season.goals}</td>
                   <td className="num">{p.season.assists}</td>
                   <td className="num"><Rating value={averageRating(p.season)} /></td>
@@ -204,7 +226,7 @@ export function Home() {
           {topScorers(game, 1, myId).length === 0 && <p className="muted">まだ得点がありません。</p>}
         </Panel>
 
-        <Panel title="クラブとお金" actions={<button type="button" className="link" onClick={() => store.open({ name: 'finance' })}>財務へ</button>}>
+        <Panel title="クラブとお金" icon="finance" actions={<button type="button" className="link" onClick={() => store.open({ name: 'finance' })}>財務へ</button>}>
           {club && (() => {
             const fin = club.finance;
             const net = netResult(yearToDate(fin));
