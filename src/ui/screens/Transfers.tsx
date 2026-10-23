@@ -17,7 +17,7 @@ import { LEAGUE_RULES } from '../../game/rules';
 import { isOpen, nextWindowStart, setListing, transferBudgetLeft, windowOpen } from '../../game/transfers';
 import type { Club, GameState, PlayerRecord, TransferKind } from '../../game/types';
 import { BidActions, bidStatusLabel, bidSummary } from '../components/BidActions';
-import { AttributeValue, ClubLink, Panel } from '../components/bits';
+import { AttributeValue, ClubLink, Panel, PosChip } from '../components/bits';
 import { formatDate, POSITION_LABEL, POSITION_ORDER } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
@@ -136,7 +136,7 @@ function Renewals({ game }: { game: GameState }) {
               return (
                 <tr key={p.id}>
                   <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
-                  <td>{POSITION_LABEL[p.position]}</td>
+                  <td><PosChip position={p.position} /></td>
                   <td className="num">{p.age}</td>
                   <td className="num">{overallRating(p).toFixed(1)}</td>
                   <td>{p.contract ? SQUAD_ROLE_LABEL[p.contract.role] : '-'}</td>
@@ -204,7 +204,7 @@ function Market({ game }: { game: GameState }) {
                   <tr key={p.id}>
                     <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
                     <td>{p.clubId ? <ClubLink game={game} clubId={p.clubId} short /> : <span className="muted">所属なし</span>}</td>
-                    <td>{POSITION_LABEL[p.position]}</td>
+                    <td><PosChip position={p.position} /></td>
                     <td className="num">{p.age}</td>
                     <td className="num"><AttributeValue view={viewAttribute(overallRating(p), knowledgeOf(game, p), `${p.id}:overall`)} /></td>
                     <td className="num">{formatValueRange(marketValueRange(game, p))}</td>
@@ -271,7 +271,7 @@ function Search({ game }: { game: GameState }) {
             <tr key={p.id}>
               <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
               <td><ClubLink game={game} clubId={p.clubId!} short /></td>
-              <td>{POSITION_LABEL[p.position]}</td>
+              <td><PosChip position={p.position} /></td>
               <td className="num">{p.age}</td>
               <td className="num"><AttributeValue view={view} /></td>
               <td className="num">{formatValueRange(value)}</td>
@@ -340,7 +340,7 @@ function MyPlayers({ game }: { game: GameState }) {
             {mine.map((p) => (
               <tr key={p.id}>
                 <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
-                <td>{POSITION_LABEL[p.position]}</td>
+                <td><PosChip position={p.position} /></td>
                 <td className="num">{p.age}</td>
                 <td className="num">{overallRating(p).toFixed(1)}</td>
                 <td>{p.contract ? SQUAD_ROLE_LABEL[p.contract.role] : '-'}</td>

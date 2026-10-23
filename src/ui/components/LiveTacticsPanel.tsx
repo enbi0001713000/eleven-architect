@@ -10,7 +10,7 @@ import { ROLE_OPTIONS, roleForSlot, roleLabel } from '../../engine/roles';
 import type { FormationName, Role, Side, TeamInstructions } from '../../engine/types';
 import { ROLE_FIT_MARK, roleFit } from '../../game/roleFit';
 import { FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL, ratingTone } from '../format';
-import { Panel, StaminaBar } from './bits';
+import { Panel, PosChip, StaminaBar } from './bits';
 
 const sameList = <T,>(a: T[], b: T[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 
@@ -158,7 +158,7 @@ export function LiveTacticsPanel({ live, side, onChange, onClose }: { live: Live
                         <tbody>
                           {bench.map((b) => (
                             <tr key={b.player.id}>
-                              <td>{POSITION_LABEL[b.player.position]}</td>
+                              <td><PosChip position={b.player.position} /></td>
                               <td>{b.player.name}</td>
                               <td className="num">{positionRating(b.player, selectedSlot.position).toFixed(1)}</td>
                               <td><button type="button" className="secondary small" onClick={() => substitute(b.player.id)}>{selectedPlayer.player.name.split(' ')[0]}と交代</button></td>

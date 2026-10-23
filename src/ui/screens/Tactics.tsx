@@ -13,7 +13,7 @@ import {
   arrangeForFormation, autoSelect, clubPlayers, isAvailable, isForeign, repairSelection, selectionWarnings, unavailableReason, validateSelection,
 } from '../../game/selection';
 import type { PlayerRecord } from '../../game/types';
-import { Condition, Panel, StatusTags } from '../components/bits';
+import { Condition, Panel, PosChip, StatusTags } from '../components/bits';
 import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, ATTRIBUTE_SHORT, attributeTone, FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
@@ -163,7 +163,7 @@ export function Tactics() {
                 if (!p) return null;
                 return (
                   <li key={id}>
-                    <span className="pos-chip">{POSITION_LABEL[p.position]}</span>
+                    <PosChip position={p.position} />
                     <span>{p.name}</span>
                     <span className="muted small">{overallRating(p).toFixed(1)}</span>
                     <StatusTags player={p} />
@@ -213,7 +213,7 @@ export function Tactics() {
                     return (
                       <tr key={p.id} className={`clickable${p.id === slotPlayer?.id ? ' highlight' : ''}${p.id === compareId ? ' compared' : ''}`}
                         title="押すと、下の表で能力を比べられます" onClick={() => setCompareId(p.id === slotPlayer?.id ? null : p.id)}>
-                        <td>{POSITION_LABEL[p.position]}</td>
+                        <td><PosChip position={p.position} /></td>
                         <td>{p.name}{isForeign(p) ? <span className="muted small">（外）</span> : null}</td>
                         <td className="num">{positionRating(p, slot.position).toFixed(1)}</td>
                         <td>{slotRole && <span className={`fit-mark fit-${roleFit(p, slotRole, slot.position)}`}>{ROLE_FIT_MARK[roleFit(p, slotRole, slot.position)]}</span>}</td>

@@ -1,37 +1,40 @@
 // ゲーム中の画面の枠：左にメニュー、上に日付と「次の出来事まで進める」ボタン（要件定義書「画面」）
 // 右上のボタンは、どの画面からでも押せる。試合の日は「試合へ」に変わる。
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { attentionCount } from '../../game/inbox';
 import { todaysFixture } from '../../game/progress';
 import { isSeasonOver } from '../../game/season';
+import { clubVars } from '../colors';
 import { formatDate } from '../format';
 import { downloadSave } from '../storage';
 import { store, useStore, type Screen } from '../store';
 import { MomentOverlay } from './Celebration';
 import { Emblem } from './Emblem';
+import { Icon, type IconName } from './Icon';
 import { TutorialOverlay } from './TutorialOverlay';
 
 interface MenuItem {
   label: string;
+  icon: IconName;
   screen: Screen;
   /** まだ作っていない画面は、追加されるフェーズを示す */
   phase?: number;
 }
 
 const MENU: MenuItem[] = [
-  { label: 'ホーム', screen: { name: 'home' } },
-  { label: '受信箱', screen: { name: 'inbox' } },
-  { label: '選手', screen: { name: 'squad' } },
-  { label: '戦術', screen: { name: 'tactics' } },
-  { label: '練習', screen: { name: 'training' } },
-  { label: '日程と結果', screen: { name: 'fixtures' } },
-  { label: 'リーグ', screen: { name: 'league' } },
-  { label: '移籍', screen: { name: 'transfers' } },
-  { label: 'スカウト', screen: { name: 'scouting' } },
-  { label: '財務', screen: { name: 'finance' } },
-  { label: 'クラブ', screen: { name: 'myClub' } },
-  { label: '監督', screen: { name: 'manager' } },
+  { label: 'ホーム', icon: 'home', screen: { name: 'home' } },
+  { label: '受信箱', icon: 'inbox', screen: { name: 'inbox' } },
+  { label: '選手', icon: 'squad', screen: { name: 'squad' } },
+  { label: '戦術', icon: 'tactics', screen: { name: 'tactics' } },
+  { label: '練習', icon: 'training', screen: { name: 'training' } },
+  { label: '日程と結果', icon: 'fixtures', screen: { name: 'fixtures' } },
+  { label: 'リーグ', icon: 'league', screen: { name: 'league' } },
+  { label: '移籍', icon: 'transfers', screen: { name: 'transfers' } },
+  { label: 'スカウト', icon: 'scouting', screen: { name: 'scouting' } },
+  { label: '財務', icon: 'finance', screen: { name: 'finance' } },
+  { label: 'クラブ', icon: 'club', screen: { name: 'myClub' } },
+  { label: '監督', icon: 'manager', screen: { name: 'manager' } },
 ];
 
 /** 無職の間のメニュー（監督の画面がホームになる） */
@@ -54,10 +57,10 @@ export function Layout({ children }: { children: ReactNode }) {
   const activeLabel = s.screen.name === 'later' ? s.screen.title : MENU_SCREENS[s.screen.name];
 
   return (
-    <div className="layout">
+    <div className="layout" style={clubVars(club?.colors, s.settings.theme) as CSSProperties}>
       <aside className="sidebar">
         <div className="sidebar-club">
-          {club && <Emblem spec={club.emblem} size={40} />}
+          {club && <Emblem spec={club.emblem} size={44} />}
           <div>
             <div className="sidebar-club-name">{club?.name ?? '無職'}</div>
             <div className="muted small">監督 {game.manager.name}</div>
@@ -68,7 +71,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <button key={item.label} type="button" disabled={s.locked} data-tutorial={item.phase ? undefined : `menu-${item.screen.name}`}
               className={`menu-item${activeLabel === item.label ? ' active' : ''}${item.phase ? ' later' : ''}`}
               onClick={() => store.open(item.screen)}>
-              {item.label}
+              <span className="menu-label"><Icon name={item.icon} />{item.label}</span>
               {item.phase && <span className="menu-phase">P{item.phase}</span>}
               {item.screen.name === 'inbox' && unread > 0 && <span className="menu-badge">{unread}</span>}
             </button>
