@@ -1,8 +1,10 @@
 // 試合の日：試合前の確認 → 試合前の声かけ → 観戦（速さの変更、一時停止、交代と戦術の変更、ハーフタイムの声かけ）
 // → 試合後のレポートと声かけ → 結果の確定
 // 要件定義書「戦術と観戦」「観戦画面」「面談と声かけ」に対応する。他会場の試合は Web Worker で先に計算しておき、時間に合わせて見せる。
+// 1.2：観戦は「大きく見るモード」（上に操作の帯、ピッチを大きく、下に字幕。交代・戦術とハーフタイムはピッチに重ねて開く。
+// ボタンで全画面にもできる）と、今までの並びの2つ。前回選んだほうから始める。ピッチはドット絵か今の図、音も出す。
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { LiveMatch, SUBSTITUTION_RULES } from '../../engine/match';
 import { createRng } from '../../engine/rng';
 import { roleLabel } from '../../engine/roles';
@@ -16,9 +18,10 @@ import {
   applyTalkMorale, averageOverall, strengthBalance, TALK_TONES, teamTalk,
   type Reaction, type TalkMoment, type TalkTone,
 } from '../../game/talks';
-import type { Fixture, PlayerRecord } from '../../game/types';
+import type { Fixture, GameState, PlayerRecord } from '../../game/types';
 import { FormBadges, Panel, PosChip, StaminaBar } from '../components/bits';
 import { Confetti, GOLD, useForAWhile } from '../components/Celebration';
+import { DotPitch } from '../components/DotPitch';
 import { Reactions } from '../components/Reactions';
 import { Term } from '../components/Term';
 import { Emblem } from '../components/Emblem';
@@ -27,8 +30,10 @@ import { kitColors, MatchPitch } from '../components/MatchPitch';
 import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
 import { textOn } from '../colors';
 import { formatDate, ratingTone } from '../format';
+import { MatchAudio } from '../matchAudio';
+import { matchLooks, type MatchLooks } from '../matchLooks';
 import { moveDuration, stepDelay } from '../matchPace';
-import type { CommentaryMode, MatchSpeed } from '../settings';
+import type { CommentaryMode, MatchSpeed, MatchView } from '../settings';
 import { simulateInBackground } from '../simClient';
 import { store, useGame, useStore } from '../store';
 import { useTutorial } from '../useTutorial';
@@ -44,7 +49,16 @@ interface Running {
   favorite: -1 | 0 | 1;
   /** 声かけの反応（試合前、ハーフタイム、試合後）。モラルは結果の確定のときに反映する */
   talks: Partial<Record<TalkMoment, Reaction[]>>;
+  /** ユニフォームの色（ホーム、アウェイ） */
+  kits: [string, string];
+  /** ドット絵の選手の見た目とスタンド */
+  looks: MatchLooks;
+  /** スタンドの埋まり具合（0〜1） */
+  crowdFill: number;
 }
+
+/** 大きく見るモードで、ピッチに重ねて開く欄 */
+type Overlay = 'tactics' | 'stats' | 'players' | 'others' | 'commentary' | null;
 
 /** 他会場の、その時点までのスコア */
 function scoreUntil(result: MatchResult, half: 1 | 2, clock: number): [number, number] {
@@ -72,10 +86,17 @@ export function MatchDay() {
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState<MatchSpeed>(s.settings.matchSpeed);
   const [mode, setMode] = useState<CommentaryMode>(s.settings.commentary);
-  const [showTactics, setShowTactics] = useState(false);
+  const [overlay, setOverlay] = useState<Overlay>(null);
+  const showTactics = overlay === 'tactics';
+  const setShowTactics = (open: boolean) => setOverlay(open ? 'tactics' : null);
   const [error, setError] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const match = useRef<Running | null>(null);
+  const audio = useRef<MatchAudio | null>(null);
+  const big = useRef<HTMLDivElement | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const view: MatchView = s.settings.matchView;
+  const setView = (next: MatchView) => store.updateSettings({ matchView: next });
 
   // 観戦中は1手ずつ進め、手の場面に合わせて待つ（matchPace.ts）。速さを上げると、ボールの動きも時計も速くなる
   const [moveMs, setMoveMs] = useState(400);
@@ -87,7 +108,10 @@ export function MatchDay() {
       if (!m) return;
       const before = m.live.events.length;
       m.live.advanceStep();
-      const delay = stepDelay(speed, m.live.snapshot(), m.live.events.slice(before));
+      const fresh = m.live.events.slice(before);
+      const snapshot = m.live.snapshot();
+      audio.current?.step(snapshot, fresh);
+      const delay = stepDelay(speed, snapshot, fresh);
       setMoveMs(moveDuration(delay));
       setTick((t) => t + 1);
       if (m.live.phase === 'halftime' || m.live.phase === 'finished') {
@@ -100,7 +124,54 @@ export function MatchDay() {
     return () => clearTimeout(timer);
   }, [running, stage, speed]);
 
-  useEffect(() => () => store.setLocked(false), []);
+  useEffect(() => () => {
+    store.setLocked(false);
+    audio.current?.dispose();
+    audio.current = null;
+  }, []);
+
+  // 音：自分で止めたとき（交代・戦術を開いたときも）と、試合後のレポートでは止める。
+  // ハーフタイムと試合終了の笛、そのあとの歓声は止めない。音量と消す・出すは設定に合わせる
+  useEffect(() => {
+    const phase = match.current?.live.phase;
+    if (stage === 'report') audio.current?.pause();
+    else if (running) audio.current?.resume();
+    else if (stage === 'live' && (phase === 'firstHalf' || phase === 'secondHalf')) audio.current?.pause();
+  }, [running, stage]);
+  useEffect(() => {
+    audio.current?.setVolume(s.settings.volume, !s.settings.sound);
+  }, [s.settings.volume, s.settings.sound]);
+
+  // 全画面になったか、やめたか
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement !== null && document.fullscreenElement === big.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  // キーボード：スペースで一時停止、F で全画面、Esc で戻る（重ねた欄を閉じる、大きく見るモードを終える）
+  useEffect(() => {
+    if (stage !== 'live') return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) return;
+      const m = match.current;
+      if (!m) return;
+      const phase = m.live.phase;
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        if (phase !== 'halftime' && phase !== 'finished' && overlay !== 'tactics') setRunning((r) => !r);
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key === 'Escape') {
+        if (overlay) setOverlay(null);
+        else if (!document.fullscreenElement && view === 'big') setView('normal');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const fixture = nextFixtureOf(game, myId);
   if (isSeasonOver(game) || !fixture) {
@@ -151,7 +222,11 @@ export function MatchDay() {
       const theirTeam = mySide === 0 ? mine.away : mine.home;
       const strength = (ids: string[]) => averageOverall(ids.map((id) => game.players[id]).filter((p): p is PlayerRecord => p !== undefined));
       const favorite = strengthBalance(strength(myTeam.lineup), strength(theirTeam.lineup));
-      match.current = { live, fixture: mine.fixture, mySide, others, favorite, talks: {} };
+      const kits = kitColors(game.clubs[mine.fixture.homeId]?.colors ?? { primary: '#1559c2', secondary: '#ffffff' }, game.clubs[mine.fixture.awayId]?.colors ?? { primary: '#d9480f', secondary: '#ffffff' });
+      const capacity = game.clubs[mine.fixture.homeId]?.stadium.capacity ?? 20000;
+      const crowdFill = Math.min(1, matchGate(game, mine.fixture, standingsOf(game)).total / Math.max(1, capacity));
+      const looks = matchLooks(game, mine.fixture.homeId, mine.fixture.awayId, kits, crowdFill, mine.seed);
+      match.current = { live, fixture: mine.fixture, mySide, others, favorite, talks: {}, kits, looks, crowdFill };
       setStage('pretalk');
     } catch (e) {
       setError((e as Error).message);
@@ -251,6 +326,26 @@ export function MatchDay() {
   const snap = m.live.snapshot();
   const finished = snap.phase === 'finished';
 
+  /** 音を出せるようにする（ブラウザの決まりで、人の操作のときに始める） */
+  function startAudio() {
+    // 設定は今の値を読む（音を出すボタンを押した直後でも鳴らせるように）
+    const current = match.current;
+    if (!current || !store.settings.sound) return;
+    if (!audio.current) audio.current = new MatchAudio({ crowdFill: current.crowdFill, mySide: current.mySide });
+    audio.current.start();
+    audio.current.setVolume(store.settings.volume, !store.settings.sound);
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    if (view !== 'big') setView('big');
+    // 大きく見るモードの枠ができてから全画面にする
+    requestAnimationFrame(() => { void big.current?.requestFullscreen?.(); });
+  }
+
   /** 声かけをする。試合前とハーフタイムはその日の出来も変わる */
   const giveTalk = (moment: TalkMoment, tone: TalkTone) => {
     const squad = moment === 'post'
@@ -277,7 +372,7 @@ export function MatchDay() {
         <TalkPanel moment="pre" situation={m.favorite === 1 ? '相手より力が上と見られています。' : m.favorite === -1 ? '相手のほうが力が上と見られています。' : '力は互角と見られています。'}
           reactions={m.talks.pre} onTalk={(tone) => giveTalk('pre', tone)} />
         <div className="button-row">
-          <button type="button" className="primary large" onClick={() => { setStage('live'); setRunning(true); }}>キックオフ ▶</button>
+          <button type="button" className="primary large" onClick={() => { startAudio(); setStage('live'); setRunning(true); }}>キックオフ ▶</button>
         </div>
       </div>
     );
@@ -330,46 +425,171 @@ export function MatchDay() {
   const half: 1 | 2 = snap.phase === 'firstHalf' || snap.phase === 'halftime' ? 1 : 2;
   const mine = snap.sides[m.mySide];
   const theirs = snap.sides[m.mySide === 0 ? 1 : 0];
-  const kits = kitColors(game.clubs[m.fixture.homeId]?.colors ?? { primary: '#1559c2', secondary: '#ffffff' }, game.clubs[m.fixture.awayId]?.colors ?? { primary: '#d9480f', secondary: '#ffffff' });
+  const kits = m.kits;
   const lastGoal = [...m.live.events].reverse().find((e) => (e.type === 'goal' || e.type === 'penaltyGoal') && e.side !== null);
   const myClub = game.clubs[myId];
   const diff = snap.score[m.mySide] - snap.score[m.mySide === 0 ? 1 : 0];
+  const names: [string, string] = [game.clubs[m.fixture.homeId]?.shortName ?? '', game.clubs[m.fixture.awayId]?.shortName ?? ''];
+  const otherClock = snap.phase === 'halftime' || finished ? Number.POSITIVE_INFINITY : snap.clock;
+
+  const pitch = (isBig: boolean) => (s.settings.pitchStyle === 'dot'
+    ? <DotPitch snapshot={snap} events={m.live.events} moveMs={moveMs} camera={s.settings.camera} options={m.looks.options} infoOf={m.looks.infoOf} className={isBig ? 'big' : ''} />
+    : <MatchPitch snapshot={snap} events={m.live.events} colors={kits} moveMs={moveMs} numberOf={(id) => game.players[id]?.squadNumber ?? null} />);
+  const toggleRun = () => {
+    startAudio();
+    setRunning(!running);
+  };
+  const secondHalf = () => {
+    startAudio();
+    m.live.startSecondHalf();
+    setOverlay(null);
+    setRunning(true);
+    setTick((t) => t + 1);
+  };
+  const skip = () => { m.live.setAiControl(m.mySide, true); m.live.playToEnd(); setRunning(false); setTick((t) => t + 1); };
+  const speedButtons = (
+    <div className="segmented small">
+      {([1, 2, 4, 8] as MatchSpeed[]).map((v) => (
+        <button key={v} type="button" className={speed === v ? 'active' : ''} onClick={() => setSpeed(v)}>{v === 1 ? '等倍' : `${v}倍`}</button>
+      ))}
+    </div>
+  );
+  const goalFlash = s.settings.celebrations && !finished && (
+    <GoalFlash goal={lastGoal} colors={kits} mySide={m.mySide}
+      scorer={(id) => (id ? game.players[id]?.name : undefined)} club={(side) => snap.sides[side].team.name} />
+  );
+  const resultBanner = finished && (
+    <div className={`result-banner ${diff > 0 ? 'win' : diff === 0 ? 'draw' : 'loss'}`}
+      style={diff > 0 && myClub ? { background: myClub.colors.primary, color: textOn(myClub.colors.primary) } : undefined}>
+      {diff > 0 && s.settings.celebrations && myClub && <Confetti colors={[myClub.colors.secondary, GOLD, '#ffffff']} count={40} />}
+      <strong>{diff > 0 ? '勝利！' : diff === 0 ? '引き分け' : '敗戦'}</strong>
+      <span>{snap.score[m.mySide]} - {snap.score[m.mySide === 0 ? 1 : 0]}　{theirs.team.name}{diff > 0 ? 'に勝ちました' : diff === 0 ? 'と引き分けました' : 'に負けました'}</span>
+    </div>
+  );
+  const tacticsPanel = showTactics && !finished && (
+    <LiveTacticsPanel live={m.live} side={m.mySide} saved={game.savedStyles ?? []} onChange={() => setTick((t) => t + 1)}
+      onClose={() => { setShowTactics(false); setTick((t) => t + 1); }} />
+  );
+  const halftimeTalk = (
+    <TalkPanel moment="half" situation={`前半を終えて ${snap.score[m.mySide]} - ${snap.score[m.mySide === 0 ? 1 : 0]}。`}
+      reactions={m.talks.half} onTalk={(tone) => giveTalk('half', tone)} />
+  );
+
+  if (view === 'big') {
+    const subtitles = m.live.events.filter((e) => mode === 'all' || e.importance >= 2).slice(-2);
+    const drawer = (title: string, body: ReactNode) => (
+      <aside className="big-drawer" aria-label={title}>
+        <header><h2>{title}</h2><button type="button" className="secondary small" onClick={() => setOverlay(null)}>閉じる ✕</button></header>
+        <div className="big-drawer-body">{body}</div>
+      </aside>
+    );
+    return (
+      <div className={`page live big-live${fullscreen ? ' is-fullscreen' : ''}`}>
+        <div className="big-match" ref={big}>
+          <div className="big-band" role="toolbar" aria-label="観戦の操作">
+            <div className="band-group">
+              {!finished && snap.phase !== 'halftime' && (
+                <button type="button" className="primary" onClick={toggleRun} title="スペースキーでも止められます">{running ? '⏸ 一時停止' : '▶ 再開'}</button>
+              )}
+              {snap.phase === 'halftime' && <button type="button" className="primary" onClick={secondHalf}>▶ 後半開始</button>}
+              {finished && <button type="button" className="primary" onClick={() => setStage('report')}>試合後のレポートへ ▶</button>}
+              {speedButtons}
+              {!finished && <button type="button" className="secondary" onClick={() => { setRunning(false); setShowTactics(true); }}>交代・戦術</button>}
+            </div>
+            <div className="band-score" aria-live="polite">
+              <span className="band-team">{game.clubs[m.fixture.homeId] && <Emblem spec={game.clubs[m.fixture.homeId]!.emblem} size={22} />}{names[0]}</span>
+              <strong className="band-goals">{snap.score[0]} - {snap.score[1]}</strong>
+              <span className="band-team">{names[1]}{game.clubs[m.fixture.awayId] && <Emblem spec={game.clubs[m.fixture.awayId]!.emblem} size={22} />}</span>
+              <span className="band-clock">{snap.phase === 'halftime' ? 'ハーフタイム' : finished ? '試合終了' : snap.minute}</span>
+            </div>
+            <div className="band-group">
+              {s.settings.pitchStyle === 'dot' && (
+                <div className="segmented small" title="ピッチの映し方">
+                  <button type="button" className={s.settings.camera === 'whole' ? 'active' : ''} onClick={() => store.updateSettings({ camera: 'whole' })}>全体</button>
+                  <button type="button" className={s.settings.camera === 'follow' ? 'active' : ''} onClick={() => store.updateSettings({ camera: 'follow' })}>ボールを追う</button>
+                </div>
+              )}
+              <SoundControl onEnable={startAudio} />
+              {document.fullscreenEnabled !== false && (
+                <button type="button" className="secondary small" onClick={toggleFullscreen} title="F キーでも切り替えられます">{fullscreen ? '全画面をやめる' : '全画面'}</button>
+              )}
+              <button type="button" className="secondary small" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); setView('normal'); }} title="Esc キーでも戻れます">小さく見る</button>
+            </div>
+          </div>
+          <div className="big-stage">
+            {pitch(true)}
+            <div className="big-flash">{goalFlash}{resultBanner}</div>
+            {snap.phase === 'halftime' && overlay !== 'tactics' && (
+              <div className="big-overlay">
+                <HalftimeSummary game={game} m={m} snap={snap} talk={halftimeTalk}
+                  onTactics={() => setShowTactics(true)} onStart={secondHalf} />
+              </div>
+            )}
+            {overlay === 'tactics' && <div className="big-overlay">{tacticsPanel}</div>}
+            {overlay === 'stats' && drawer('スタッツ', <StatsTable stats={[snap.sides[0].stats, snap.sides[1].stats]} names={names} />)}
+            {overlay === 'players' && drawer('選手', (
+              <>
+                <h3>{mine.team.name}</h3>
+                <PlayersOnPitch side={mine} />
+                <div className="muted small">交代 {mine.subsUsed}/{SUBSTITUTION_RULES.maxSubs}　交代の回数 {mine.windowsUsed}/{SUBSTITUTION_RULES.maxWindows}（ハーフタイムは数えない）</div>
+                <h3>{theirs.team.name}</h3>
+                <PlayersOnPitch side={theirs} compact />
+              </>
+            ))}
+            {overlay === 'others' && drawer('他会場', <OtherScores game={game} m={m} half={half} clock={otherClock} full={finished} />)}
+            {overlay === 'commentary' && drawer('実況', <CommentaryList events={events} />)}
+          </div>
+          <div className="big-subtitles" aria-live="polite">
+            {subtitles.length === 0 ? <span className="muted">キックオフを待っています</span> : subtitles.map((e, i) => (
+              <div key={`${e.clock}-${i}`} className={`subtitle imp-${e.importance} side-${e.side ?? 'none'}`}><span className="event-minute">{e.minute}</span>{e.text}</div>
+            ))}
+          </div>
+          <div className="big-footer">
+            <div className="band-group">
+              {(['stats', 'players', 'others', 'commentary'] as const).map((key) => (
+                <button key={key} type="button" className={`secondary small${overlay === key ? ' active' : ''}`} onClick={() => setOverlay(overlay === key ? null : key)}>
+                  {{ stats: 'スタッツ', players: '選手', others: '他会場', commentary: '実況をすべて' }[key]}
+                </button>
+              ))}
+            </div>
+            <div className="band-group">
+              <div className="segmented small" title="字幕に出す実況">
+                <button type="button" className={mode === 'key' ? 'active' : ''} onClick={() => setMode('key')}>主な場面</button>
+                <button type="button" className={mode === 'all' ? 'active' : ''} onClick={() => setMode('all')}>すべて</button>
+              </div>
+              {!finished && (
+                <label className="inline small">
+                  <input type="checkbox" checked={m.live.isAiControlled(m.mySide)}
+                    onChange={(e) => { m.live.setAiControl(m.mySide, e.target.checked); setTick((t) => t + 1); }} />
+                  交代と戦術の変更をAIに任せる
+                </label>
+              )}
+              {!finished && <button type="button" className="secondary small" title="残りの交代と戦術の変更はAIに任せます" onClick={skip}>結果まで飛ばす</button>}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page live">
       <ScoreHeader game={game} homeId={m.fixture.homeId} awayId={m.fixture.awayId}
         homeGoals={snap.score[0]} awayGoals={snap.score[1]} live={s.settings.celebrations}
         sub={snap.phase === 'halftime' ? 'ハーフタイム' : finished ? '試合終了' : snap.minute} />
-      {s.settings.celebrations && !finished && (
-        <GoalFlash goal={lastGoal} colors={kits} mySide={m.mySide}
-          scorer={(id) => (id ? game.players[id]?.name : undefined)} club={(side) => snap.sides[side].team.name} />
-      )}
-      {finished && (
-        <div className={`result-banner ${diff > 0 ? 'win' : diff === 0 ? 'draw' : 'loss'}`}
-          style={diff > 0 && myClub ? { background: myClub.colors.primary, color: textOn(myClub.colors.primary) } : undefined}>
-          {diff > 0 && s.settings.celebrations && myClub && <Confetti colors={[myClub.colors.secondary, GOLD, '#ffffff']} count={40} />}
-          <strong>{diff > 0 ? '勝利！' : diff === 0 ? '引き分け' : '敗戦'}</strong>
-          <span>{snap.score[m.mySide]} - {snap.score[m.mySide === 0 ? 1 : 0]}　{theirs.team.name}{diff > 0 ? 'に勝ちました' : diff === 0 ? 'と引き分けました' : 'に負けました'}</span>
-        </div>
-      )}
+      {goalFlash}
+      {resultBanner}
 
       <div className="live-controls">
         {!finished && snap.phase !== 'halftime' && (
-          <button type="button" className="primary" onClick={() => setRunning(!running)}>{running ? '⏸ 一時停止' : '▶ 再開'}</button>
+          <button type="button" className="primary" onClick={toggleRun}>{running ? '⏸ 一時停止' : '▶ 再開'}</button>
         )}
         {snap.phase === 'halftime' && (
-          <button type="button" className="primary" onClick={() => { m.live.startSecondHalf(); setRunning(true); setTick((t) => t + 1); }}>▶ 後半開始</button>
+          <button type="button" className="primary" onClick={secondHalf}>▶ 後半開始</button>
         )}
-        <div className="segmented small">
-          {([1, 2, 4, 8] as MatchSpeed[]).map((v) => (
-            <button key={v} type="button" className={speed === v ? 'active' : ''} onClick={() => setSpeed(v)}>{v === 1 ? '等倍' : `${v}倍`}</button>
-          ))}
-        </div>
+        {speedButtons}
         {!finished && (
-          <button type="button" className="secondary" title="残りの交代と戦術の変更はAIに任せます"
-            onClick={() => { m.live.setAiControl(m.mySide, true); m.live.playToEnd(); setRunning(false); setTick((t) => t + 1); }}>
-            結果まで飛ばす
-          </button>
+          <button type="button" className="secondary" title="残りの交代と戦術の変更はAIに任せます" onClick={skip}>結果まで飛ばす</button>
         )}
         {!finished && (
           <label className="inline small">
@@ -381,7 +601,9 @@ export function MatchDay() {
         {!finished && (
           <button type="button" className="secondary" onClick={() => { setRunning(false); setShowTactics(true); }}>交代・戦術の変更</button>
         )}
+        <button type="button" className="secondary" onClick={() => setView('big')}>大きく見る</button>
         {!s.settings.showPitch && <button type="button" className="secondary" onClick={() => store.updateSettings({ showPitch: true })}>ピッチを見せる</button>}
+        <SoundControl onEnable={startAudio} />
         <div className="segmented small">
           <button type="button" className={mode === 'key' ? 'active' : ''} onClick={() => setMode('key')}>主な場面</button>
           <button type="button" className={mode === 'all' ? 'active' : ''} onClick={() => setMode('all')}>すべての実況</button>
@@ -389,32 +611,19 @@ export function MatchDay() {
         {finished && <button type="button" className="primary" onClick={() => setStage('report')}>試合後のレポートへ ▶</button>}
       </div>
 
-      {snap.phase === 'halftime' && (
-        <TalkPanel moment="half" situation={`前半を終えて ${snap.score[m.mySide]} - ${snap.score[m.mySide === 0 ? 1 : 0]}。`}
-          reactions={m.talks.half} onTalk={(tone) => giveTalk('half', tone)} />
-      )}
+      {snap.phase === 'halftime' && halftimeTalk}
 
-      {showTactics && !finished && (
-        <LiveTacticsPanel live={m.live} side={m.mySide} saved={game.savedStyles ?? []} onChange={() => setTick((t) => t + 1)}
-          onClose={() => { setShowTactics(false); setTick((t) => t + 1); }} />
-      )}
+      {tacticsPanel}
 
       <div className="live-grid">
         <div>
         {s.settings.showPitch && (
           <Panel title="ピッチ" actions={<button type="button" className="secondary small" onClick={() => store.updateSettings({ showPitch: false })}>隠す</button>}>
-            <MatchPitch snapshot={snap} events={m.live.events} colors={kits} moveMs={moveMs} numberOf={(id) => game.players[id]?.squadNumber ?? null} />
+            {pitch(false)}
           </Panel>
         )}
-        <Panel title={<>実況<span className="side-legend"><span className="swatch side-0" />{game.clubs[m.fixture.homeId]?.shortName}<span className="swatch side-1" />{game.clubs[m.fixture.awayId]?.shortName}</span></>}>
-          <ul className="commentary">
-            {events.map((e, i) => (
-              <li key={`${e.clock}-${i}`} className={`event imp-${e.importance} type-${e.type} side-${e.side ?? 'none'}`}>
-                <span className="event-minute">{e.minute}</span>
-                <span>{e.text}</span>
-              </li>
-            ))}
-          </ul>
+        <Panel title={<>実況<span className="side-legend"><span className="swatch side-0" />{names[0]}<span className="swatch side-1" />{names[1]}</span></>}>
+          <CommentaryList events={events} />
         </Panel>
         </div>
         <div>
@@ -423,11 +632,10 @@ export function MatchDay() {
             <div className="muted small">交代 {mine.subsUsed}/{SUBSTITUTION_RULES.maxSubs}　交代の回数 {mine.windowsUsed}/{SUBSTITUTION_RULES.maxWindows}（ハーフタイムは数えない）</div>
           </Panel>
           <Panel title="スタッツ">
-            <StatsTable stats={[snap.sides[0].stats, snap.sides[1].stats]}
-              names={[game.clubs[m.fixture.homeId]?.shortName ?? '', game.clubs[m.fixture.awayId]?.shortName ?? '']} />
+            <StatsTable stats={[snap.sides[0].stats, snap.sides[1].stats]} names={names} />
           </Panel>
           <Panel title="他会場">
-            <OtherScores game={game} m={m} half={half} clock={snap.phase === 'halftime' ? Number.POSITIVE_INFINITY : finished ? Number.POSITIVE_INFINITY : snap.clock} full={finished} />
+            <OtherScores game={game} m={m} half={half} clock={otherClock} full={finished} />
           </Panel>
           <Panel title={`相手：${theirs.team.name}`}>
             <PlayersOnPitch side={theirs} compact />
@@ -435,6 +643,72 @@ export function MatchDay() {
         </div>
       </div>
     </div>
+  );
+}
+
+function CommentaryList({ events }: { events: readonly MatchEvent[] }) {
+  return (
+    <ul className="commentary">
+      {events.map((e, i) => (
+        <li key={`${e.clock}-${i}`} className={`event imp-${e.importance} type-${e.type} side-${e.side ?? 'none'}`}>
+          <span className="event-minute">{e.minute}</span>
+          <span>{e.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** 音を出す・消すと、音量（設定に残る） */
+function SoundControl({ onEnable }: { onEnable: () => void }) {
+  const s = useStore();
+  const on = s.settings.sound;
+  return (
+    <span className="sound-control">
+      <button type="button" className="secondary small" aria-pressed={on} title={on ? '音を消す' : '音を出す'}
+        onClick={() => {
+          store.updateSettings({ sound: !on });
+          if (!on) requestAnimationFrame(onEnable);
+        }}>{on ? '🔊 音' : '🔇 音なし'}</button>
+      <input type="range" min={0} max={1} step={0.05} value={s.settings.volume} aria-label="音量" disabled={!on}
+        onChange={(e) => store.updateSettings({ volume: Number(e.target.value) })} />
+    </span>
+  );
+}
+
+/** ハーフタイムに重ねて出す：前半のまとめ（スコア、スタッツ、流れ）と声かけ、交代・戦術 */
+function HalftimeSummary({ game, m, snap, talk, onTactics, onStart }: {
+  game: GameState; m: Running; snap: ReturnType<LiveMatch['snapshot']>; talk: ReactNode; onTactics: () => void; onStart: () => void;
+}) {
+  const [h, a] = [snap.sides[0].stats, snap.sides[1].stats];
+  const possession = Math.round((h.possessionSeconds / Math.max(1, h.possessionSeconds + a.possessionSeconds)) * 100);
+  const names = [game.clubs[m.fixture.homeId]?.shortName ?? '', game.clubs[m.fixture.awayId]?.shortName ?? ''];
+  const key = m.live.events.filter((e) => e.importance >= 3 || e.type === 'yellowCard');
+  const flow = possession >= 58 ? `${names[0]}がボールを持って押している` : possession <= 42 ? `${names[1]}がボールを持って押している` : 'ボールの持ち合いは五分';
+  return (
+    <section className="panel halftime-summary">
+      <header className="panel-header"><h2>ハーフタイム　{names[0]} {snap.score[0]} - {snap.score[1]} {names[1]}</h2></header>
+      <div className="panel-body">
+        <div className="half-flow">
+          <div className="half-bar" aria-label={`ボール支配率 ${possession}% 対 ${100 - possession}%`}>
+            <span style={{ width: `${possession}%`, background: m.kits[0] }} />
+            <span style={{ width: `${100 - possession}%`, background: m.kits[1] }} />
+          </div>
+          <div className="small">ボール支配率 {possession}% - {100 - possession}%　シュート {h.shots}（枠内 {h.shotsOnTarget}）- {a.shots}（枠内 {a.shotsOnTarget}）　xG {h.xg.toFixed(2)} - {a.xg.toFixed(2)}</div>
+          <div className="small muted">前半の流れ：{flow}</div>
+          {key.length > 0 && (
+            <ul className="half-events">
+              {key.map((e, i) => <li key={`${e.clock}-${i}`} className={`side-${e.side ?? 'none'}`}><span className="event-minute">{e.minute}</span>{e.text}</li>)}
+            </ul>
+          )}
+        </div>
+        {talk}
+        <div className="button-row">
+          <button type="button" className="secondary" onClick={onTactics}>交代・戦術の変更</button>
+          <button type="button" className="primary large" onClick={onStart}>▶ 後半開始</button>
+        </div>
+      </div>
+    </section>
   );
 }
 
