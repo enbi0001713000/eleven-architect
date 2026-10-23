@@ -95,7 +95,7 @@ export function Training() {
                 <thead><tr><th>選手</th><th>ケガ</th><th className="num">残り</th><th>復帰の見込み</th></tr></thead>
                 <tbody>
                   {injured.map((p) => (
-                    <tr key={p.id} className="clickable" onClick={() => store.navigate({ name: 'player', id: p.id })}>
+                    <tr key={p.id} className="clickable" onClick={() => store.navigate({ name: 'player', id: p.id, list: injured.map((q) => q.id) })}>
                       <td>{p.name}</td>
                       <td>{p.status.injury && injuryName(p.status.injury)}</td>
                       <td className="num">{p.status.injury?.daysLeft}日</td>
@@ -119,7 +119,7 @@ export function Training() {
             {players.map((p) => (
               <tr key={p.id}>
                 <td>{POSITION_LABEL[p.position]}</td>
-                <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button></td>
+                <td><button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id, list: players.map((q) => q.id) })}>{p.name}</button></td>
                 <td className="num">{p.age}</td>
                 <td className="num">{overallRating(p).toFixed(1)}</td>
                 <td><Stars count={potentialStars(p)} /></td>

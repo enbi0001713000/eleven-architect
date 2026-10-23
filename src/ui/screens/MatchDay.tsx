@@ -5,11 +5,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { LiveMatch, SUBSTITUTION_RULES } from '../../engine/match';
 import { createRng } from '../../engine/rng';
-import { positionRating } from '../../engine/ratings';
-import { ROLE_OPTIONS, roleLabel } from '../../engine/roles';
-import type { FormationName, MatchResult, Role, Side, TeamInstructions } from '../../engine/types';
+import { roleLabel } from '../../engine/roles';
+import type { MatchResult, Side } from '../../engine/types';
 import { matchGate } from '../../game/finance';
-import { ROLE_FIT_MARK, roleFit } from '../../game/roleFit';
 import { applyMatchday, isSeasonOver, nextFixtureOf, prepareMatchday } from '../../game/season';
 import { autoSelect, repairSelection, selectionWarnings, validateSelection } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
@@ -21,8 +19,9 @@ import type { Fixture, PlayerRecord } from '../../game/types';
 import { FormBadges, Panel, StaminaBar } from '../components/bits';
 import { Reactions } from '../components/Reactions';
 import { Emblem } from '../components/Emblem';
+import { LiveTacticsPanel } from '../components/LiveTacticsPanel';
 import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
-import { FORMATIONS_LIST, formatDate, INSTRUCTION_LABELS, POSITION_LABEL, ratingTone } from '../format';
+import { formatDate, POSITION_LABEL, ratingTone } from '../format';
 import type { CommentaryMode, MatchSpeed } from '../settings';
 import { simulateInBackground } from '../simClient';
 import { store, useGame, useStore } from '../store';
@@ -361,12 +360,12 @@ export function MatchDay() {
       )}
 
       {showTactics && !finished && (
-        <TacticsPanel live={m.live} side={m.mySide} onChange={() => setTick((t) => t + 1)}
+        <LiveTacticsPanel live={m.live} side={m.mySide} onChange={() => setTick((t) => t + 1)}
           onClose={() => { setShowTactics(false); setTick((t) => t + 1); }} />
       )}
 
       <div className="live-grid">
-        <Panel title="実況">
+        <Panel title={<>実況<span className="side-legend"><span className="swatch side-0" />{game.clubs[m.fixture.homeId]?.shortName}<span className="swatch side-1" />{game.clubs[m.fixture.awayId]?.shortName}</span></>}>
           <ul className="commentary">
             {events.map((e, i) => (
               <li key={`${e.clock}-${i}`} className={`event imp-${e.importance} type-${e.type} side-${e.side ?? 'none'}`}>
@@ -433,111 +432,6 @@ function PlayersOnPitch({ side, compact }: { side: ReturnType<LiveMatch['snapsho
         ))}
       </tbody>
     </table>
-  );
-}
-
-/** 試合中の交代と戦術の変更 */
-function TacticsPanel({ live, side, onChange, onClose }: { live: LiveMatch; side: Side; onChange: () => void; onClose: () => void }) {
-  const current = live.snapshot().sides[side];
-  const [formation, setFormation] = useState<FormationName>(current.tactics.formation);
-  const [instructions, setInstructions] = useState<TeamInstructions>(current.tactics.instructions);
-  const [roles, setRoles] = useState<Role[]>(current.onPitch.map((p) => p.role));
-  const [outId, setOutId] = useState('');
-  const [inId, setInId] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [, setVersion] = useState(0);
-
-  const substitute = () => {
-    const result = live.substitute(side, outId, inId);
-    setMessage(result.ok ? '交代しました' : result.message ?? '交代できませんでした');
-    if (result.ok) {
-      setOutId('');
-      setInId('');
-      setRoles(live.snapshot().sides[side].onPitch.map((p) => p.role));
-    }
-    setVersion((v) => v + 1);
-    onChange();
-  };
-
-  const apply = () => {
-    const formationChanged = formation !== current.tactics.formation;
-    const result = live.changeTactics(side, formationChanged ? { formation, instructions } : { instructions, roles });
-    setMessage(result.ok ? '戦術を変更しました' : result.message ?? '変更できませんでした');
-    if (result.ok) {
-      setRoles(live.snapshot().sides[side].onPitch.map((p) => p.role));
-      setVersion((v) => v + 1);
-      onChange();
-    }
-  };
-
-  const outgoing = current.onPitch.find((p) => p.player.id === outId);
-
-  return (
-    <div className="tactics-overlay">
-      <Panel title="交代・戦術の変更（試合は止まっています）" actions={<button type="button" className="primary" onClick={onClose}>閉じて戻る</button>}>
-        <div className="grid-2">
-          <div>
-            <h3>選手交代（{current.subsUsed}/{SUBSTITUTION_RULES.maxSubs}人、回数 {current.windowsUsed}/{SUBSTITUTION_RULES.maxWindows}）</h3>
-            <label className="block">下げる選手
-              <select value={outId} onChange={(e) => setOutId(e.target.value)}>
-                <option value="">選ぶ…</option>
-                {current.onPitch.filter((p) => !p.sentOff).map((p) => (
-                  <option key={p.player.id} value={p.player.id}>{POSITION_LABEL[p.position]} {p.player.name}（スタミナ{Math.round(p.stamina)}・評価{p.stats.rating.toFixed(1)}）</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">入れる選手
-              <select value={inId} onChange={(e) => setInId(e.target.value)}>
-                <option value="">選ぶ…</option>
-                {current.bench.filter((b) => !b.used).map((b) => (
-                  <option key={b.player.id} value={b.player.id}>
-                    {POSITION_LABEL[b.player.position]} {b.player.name}{outgoing ? `（この枠での力 ${positionRating(b.player, outgoing.position).toFixed(1)}）` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="button" className="primary" disabled={!outId || !inId} onClick={substitute}>交代する</button>
-          </div>
-          <div>
-            <h3>戦術</h3>
-            <label className="inline">フォーメーション
-              <select value={formation} onChange={(e) => setFormation(e.target.value as FormationName)}>
-                {FORMATIONS_LIST.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </label>
-            {INSTRUCTION_LABELS.map((item) => (
-              <div key={item.key} className="instruction">
-                <span className="instruction-label">{item.label}</span>
-                <div className="segmented small">
-                  {[-2, -1, 0, 1, 2].map((v) => (
-                    <button key={v} type="button" className={instructions[item.key] === v ? 'active' : ''}
-                      onClick={() => setInstructions({ ...instructions, [item.key]: v })}>
-                      {v === -2 ? item.low : v === 2 ? item.high : v === 0 ? '標準' : v > 0 ? '＋' : '−'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {formation === current.tactics.formation && (
-              <details>
-                <summary>役割を変える</summary>
-                {current.onPitch.map((p, i) => (
-                  <label key={p.player.id} className="inline">
-                    {POSITION_LABEL[p.position]} {p.player.name}
-                    <select value={roles[i]} onChange={(e) => setRoles(roles.map((r, j) => (j === i ? (e.target.value as Role) : r)))}>
-                      {ROLE_OPTIONS[p.position].map((r) => <option key={r} value={r}>{ROLE_FIT_MARK[roleFit(p.player, r, p.position)]} {roleLabel(r, p.position)}</option>)}
-                    </select>
-                  </label>
-                ))}
-              </details>
-            )}
-            {formation !== current.tactics.formation && <p className="muted small">フォーメーションを変えると、選手は適性の高い枠に自動で並び直し、役割は初期値に戻ります。</p>}
-            <button type="button" className="primary" onClick={apply}>戦術を変更する</button>
-          </div>
-        </div>
-        {message && <p className="notice">{message}</p>}
-      </Panel>
-    </div>
   );
 }
 

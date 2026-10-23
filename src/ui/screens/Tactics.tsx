@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { FORMATIONS } from '../../engine/formations';
 import { overallRating, positionFit, positionRating } from '../../engine/ratings';
 import { ROLE_OPTIONS, ROLE_PROFILES, roleForSlot, roleLabel } from '../../engine/roles';
-import type { FormationName, Role, TeamInstructions } from '../../engine/types';
+import type { AttributeKey, FormationName, Player, Role, TeamInstructions } from '../../engine/types';
 import { teamFamiliarity } from '../../game/condition';
 import { instructionFamiliarity } from '../../game/progress';
 import { bestRoles, ROLE_FIT_MARK, ROLE_FIT_TEXT, roleFit } from '../../game/roleFit';
@@ -14,7 +14,7 @@ import {
 } from '../../game/selection';
 import type { PlayerRecord } from '../../game/types';
 import { Condition, Panel, StatusTags } from '../components/bits';
-import { FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL } from '../format';
+import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, ATTRIBUTE_SHORT, attributeTone, FORMATIONS_LIST, INSTRUCTION_LABELS, POSITION_LABEL } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
 
@@ -24,6 +24,8 @@ export function Tactics() {
   const clubId = game.manager.clubId;
   const club = game.clubs[clubId];
   const [selectedSlot, setSelectedSlot] = useState<number>(0);
+  /** 能力を比べる候補（枠の選手と並べて見せる） */
+  const [compareId, setCompareId] = useState<string | null>(null);
   if (!club) return null;
 
   const tactics = club.tactics;
@@ -91,6 +93,9 @@ export function Tactics() {
   const notSelected = players.filter((p) => !selection.lineup.includes(p.id) && !selection.bench.includes(p.id))
     .sort((a, b) => overallRating(b) - overallRating(a));
   const lineupPlayers = selection.lineup.map(byId).filter((p): p is PlayerRecord => p !== undefined);
+  /** 選んだ枠の役割で大事な能力（候補の表に列として出す） */
+  const keyAttributes: AttributeKey[] = slotRole ? ROLE_PROFILES[slotRole].keys : [];
+  const compare = byId(compareId ?? undefined);
 
   return (
     <div className="page tactics">
@@ -141,7 +146,7 @@ export function Tactics() {
                 <button key={i} type="button"
                   className={`pitch-slot${selectedSlot === i ? ' selected' : ''}${problem ? ' problem' : ''}`}
                   style={{ top: `${(1 - s.x / 4.6) * 88 + 4}%`, left: `${50 + (s.y - 2.5) * 19}%` }}
-                  onClick={() => setSelectedSlot(i)}>
+                  onClick={() => { setSelectedSlot(i); setCompareId(null); }}>
                   <span className="slot-pos">{POSITION_LABEL[s.position]}</span>
                   <span className="slot-name">{p ? p.name.split(' ')[0]?.split('・')[0] : '（空き）'}</span>
                   <span className="slot-role">{p && <span className={`fit-mark fit-${roleFit(p, role, s.position)}`}>{ROLE_FIT_MARK[roleFit(p, role, s.position)]}</span>}{roleLabel(role, s.position)}</span>
@@ -197,22 +202,27 @@ export function Tactics() {
                 })}
                 {slotPlayer && <p className="muted small">◎○△は、その役割で大事な能力が、{slotPlayer.name}のこの位置での力より高いかどうかの目安です。</p>}
               </div>
+              <div className="table-wrap">
               <table className="data-table compact">
-                <thead><tr><th>Pos</th><th>名前</th><th className="num">この枠での力</th><th title={slotRole ? `${roleLabel(slotRole, slot.position)}への向き不向き` : ''}>役割</th><th>調子</th><th>状態</th><th /></tr></thead>
+                <thead><tr><th>Pos</th><th>名前</th><th className="num">この枠での力</th><th title={slotRole ? `${roleLabel(slotRole, slot.position)}への向き不向き` : ''}>役割</th>
+                  {keyAttributes.map((k) => <th key={k} className="num" title={`${ATTRIBUTE_LABEL[k]}（この役割で大事な能力）`}>{ATTRIBUTE_SHORT[k]}</th>)}
+                  <th>調子</th><th>状態</th><th /></tr></thead>
                 <tbody>
                   {candidates.slice(0, 12).map((p) => {
                     const where = selection.lineup.includes(p.id) ? '先発' : selection.bench.includes(p.id) ? '控え' : '';
                     return (
-                      <tr key={p.id} className={p.id === slotPlayer?.id ? 'highlight' : ''}>
+                      <tr key={p.id} className={`clickable${p.id === slotPlayer?.id ? ' highlight' : ''}${p.id === compareId ? ' compared' : ''}`}
+                        title="押すと、下の表で能力を比べられます" onClick={() => setCompareId(p.id === slotPlayer?.id ? null : p.id)}>
                         <td>{POSITION_LABEL[p.position]}</td>
                         <td>{p.name}{isForeign(p) ? <span className="muted small">（外）</span> : null}</td>
                         <td className="num">{positionRating(p, slot.position).toFixed(1)}</td>
                         <td>{slotRole && <span className={`fit-mark fit-${roleFit(p, slotRole, slot.position)}`}>{ROLE_FIT_MARK[roleFit(p, slotRole, slot.position)]}</span>}</td>
+                        {keyAttributes.map((k) => <td key={k} className={`num ${attributeTone(p.attributes[k])}`}>{Math.round(p.attributes[k])}</td>)}
                         <td><Condition value={p.status.condition} /></td>
                         <td>{unavailableReason(p) ? <StatusTags player={p} /> : <>{where} <StatusTags player={p} /></>}</td>
                         <td>
                           {p.id !== slotPlayer?.id && isAvailable(p) && (
-                            <button type="button" className="secondary small" onClick={() => assign(p.id)}>入れる</button>
+                            <button type="button" className="secondary small" onClick={(e) => { e.stopPropagation(); assign(p.id); setCompareId(null); }}>入れる</button>
                           )}
                         </td>
                       </tr>
@@ -220,6 +230,10 @@ export function Tactics() {
                   })}
                 </tbody>
               </table>
+              </div>
+              {slotPlayer && (
+                <AttributeCompare position={slot.position} keys={keyAttributes} left={slotPlayer} right={compare && compare.id !== slotPlayer.id ? compare : undefined} />
+              )}
             </Panel>
           )}
 
@@ -260,6 +274,37 @@ export function Tactics() {
             })}
           </Panel>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** 枠の選手（左）と、比べる候補（右）の能力。役割で大事な能力に★を付ける */
+function AttributeCompare({ position, keys, left, right }: { position: Player['position']; keys: AttributeKey[]; left: Player; right?: Player }) {
+  const showGk = position === 'GK' || left.position === 'GK' || right?.position === 'GK';
+  const groups = ATTRIBUTE_GROUPS.filter((g) => showGk || g.label !== 'GK');
+  return (
+    <div className="attr-compare">
+      <h3 className="small">能力{right ? `：${left.name} と ${right.name}` : `：${left.name}`}<span className="muted small">（★はこの役割で大事な能力。表の行を押すと比べられます）</span></h3>
+      <div className="attr-compare-grid">
+        {groups.map((group) => (
+          <table key={group.label} className="attr-table">
+            <thead><tr><th>{group.label}</th><th className="num">{left.name.split(' ')[0]}</th>{right && <th className="num">{right.name.split(' ')[0]}</th>}</tr></thead>
+            <tbody>
+              {group.keys.map((k) => {
+                const a = Math.round(left.attributes[k]);
+                const b = right ? Math.round(right.attributes[k]) : null;
+                return (
+                  <tr key={k} className={keys.includes(k) ? 'key-attr' : ''}>
+                    <td>{keys.includes(k) ? '★' : ''}{ATTRIBUTE_LABEL[k]}</td>
+                    <td className={`num ${attributeTone(a)}`}>{a}</td>
+                    {b !== null && <td className={`num ${attributeTone(b)}`}>{b}{b > a ? <span className="diff-up"> ▲</span> : b < a ? <span className="diff-down"> ▼</span> : null}</td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ))}
       </div>
     </div>
   );

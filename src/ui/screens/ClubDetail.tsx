@@ -75,7 +75,7 @@ export function ClubDetail({ id }: { id: string }) {
       {!mine && <p className="muted small">他クラブの選手の能力は幅で表示されます（知識度50%）。</p>}
       <DataTable rows={clubPlayers(game, id)} rowKey={(p) => p.id} initialSort={{ key: 'pos', desc: false }}
         columns={columns.filter((c) => keys.includes(c.key))}
-        onRowClick={(p) => store.navigate({ name: 'player', id: p.id })} />
+        onRowClick={(p, rows) => store.navigate({ name: 'player', id: p.id, list: rows.map((r) => r.id) })} />
     </div>
   );
 }

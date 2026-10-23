@@ -112,6 +112,19 @@ describe('戦術の変更', () => {
     expect(live.events.some((e) => e.type === 'tactics')).toBe(true);
   });
 
+  it('フォーメーションを変えるときに、おすすめの並びから自分で入れ替えた並びにできる', () => {
+    const live = new LiveMatch(home, away, { seed: 10, aiControl: manual });
+    live.advance(50 * 60);
+    const suggested = live.suggestOrder(0, '4-3-3');
+    expect(suggested).toHaveLength(11);
+    expect(new Set(suggested)).toEqual(new Set(live.snapshot().sides[0].onPitch.map((p) => p.player.id)));
+    // 両ウイングの枠（9番目と11番目）の選手を入れ替える
+    const order = [...suggested];
+    [order[8], order[10]] = [order[10] as string, order[8] as string];
+    expect(live.changeTactics(0, { formation: '4-3-3', order }).ok).toBe(true);
+    expect(live.snapshot().sides[0].onPitch.map((p) => p.player.id)).toEqual(order);
+  });
+
   it('枠の数が合わない並びは受け付けない', () => {
     const live = new LiveMatch(home, away, { seed: 12, aiControl: manual });
     expect(live.changeTactics(0, { order: home.lineup.slice(0, 10) }).ok).toBe(false);

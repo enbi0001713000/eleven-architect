@@ -38,7 +38,7 @@ export function Squad() {
       </div>
       <div data-tutorial="squad-table">
         <DataTable rows={players} columns={visible} rowKey={(p) => p.id} initialSort={{ key: 'pos', desc: false }}
-          onRowClick={(p) => store.navigate({ name: 'player', id: p.id })} />
+          onRowClick={(p, rows) => store.navigate({ name: 'player', id: p.id, list: rows.map((r) => r.id) })} />
       </div>
     </div>
   );

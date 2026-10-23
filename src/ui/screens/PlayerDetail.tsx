@@ -1,6 +1,6 @@
 // 選手の詳細：能力、記録、契約、スカウトレポート（フェーズ4-C）をタブで切り替える
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { overallRating, positionRating } from '../../engine/ratings';
 import { ATTRIBUTE_KEYS, type AttributeKey, type Position } from '../../engine/types';
 import { GOALKEEPING_KEYS, INJURY_TYPES } from '../../game/balance';
@@ -23,10 +23,28 @@ import { store, useGame } from '../store';
 
 type Tab = 'attributes' | 'records' | 'contract' | 'scout';
 
-export function PlayerDetail({ id }: { id: string }) {
+export function PlayerDetail({ id, list, initialTab }: { id: string; list?: string[]; initialTab?: Tab }) {
   const game = useGame();
-  const [tab, setTab] = useState<Tab>('attributes');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'attributes');
   const player = game.players[id];
+  // 一覧から開いたときは、矢印（または左右のキー）で前後の選手に移る。戻ると一覧に戻る
+  const index = list ? list.indexOf(id) : -1;
+  const move = (step: number) => {
+    if (!list || index < 0) return;
+    const next = list[(index + step + list.length) % list.length];
+    if (next) store.replace({ name: 'player', id: next, list, tab });
+  };
+  useEffect(() => {
+    if (index < 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+      if (e.key === 'ArrowLeft') move(-1);
+      if (e.key === 'ArrowRight') move(1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
   if (!player) return <div className="page"><p>選手が見つかりません。</p></div>;
   const knowledge = knowledgeOf(game, player);
   const mine = player.clubId === game.manager.clubId;
@@ -37,6 +55,13 @@ export function PlayerDetail({ id }: { id: string }) {
     <div className="page">
       <header className="page-header">
         <button type="button" className="secondary" onClick={() => store.back()}>← 戻る</button>
+        {list && index >= 0 && list.length > 1 && (
+          <div className="player-nav">
+            <button type="button" className="secondary" title="前の選手（←キー）" aria-label="前の選手" onClick={() => move(-1)}>◀</button>
+            <span className="muted small">{index + 1} / {list.length}</span>
+            <button type="button" className="secondary" title="次の選手（→キー）" aria-label="次の選手" onClick={() => move(1)}>▶</button>
+          </div>
+        )}
         <div className="player-head">
           <div className="player-number">{player.squadNumber ?? '-'}</div>
           <div>

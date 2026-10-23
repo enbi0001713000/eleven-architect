@@ -15,7 +15,13 @@ export type Screen =
   | { name: 'settings' }
   | { name: 'home' }
   | { name: 'squad' }
-  | { name: 'player'; id: string }
+  | {
+    name: 'player';
+    id: string;
+    /** 一覧から開いたときの並び。矢印で前後の選手に移れる */
+    list?: string[];
+    tab?: 'attributes' | 'records' | 'contract' | 'scout';
+  }
   | { name: 'tactics' }
   | { name: 'fixtures'; round?: number }
   | { name: 'league' }
@@ -95,6 +101,12 @@ class Store {
     if (this.history.length > 30) this.history.shift();
     this.screen = screen;
     this.scrollToTop();
+    this.emit();
+  }
+
+  /** 今の画面を差し替える（戻ると、その前の画面に戻る）。選手の詳細で前後の選手に移るとき */
+  replace(screen: Screen): void {
+    this.screen = screen;
     this.emit();
   }
 
