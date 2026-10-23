@@ -18,6 +18,7 @@ import { LEAGUE_RULES } from '../../game/rules';
 import { averageRating } from '../../game/season';
 import { AttributeValue, Bar, ClubLink, Condition, Fatigue, Morale, Panel, PosChip, Rating, Stars, StatusTags } from '../components/bits';
 import { PlayerFace } from '../components/Face';
+import { Term } from '../components/Term';
 import { ATTRIBUTE_GROUPS, ATTRIBUTE_LABEL, formatDate, formatYen, POSITION_NAME, POSITION_ORDER } from '../format';
 import { ScoutReportView } from '../components/ScoutReport';
 import { store, useGame } from '../store';
@@ -87,9 +88,9 @@ export function PlayerDetail({ id, list, initialTab }: { id: string; list?: stri
             </div>
           </div>
           <div className="player-overall">
-            <span className="muted small">総合力</span>
+            <span className="muted small"><Term k="総合力">総合力</Term></span>
             <AttributeValue view={view(overallRating(player), 'overall')} />
-            {!mine && <span className="muted small">知識度 {knowledge}%</span>}
+            {!mine && <span className="muted small"><Term k="知識度">知識度</Term> {knowledge}%</span>}
           </div>
         </div>
       </header>
@@ -107,9 +108,9 @@ export function PlayerDetail({ id, list, initialTab }: { id: string; list?: stri
           </button>}>
           <div className="grid-2">
             <dl className="facts">
-              <dt>コンディション</dt><dd><Bar value={player.status.condition} /> <Condition value={player.status.condition} /></dd>
-              <dt>蓄積疲労</dt><dd><Bar value={player.status.fatigue} invert /> <Fatigue value={player.status.fatigue} /></dd>
-              <dt>モラル</dt><dd><Morale value={player.status.morale} /></dd>
+              <dt><Term k="コンディション">コンディション</Term></dt><dd><Bar value={player.status.condition} /> <Condition value={player.status.condition} /></dd>
+              <dt><Term k="蓄積疲労">蓄積疲労</Term></dt><dd><Bar value={player.status.fatigue} invert /> <Fatigue value={player.status.fatigue} /></dd>
+              <dt><Term k="モラル">モラル</Term></dt><dd><Morale value={player.status.morale} /></dd>
               <dt>ケガ</dt><dd>{player.status.injury ? injuryName(player.status.injury) : 'なし'} <StatusTags player={player} /></dd>
             </dl>
             <dl className="facts">
@@ -256,7 +257,7 @@ function ContractPanel({ game, player, mine }: { game: GameState; player: Player
       </>
     }>
       <dl className="facts">
-        <dt>市場価値</dt><dd>{formatValueRange(marketValueRange(game, player))}</dd>
+        <dt><Term k="市場価値">市場価値</Term></dt><dd>{formatValueRange(marketValueRange(game, player))}</dd>
         <dt>代理人</dt><dd>{agent.name}（{AGENT_STYLES[agent.style].label}）</dd>
         {c ? (
           <>

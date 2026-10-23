@@ -2,10 +2,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { applyTheme, loadSettings } from './settings';
+import { applyScale, applyTheme, loadSettings } from './settings';
 import './styles.css';
 
 applyTheme(loadSettings().theme);
+applyScale(loadSettings().uiScale);
 
 // ブラウザの容量が足りなくなっても、セーブを勝手に消さないように頼む（認められないこともある）
 void navigator.storage?.persist?.().catch(() => false);

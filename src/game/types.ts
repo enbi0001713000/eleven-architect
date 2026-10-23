@@ -747,4 +747,13 @@ export interface GameState {
   // ---- 1.0.3 ----
   /** 画面で大きく見せる出来事の予定（古いセーブにはない） */
   moments?: Moment[];
+  // ---- 1.1 ----
+  /** 自分で名前を付けて残したチーム指示（3つまで。古いセーブにはない） */
+  savedStyles?: SavedStyle[];
+}
+
+/** 自分で作った戦い方（1.1） */
+export interface SavedStyle {
+  name: string;
+  instructions: TeamInstructions;
 }

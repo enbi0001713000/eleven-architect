@@ -3,9 +3,11 @@
 import { yearPlan, yenText } from '../../game/finance';
 import { clubPlayers } from '../../game/selection';
 import { standingsOf } from '../../game/standings';
+import { nearestStyle } from '../../game/styles';
 import { ClubLink, FormBadges, Panel, ResultChip } from '../components/bits';
 import { DataTable } from '../components/DataTable';
 import { Emblem } from '../components/Emblem';
+import { Term } from '../components/Term';
 import { SIZE_LABEL } from '../format';
 import { COLUMN_PRESETS, playerColumns } from '../playerColumns';
 import { playedFixtures, scoreFor } from '../queries';
@@ -45,6 +47,7 @@ export function ClubDetail({ id }: { id: string }) {
             <dt>ファンの数</dt><dd>約{club.fans.toLocaleString('ja-JP')}人</dd>
             <dt>ライバル</dt><dd>{club.rivalId && <ClubLink game={game} clubId={club.rivalId} />}</dd>
             <dt>フォーメーション</dt><dd>{club.tactics.formation}</dd>
+            <dt><Term k="戦い方">戦い方</Term></dt><dd>{nearestStyle(club.tactics.instructions)?.name ?? '独自の戦い方'}</dd>
             <dt>評判</dt><dd>{club.reputation}</dd>
             {club.finance.history.length > 0
               ? <><dt>前年の売上</dt><dd>{yenText(club.revenue)}</dd></>

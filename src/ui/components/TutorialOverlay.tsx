@@ -2,9 +2,11 @@
 // 説明している部品を光らせ、ほかの部分を少し暗くする（光っている部品も、ほかの部品も押せる）。
 
 import { useEffect, useState } from 'react';
+import { coachName } from '../coach';
 import { store, useStore } from '../store';
 import { TUTORIALS } from '../tutorials';
 import { Avatar } from './Conversation';
+import { StaffFace } from './Face';
 
 interface Rect { top: number; left: number; width: number; height: number }
 
@@ -23,6 +25,8 @@ export function TutorialOverlay() {
   const s = useStore();
   const current = s.tutorial;
   const tutorial = current ? TUTORIALS[current.id] : null;
+  const game = s.game;
+  const club = game ? game.clubs[game.manager.clubId] : undefined;
   const step = tutorial && current ? tutorial.steps[current.step] : undefined;
   const [rect, setRect] = useState<Rect | null>(null);
 
@@ -64,9 +68,12 @@ export function TutorialOverlay() {
         : <div className="tutorial-dim" />}
       <div className={`tutorial-card${atTop ? ' top' : ''}`}>
         <div className="tutorial-head">
-          <Avatar speaker={{ name: 'アシスタントコーチ', kind: 'staff' }} size={40} />
+          <Avatar speaker={{
+            name: 'アシスタントコーチ', kind: 'staff',
+            portrait: club && game ? (size) => <StaffFace seed={`${club.id}:coach`} age={38} tie={club.colors.primary} size={size} /> : undefined,
+          }} size={40} />
           <div>
-            <div className="conv-name">アシスタントコーチ</div>
+            <div className="conv-name">アシスタントコーチ{club && game ? ` ${coachName(game, club.id)}` : ''}</div>
             <strong>{tutorial.title}</strong>
           </div>
           <span className="muted small tutorial-count">{current.step + 1} / {tutorial.steps.length}</span>

@@ -1,26 +1,16 @@
-// クラブ：オーナーの目標と信頼度、評価の履歴、クラブの情報、ファンクラブ（要件定義書「画面の一覧」の「クラブ」。スタッフはフェーズ5）
+// 経営の画面の「オーナー」タブ：オーナーの目標と信頼度、評価の履歴、クラブの情報（要件定義書「画面の一覧」の「クラブ」。スタッフはフェーズ5）
 
-import { useState } from 'react';
 import { canNegotiate, financeGoalStatus, goalLabel, trustLabel, verdictLabel } from '../../game/owner';
 import { FINANCE_GOAL_LABEL, OWNER, STRICTNESS_LABEL } from '../../game/ownerBalance';
 import { standingsOf } from '../../game/standings';
 import { TrendChart } from '../components/BalanceChart';
 import { Bar, ClubLink, Panel } from '../components/bits';
-import { Emblem } from '../components/Emblem';
-import { formatDate, SIZE_LABEL } from '../format';
-import { store, useGame } from '../store';
-import { useTutorial } from '../useTutorial';
-import { FanClubTab } from './FanClubTab';
+import { formatDate } from '../format';
+import type { Club, GameState } from '../../game/types';
+import { store } from '../store';
 
-type Tab = 'owner' | 'fanClub';
-const TABS: { key: Tab; label: string }[] = [{ key: 'owner', label: 'オーナー' }, { key: 'fanClub', label: 'ファンクラブ' }];
-
-export function MyClub({ initialTab }: { initialTab?: Tab }) {
-  const game = useGame();
-  const [tab, setTab] = useState<Tab>(initialTab ?? 'owner');
-  useTutorial(tab === 'owner' ? 'myClub' : undefined);
-  const club = game.clubs[game.manager.clubId];
-  if (!club) return null;
+/** 経営の画面の「オーナー」タブ：信頼度とその推移、今シーズンの目標、これまでの評価、クラブの情報 */
+export function OwnerTab({ game, club }: { game: GameState; club: Club }) {
   const owner = game.owner;
   const goals = owner.goals;
   const row = standingsOf(game).find((r) => r.clubId === club.id);
@@ -29,22 +19,6 @@ export function MyClub({ initialTab }: { initialTab?: Tab }) {
   const played = (row?.played ?? 0) > 0;
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <Emblem spec={club.emblem} size={56} />
-        <div>
-          <h1>{club.name}</h1>
-          <div className="muted">{club.hometown}　創設{club.founded}年　規模：{SIZE_LABEL[club.size]}　監督 {game.manager.name}</div>
-        </div>
-      </header>
-      <div className="tabs">
-        <div className="segmented" data-tutorial="club-tabs">
-          {TABS.map((t) => (
-            <button key={t.key} type="button" className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>{t.label}</button>
-          ))}
-        </div>
-      </div>
-      {tab === 'fanClub' ? <FanClubTab game={game} club={club} /> : (
       <div className="grid-2">
         <Panel title="オーナーの信頼度" tutorial="owner-trust">
           <div className="trust-row">
@@ -120,7 +94,5 @@ export function MyClub({ initialTab }: { initialTab?: Tab }) {
           </dl>
         </Panel>
       </div>
-      )}
-    </div>
   );
 }

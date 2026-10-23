@@ -68,7 +68,7 @@ export function Panel({ title, children, actions, tutorial, icon }: {
   );
 }
 
-const POSITION_GROUP: Record<Position, 'gk' | 'df' | 'mf' | 'fw'> = {
+export const POSITION_GROUP: Record<Position, 'gk' | 'df' | 'mf' | 'fw'> = {
   GK: 'gk', CB: 'df', SB: 'df', WB: 'df', DM: 'mf', CM: 'mf', WM: 'mf', AM: 'mf', W: 'fw', FW: 'fw',
 };
 

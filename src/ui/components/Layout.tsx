@@ -10,6 +10,7 @@ import { formatDate } from '../format';
 import { downloadSave } from '../storage';
 import { store, useStore, type Screen } from '../store';
 import { MomentOverlay } from './Celebration';
+import { CoachBubble } from './CoachBubble';
 import { Emblem } from './Emblem';
 import { Icon, type IconName } from './Icon';
 import { TutorialOverlay } from './TutorialOverlay';
@@ -22,19 +23,29 @@ interface MenuItem {
   phase?: number;
 }
 
-const MENU: MenuItem[] = [
-  { label: 'ホーム', icon: 'home', screen: { name: 'home' } },
-  { label: '受信箱', icon: 'inbox', screen: { name: 'inbox' } },
-  { label: '選手', icon: 'squad', screen: { name: 'squad' } },
-  { label: '戦術', icon: 'tactics', screen: { name: 'tactics' } },
-  { label: '練習', icon: 'training', screen: { name: 'training' } },
-  { label: '日程と結果', icon: 'fixtures', screen: { name: 'fixtures' } },
-  { label: 'リーグ', icon: 'league', screen: { name: 'league' } },
-  { label: '移籍', icon: 'transfers', screen: { name: 'transfers' } },
-  { label: 'スカウト', icon: 'scouting', screen: { name: 'scouting' } },
-  { label: '財務', icon: 'finance', screen: { name: 'finance' } },
-  { label: 'クラブ', icon: 'club', screen: { name: 'myClub' } },
-  { label: '監督', icon: 'manager', screen: { name: 'manager' } },
+/** 左のメニュー。ホームと受信箱を一番上に置き、その下をグループに分ける（要件定義書「画面の作り直し（1.1）」） */
+const MENU: { label: string | null; items: MenuItem[] }[] = [
+  { label: null, items: [
+    { label: 'ホーム', icon: 'home', screen: { name: 'home' } },
+    { label: '受信箱', icon: 'inbox', screen: { name: 'inbox' } },
+  ] },
+  { label: 'チーム', items: [
+    { label: '選手', icon: 'squad', screen: { name: 'squad' } },
+    { label: '戦術', icon: 'tactics', screen: { name: 'tactics' } },
+    { label: '練習', icon: 'training', screen: { name: 'training' } },
+  ] },
+  { label: '試合', items: [
+    { label: '日程と結果', icon: 'fixtures', screen: { name: 'fixtures' } },
+    { label: 'リーグ', icon: 'league', screen: { name: 'league' } },
+  ] },
+  { label: '補強', items: [
+    { label: '移籍', icon: 'transfers', screen: { name: 'transfers' } },
+    { label: 'スカウト', icon: 'scouting', screen: { name: 'scouting' } },
+  ] },
+  { label: '経営', items: [
+    { label: '経営', icon: 'finance', screen: { name: 'management' } },
+    { label: '監督', icon: 'manager', screen: { name: 'manager' } },
+  ] },
 ];
 
 /** 無職の間のメニュー（監督の画面がホームになる） */
@@ -42,7 +53,7 @@ const UNEMPLOYED_MENU = new Set(['受信箱', '日程と結果', 'リーグ', '�
 
 const MENU_SCREENS: Record<string, string> = {
   home: 'ホーム', squad: '選手', player: '選手', tactics: '戦術', fixtures: '日程と結果', league: 'リーグ', club: 'リーグ',
-  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', finance: '財務', conversation: '受信箱', myClub: 'クラブ', manager: '監督', transfers: '移籍', contract: '移籍', bid: '移籍', scouting: 'スカウト', prospect: 'スカウト',
+  inbox: '受信箱', training: '練習', talk: '選手', meeting: 'ホーム', press: '受信箱', seasonEnd: 'リーグ', management: '経営', conversation: '受信箱', manager: '監督', transfers: '移籍', contract: '移籍', bid: '移籍', scouting: 'スカウト', prospect: 'スカウト',
 };
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -67,15 +78,24 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav data-tutorial="menu">
-          {MENU.filter((item) => !unemployed || UNEMPLOYED_MENU.has(item.label)).map((item) => (
-            <button key={item.label} type="button" disabled={s.locked} data-tutorial={item.phase ? undefined : `menu-${item.screen.name}`}
-              className={`menu-item${activeLabel === item.label ? ' active' : ''}${item.phase ? ' later' : ''}`}
-              onClick={() => store.open(item.screen)}>
-              <span className="menu-label"><Icon name={item.icon} />{item.label}</span>
-              {item.phase && <span className="menu-phase">P{item.phase}</span>}
-              {item.screen.name === 'inbox' && unread > 0 && <span className="menu-badge">{unread}</span>}
-            </button>
-          ))}
+          {MENU.map((group) => {
+            const items = group.items.filter((item) => !unemployed || UNEMPLOYED_MENU.has(item.label));
+            if (items.length === 0) return null;
+            return (
+              <div key={group.label ?? 'top'} className="menu-group">
+                {group.label && <div className="menu-group-label">{group.label}</div>}
+                {items.map((item) => (
+                  <button key={item.label} type="button" disabled={s.locked} data-tutorial={item.phase ? undefined : `menu-${item.screen.name}`}
+                    className={`menu-item${activeLabel === item.label ? ' active' : ''}${item.phase ? ' later' : ''}`}
+                    onClick={() => store.open(item.screen)}>
+                    <span className="menu-label"><Icon name={item.icon} size={20} />{item.label}</span>
+                    {item.phase && <span className="menu-phase">P{item.phase}</span>}
+                    {item.screen.name === 'inbox' && unread > 0 && <span className="menu-badge">{unread}</span>}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
       </aside>
       <div className="main">
@@ -113,7 +133,10 @@ export function Layout({ children }: { children: ReactNode }) {
             <button type="button" className="secondary small" disabled={s.locked} onClick={() => void store.saveNow()}>もう一度保存する</button>
           </div>
         )}
-        <main className="content">{children}</main>
+        <main className="content">
+          <CoachBubble />
+          {children}
+        </main>
       </div>
       <TutorialOverlay />
       <MomentOverlay />

@@ -1,5 +1,5 @@
-// 財務：収支、予算の配分、スポンサー、チケットの値段、借り入れ、過去の決算（要件定義書「フェーズ3：財務とオーナー」）
-// オーナーへの相談（予算の増額、借り入れ）とスポンサーの提案は、会話画面で行う。
+// 財務の中身：収支、予算の配分、スポンサー、チケットの値段、借り入れ、過去の決算（要件定義書「フェーズ3：財務とオーナー」）。
+// 経営の画面（Management.tsx）のタブとして使う。オーナーへの相談（予算の増額、借り入れ）とスポンサーの提案は、会話画面で行う。
 
 import { useState } from 'react';
 import {
@@ -12,17 +12,6 @@ import { BalanceChart, type BalancePoint } from '../components/BalanceChart';
 import { ClubLink, Panel } from '../components/bits';
 import { formatDate } from '../format';
 import { store, useGame } from '../store';
-import { useTutorial } from '../useTutorial';
-
-type Tab = 'overview' | 'budget' | 'sponsors' | 'tickets' | 'loans' | 'history';
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'overview', label: '収支' },
-  { key: 'budget', label: '予算' },
-  { key: 'sponsors', label: 'スポンサー' },
-  { key: 'tickets', label: 'チケット' },
-  { key: 'loans', label: '借り入れ' },
-  { key: 'history', label: '過去の決算' },
-];
 
 const INCOME_KEYS: IncomeKind[] = ['tickets', 'sponsor', 'merchandise', 'fanClub', 'broadcast', 'prize', 'transfers'];
 const EXPENSE_KEYS: ExpenseKind[] = ['wages', 'operations', 'matchday', 'merchandiseCost', 'fanClubCost', 'interest', 'transfers', 'agentFees'];
@@ -32,34 +21,7 @@ const LATER: ReadonlySet<string> = new Set<string>();
 const Signed = ({ yen }: { yen: number }) => <span className={yen < 0 ? 'tone-low' : ''}>{yenText(yen)}</span>;
 const monthText = (month: string): string => `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
 
-export function Finance({ initialTab }: { initialTab?: Tab }) {
-  useTutorial('finance');
-  const game = useGame();
-  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
-  const club = game.clubs[game.manager.clubId];
-  if (!club) return null;
-  return (
-    <div className="page">
-      <div className="toolbar">
-        <h1>財務</h1>
-        <div className="segmented" data-tutorial="finance-tabs">
-          {TABS.map((t) => (
-            <button key={t.key} type="button" className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>{t.label}</button>
-          ))}
-        </div>
-      </div>
-      <Summary game={game} club={club} />
-      {tab === 'overview' && <Overview game={game} club={club} />}
-      {tab === 'budget' && <BudgetPanel game={game} club={club} />}
-      {tab === 'sponsors' && <Sponsors game={game} club={club} />}
-      {tab === 'tickets' && <Tickets game={game} club={club} />}
-      {tab === 'loans' && <Loans club={club} />}
-      {tab === 'history' && <History club={club} />}
-    </div>
-  );
-}
-
-function Summary({ game, club }: { game: GameState; club: Club }) {
+export function Summary({ game, club }: { game: GameState; club: Club }) {
   const fin = club.finance;
   const year = yearToDate(fin);
   const payroll = payrollOf(game, club.id);
@@ -115,13 +77,13 @@ function ledgerRows(ledgers: { label: string; ledger: Ledger | null }[]) {
   );
 }
 
-function balancePoints(club: Club): BalancePoint[] {
+export function balancePoints(club: Club): BalancePoint[] {
   const fin = club.finance;
   const previous = fin.history.at(-1)?.balances ?? [];
   return [...previous, ...fin.months.map((m) => ({ month: m.month, balance: m.balance }))].slice(-24);
 }
 
-function Overview({ game, club }: { game: GameState; club: Club }) {
+export function Overview({ game, club }: { game: GameState; club: Club }) {
   const fin = club.finance;
   const lastMonth = fin.months.at(-1);
   const lastYear = fin.history.at(-1);
@@ -172,7 +134,7 @@ function Overview({ game, club }: { game: GameState; club: Club }) {
   );
 }
 
-function RecentGates({ game, club }: { game: GameState; club: Club }) {
+export function RecentGates({ game, club }: { game: GameState; club: Club }) {
   const homes = game.fixtures.filter((f) => f.homeId === club.id && f.result?.attendance !== undefined).slice(-6).reverse();
   if (homes.length === 0) return null;
   return (
@@ -194,7 +156,7 @@ function RecentGates({ game, club }: { game: GameState; club: Club }) {
   );
 }
 
-function BudgetPanel({ game, club }: { game: GameState; club: Club }) {
+export function BudgetPanel({ game, club }: { game: GameState; club: Club }) {
   const budget = club.finance.budget;
   const payroll = payrollOf(game, club.id);
   const room = budgetIncreaseRoom(game, club);
@@ -257,7 +219,7 @@ function BudgetPanel({ game, club }: { game: GameState; club: Club }) {
   );
 }
 
-function Tickets({ game, club }: { game: GameState; club: Club }) {
+export function Tickets({ game, club }: { game: GameState; club: Club }) {
   const prices = club.finance.ticketPrices;
   const gate = expectedGate(club, prices, game.fanMood);
   const listGate = expectedGate(club, Object.fromEntries(SEAT_KINDS.map((s) => [s, listPrice(club, s)])) as Record<SeatKind, number>, game.fanMood);
@@ -318,7 +280,7 @@ function Tickets({ game, club }: { game: GameState; club: Club }) {
   );
 }
 
-function Loans({ club }: { club: Club }) {
+export function Loans({ club }: { club: Club }) {
   const fin = club.finance;
   const limit = FINANCE.loanLimit[club.size];
   const room = Math.max(0, limit - debtOf(fin));
@@ -399,7 +361,7 @@ function Loans({ club }: { club: Club }) {
   );
 }
 
-function Sponsors({ game, club }: { game: GameState; club: Club }) {
+export function Sponsors({ game, club }: { game: GameState; club: Club }) {
   const fin = club.finance;
   const pending = fin.sponsorOffers.length > 0;
   return (
@@ -433,7 +395,7 @@ function Sponsors({ game, club }: { game: GameState; club: Club }) {
   );
 }
 
-function History({ club }: { club: Club }) {
+export function History({ club }: { club: Club }) {
   const years = [...club.finance.history].reverse();
   if (years.length === 0) return <Panel><p className="muted">まだ締めた年度はありません。年度（1月〜12月）は、1月1日に締めます。</p></Panel>;
   return (

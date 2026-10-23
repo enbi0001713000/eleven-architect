@@ -3,12 +3,12 @@
 import { Layout } from './components/Layout';
 import { ClubDetail } from './screens/ClubDetail';
 import { ConversationScreen } from './screens/ConversationScreen';
-import { Finance } from './screens/Finance';
 import { Fixtures } from './screens/Fixtures';
 import { Home } from './screens/Home';
 import { Inbox } from './screens/Inbox';
 import { Later } from './screens/Later';
 import { League } from './screens/League';
+import { Management } from './screens/Management';
 import { Manager } from './screens/Manager';
 import { Transfers } from './screens/Transfers';
 import { TransferBid } from './screens/TransferBid';
@@ -16,7 +16,6 @@ import { Scouting } from './screens/Scouting';
 import { ProspectOfferScreen } from './screens/ProspectOffer';
 import { ContractTalk } from './screens/ContractTalk';
 import { MatchDay } from './screens/MatchDay';
-import { MyClub } from './screens/MyClub';
 import { Meeting } from './screens/Meeting';
 import { NewGame } from './screens/NewGame';
 import { PlayerDetail } from './screens/PlayerDetail';
@@ -62,10 +61,12 @@ export function App() {
     case 'talk': content = <Talk key={`${screen.playerId}-${screen.requestId ?? ''}`} playerId={screen.playerId} requestId={screen.requestId} />; break;
     case 'meeting': content = <Meeting />; break;
     case 'press': content = <Press key={screen.fixtureId} fixtureId={screen.fixtureId} />; break;
-    case 'finance': content = <Finance key={screen.tab ?? 'finance'} initialTab={screen.tab} />; break;
-    case 'myClub': content = <MyClub key={screen.tab ?? 'owner'} initialTab={screen.tab} />; break;
+    // 財務とクラブは、経営の画面のタブになった
+    case 'finance': content = <Management key={`finance-${screen.tab ?? 'overview'}`} initialTab={screen.tab === 'overview' ? 'ledger' : screen.tab} />; break;
+    case 'myClub': content = <Management key={`club-${screen.tab ?? 'owner'}`} initialTab={screen.tab ?? 'owner'} />; break;
+    case 'management': content = <Management key={screen.tab ?? 'overview'} initialTab={screen.tab} />; break;
     case 'manager': content = <Manager />; break;
-    case 'transfers': content = <Transfers key={screen.tab ?? 'auto'} initialTab={screen.tab} />; break;
+    case 'transfers': content = <Transfers key={`${screen.tab ?? 'auto'}-${screen.position ?? ''}-${screen.maxAge ?? ''}`} initialTab={screen.tab} position={screen.position} maxAge={screen.maxAge} />; break;
     case 'bid': content = <TransferBid key={screen.playerId} playerId={screen.playerId} />; break;
     case 'scouting': content = <Scouting key={screen.tab ?? 'auto'} initialTab={screen.tab} />; break;
     case 'prospect': content = <ProspectOfferScreen key={screen.playerId} playerId={screen.playerId} />; break;

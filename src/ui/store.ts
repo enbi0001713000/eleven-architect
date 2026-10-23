@@ -2,12 +2,15 @@
 // ゲームの状態は update() の中で直接書き換え、書き換えたら画面を描き直す。変更は少し待ってから自動でセーブする。
 
 import { useSyncExternalStore } from 'react';
+import type { Position } from '../engine/types';
 import type { HeldEventKind } from '../game/fanClub';
 import { advanceDay, advanceToNextEvent } from '../game/progress';
 import type { GameState, InboxMessage } from '../game/types';
-import { applyTheme, loadSettings, saveSettings, type Settings } from './settings';
+import { applyScale, applyTheme, loadSettings, saveSettings, type Settings } from './settings';
 import { writeSave } from './storage';
 import { TUTORIALS, type TutorialId } from './tutorials';
+
+export type ManagementTab = 'overview' | 'ledger' | 'budget' | 'sponsors' | 'tickets' | 'loans' | 'history' | 'owner' | 'fanClub';
 
 export type Screen =
   | { name: 'title' }
@@ -52,8 +55,17 @@ export type Screen =
   }
   | { name: 'later'; title: string; phase: number }
   | { name: 'myClub'; tab?: 'owner' | 'fanClub' }
+  /** 経営（財務とクラブをまとめた画面）。finance と myClub もここを開く */
+  | { name: 'management'; tab?: ManagementTab }
   | { name: 'manager' }
-  | { name: 'transfers'; tab?: 'search' | 'bids' | 'mine' | 'renewals' | 'market' | 'history' }
+  | {
+    name: 'transfers';
+    tab?: 'home' | 'search' | 'bids' | 'mine' | 'renewals' | 'market' | 'history';
+    /** 選手を探すときのポジション（コーチが教えた手薄な位置など） */
+    position?: Position;
+    /** 選手を探すときの年齢の上限（若手を探す） */
+    maxAge?: number;
+  }
   | { name: 'bid'; playerId: string }
   | { name: 'scouting'; tab?: 'scouts' | 'reports' | 'prospects' | 'overseas' }
   | { name: 'prospect'; playerId: string }
@@ -249,6 +261,13 @@ class Store {
     else this.emit();
   }
 
+  /** コーチが話したことを覚える（同じことは繰り返さない。古いものから忘れる） */
+  markCoachSeen(key: string): void {
+    if (this.settings.coachSeen.includes(key)) return;
+    this.settings = { ...this.settings, coachSeen: [...this.settings.coachSeen, key].slice(-400) };
+    saveSettings(this.settings);
+  }
+
   /** チュートリアルをすべて切る（設定で戻せる） */
   disableTutorials(): void {
     this.tutorial = null;
@@ -259,6 +278,7 @@ class Store {
     this.settings = { ...this.settings, ...change };
     saveSettings(this.settings);
     applyTheme(this.settings.theme);
+    applyScale(this.settings.uiScale);
     this.emit();
   }
 

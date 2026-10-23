@@ -10,15 +10,19 @@ import { FINANCE_GOAL_LABEL } from '../../game/ownerBalance';
 import { pendingActions } from '../../game/inbox';
 import { todaysFixture } from '../../game/progress';
 import { averageRating, isSeasonOver, nextFixtureOf } from '../../game/season';
-import { clubPlayers, validateSelection } from '../../game/selection';
+import { clubPlayers } from '../../game/selection';
+import { nearestStyle } from '../../game/styles';
 import { standingsOf } from '../../game/standings';
 import { meetingCooldownLeft } from '../../game/talks';
 import { Bar, ClubLink, FormBadges, Panel, PosChip, Rating, ResultChip } from '../components/bits';
 import { Emblem } from '../components/Emblem';
+import { Icon, type IconName } from '../components/Icon';
+import { Term } from '../components/Term';
 import { PlayerFace } from '../components/Face';
 import { fanMoodLabel, formatDate, INBOX_CATEGORY_LABEL } from '../format';
 import { playedFixtures, scoreFor, topScorers } from '../queries';
 import { store, useGame } from '../store';
+import { homeTodos, TODO_KIND_LABEL, type Todo, type TodoKind } from '../todos';
 import { useTutorial } from '../useTutorial';
 
 export function Home() {
@@ -30,8 +34,6 @@ export function Home() {
   const myRow = table.find((r) => r.clubId === myId);
   const next = nextFixtureOf(game, myId);
   const recent = playedFixtures(game, myId).slice(-5).reverse();
-  const formation = club?.tactics.formation ?? '4-4-2';
-  const problems = club?.selection ? validateSelection(game, myId, formation, club.selection) : ['メンバーが決まっていません'];
   const squad = clubPlayers(game, myId);
   const suspended = squad.filter((p) => p.discipline.suspendedMatches > 0);
   const warned = squad.filter((p) => p.discipline.yellowAccumulation === 3);
@@ -65,6 +67,7 @@ export function Home() {
         </div>
       ) : <h1>ホーム</h1>}
       <div className="grid-2">
+        <TodoPanel game={game} today={today !== undefined} />
         <Panel title="次の試合" icon="match" tutorial="home-next-match">
           {isSeasonOver(game) && (
             <div className="next-match">
@@ -76,6 +79,7 @@ export function Home() {
             const home = next.homeId === myId;
             const opponentId = home ? next.awayId : next.homeId;
             const opponent = game.clubs[opponentId];
+            const opponentStyle = opponent ? nearestStyle(opponent.tactics.instructions) : null;
             const derby = club?.rivalId === opponentId;
             return (
               <div className="next-match">
@@ -98,18 +102,13 @@ export function Home() {
                   })}
                   <div className="fixture-vs">VS</div>
                 </div>
-                {opponent && <div className="muted small">相手：{opponent.name}（フォーメーション {opponent.tactics.formation}）</div>}
-                {problems.length > 0 && (
-                  <div className="warning">
-                    メンバーに問題があります：{problems.join('／')}
-                    <button type="button" className="secondary small" onClick={() => store.open({ name: 'tactics' })}>戦術画面で直す</button>
+                {opponent && (
+                  <div className="muted small">
+                    相手：{opponent.name}（{opponentStyle ? <Term k="戦い方">{opponentStyle.name}</Term> : '独自の戦い方'}、フォーメーション {opponent.tactics.formation}）
                   </div>
                 )}
                 <div className="button-row">
                   <button type="button" className="secondary" onClick={() => store.open({ name: 'tactics' })}>スタメンと戦術</button>
-                  {today
-                    ? <button type="button" className="primary" onClick={() => store.open({ name: 'match' })}>試合へ ▶</button>
-                    : <button type="button" className="primary" onClick={() => store.advance()}>次の出来事まで進める ▶</button>}
                 </div>
               </div>
             );
@@ -152,7 +151,7 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="オーナーの評価" icon="owner" tutorial="home-owner" actions={<button type="button" className="link" onClick={() => store.open({ name: 'myClub' })}>クラブの画面へ</button>}>
+        <Panel title="オーナーの評価" icon="owner" tutorial="home-owner" actions={<button type="button" className="link" onClick={() => store.open({ name: 'management', tab: 'owner' })}>オーナーの欄へ</button>}>
           {(() => {
             const owner = game.owner;
             const money = financeGoalStatus(game);
@@ -227,7 +226,7 @@ export function Home() {
           {topScorers(game, 1, myId).length === 0 && <p className="muted">まだ得点がありません。</p>}
         </Panel>
 
-        <Panel title="クラブとお金" icon="finance" actions={<button type="button" className="link" onClick={() => store.open({ name: 'finance' })}>財務へ</button>}>
+        <Panel title="クラブとお金" icon="finance" actions={<button type="button" className="link" onClick={() => store.open({ name: 'management' })}>経営へ</button>}>
           {club && (() => {
             const fin = club.finance;
             const net = netResult(yearToDate(fin));
@@ -244,7 +243,7 @@ export function Home() {
                 <dt>ファンクラブ</dt>
                 <dd>
                   会員 {totalMembers(club.fanClub.members).toLocaleString('ja-JP')}人
-                  <button type="button" className="link" onClick={() => store.open({ name: 'myClub', tab: 'fanClub' })}>ファンクラブへ</button>
+                  <button type="button" className="link" onClick={() => store.open({ name: 'management', tab: 'fanClub' })}>ファンクラブへ</button>
                 </dd>
               </dl>
             );
@@ -252,5 +251,43 @@ export function Home() {
         </Panel>
       </div>
     </div>
+  );
+}
+
+const TODO_ICON: Record<TodoKind, IconName> = { problem: 'tactics', reply: 'inbox', deadline: 'fixtures', advice: 'heart' };
+
+/** 済んだ「今やること」を覚えておく（同じ日のうちは、印をつけて残す。セーブはしない） */
+let todoMemory: { date: string; items: Map<string, Todo> } | null = null;
+
+/** ホームの「今やること」と、大きな「進める」ボタン（要件定義書「画面の作り直し（1.1）」） */
+function TodoPanel({ game, today }: { game: ReturnType<typeof useGame>; today: boolean }) {
+  const todos = homeTodos(game);
+  if (!todoMemory || todoMemory.date !== game.date) todoMemory = { date: game.date, items: new Map() };
+  for (const t of todos) todoMemory.items.set(t.key, t);
+  const open = new Set(todos.map((t) => t.key));
+  const done = [...todoMemory.items.values()].filter((t) => !open.has(t.key));
+  return (
+    <Panel title="今やること" icon="home" tutorial="home-todos">
+      {todos.length === 0 && done.length === 0 && <p className="muted">今、急いでやることはありません。準備ができたら進めましょう。</p>}
+      <ul className="todo-list">
+        {todos.map((t) => (
+          <li key={t.key}>
+            <button type="button" className={`todo-item todo-${t.kind}`} onClick={() => store.navigate(t.screen)}>
+              <Icon name={TODO_ICON[t.kind]} size={18} />
+              <span className="todo-text"><span className="todo-kind">{TODO_KIND_LABEL[t.kind]}</span>{t.text}</span>
+              <span className="todo-go">▶</span>
+            </button>
+          </li>
+        ))}
+        {done.map((t) => (
+          <li key={t.key}><span className="todo-item done"><span className="todo-check">✓</span><span className="todo-text">{t.text}</span></span></li>
+        ))}
+      </ul>
+      <div className="todo-advance">
+        {today
+          ? <button type="button" className="primary huge" onClick={() => store.open({ name: 'match' })}>試合へ ▶</button>
+          : <button type="button" className="primary huge" disabled={store.locked || store.tutorial !== null} onClick={() => store.advance()}>次の出来事まで進める ▶</button>}
+      </div>
+    </Panel>
   );
 }

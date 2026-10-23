@@ -1,5 +1,5 @@
-// 移籍：選手を探す、交渉、自分の選手（移籍リストとレンタル）、契約の更新、契約満了の選手、移籍の記録。
-// 要件定義書 フェーズ4「移籍交渉」「契約の更新」「レンタル移籍」（フェーズ4-A、4-B）。
+// 移籍：やりたいこと（入口）、選手を探す、交渉、自分の選手（移籍リストとレンタル）、契約の更新、契約満了の選手、移籍の記録。
+// 要件定義書 フェーズ4「移籍交渉」「契約の更新」「レンタル移籍」（フェーズ4-A、4-B）、「画面の作り直し（1.1）」の「移籍とスカウト」。
 
 import { useState } from 'react';
 import { overallRating } from '../../engine/ratings';
@@ -13,18 +13,23 @@ import { monthDay } from '../../game/dates';
 import { yenText } from '../../game/finance';
 import { knowledgeOf, viewAttribute } from '../../game/knowledge';
 import { SQUAD_ROLE_LABEL } from '../../game/morale';
+import { weakSpots } from '../../game/needs';
 import { LEAGUE_RULES } from '../../game/rules';
 import { isOpen, nextWindowStart, setListing, transferBudgetLeft, windowOpen } from '../../game/transfers';
-import type { Club, GameState, PlayerRecord, TransferKind } from '../../game/types';
+import type { Club, GameState, PlayerRecord, TransferBid, TransferKind } from '../../game/types';
+import { bidSteps } from '../bidProgress';
 import { BidActions, bidStatusLabel, bidSummary } from '../components/BidActions';
 import { AttributeValue, ClubLink, Panel, PosChip } from '../components/bits';
-import { formatDate, POSITION_LABEL, POSITION_ORDER } from '../format';
+import { Icon, type IconName } from '../components/Icon';
+import { Term } from '../components/Term';
+import { formatDate, POSITION_LABEL, POSITION_NAME, POSITION_ORDER } from '../format';
 import { store, useGame } from '../store';
 import { useTutorial } from '../useTutorial';
 
-export type TransfersTab = 'search' | 'bids' | 'mine' | 'renewals' | 'market' | 'history';
+export type TransfersTab = 'home' | 'search' | 'bids' | 'mine' | 'renewals' | 'market' | 'history';
 
 const TABS: { key: TransfersTab; label: string }[] = [
+  { key: 'home', label: 'やりたいこと' },
   { key: 'search', label: '選手を探す' },
   { key: 'bids', label: '交渉' },
   { key: 'mine', label: '自分の選手' },
@@ -45,36 +50,102 @@ function seasonNote(date: string): string {
   return window;
 }
 
-export function Transfers({ initialTab }: { initialTab?: TransfersTab }) {
+/** 自分が返事や次の手を打つ必要のある交渉がある */
+function needsMyMove(game: GameState): boolean {
+  const myId = game.manager.clubId;
+  return (game.bids ?? []).some((b) => (b.sellerId === myId && b.status === 'waiting') || (b.buyerId === myId && (b.status === 'countered' || b.status === 'accepted')));
+}
+
+export function Transfers({ initialTab, position, maxAge }: { initialTab?: TransfersTab; position?: Position; maxAge?: number }) {
   useTutorial('transfers', 'transferMarket');
   const game = useGame();
-  const md = monthDay(game.date);
-  const pending = (game.bids ?? []).some((b) => b.sellerId === game.manager.clubId && b.status === 'waiting')
-    || (game.bids ?? []).some((b) => b.buyerId === game.manager.clubId && (b.status === 'countered' || b.status === 'accepted'));
-  const fallback: TransfersTab = pending ? 'bids' : md.startsWith('12-') || (md <= CONTRACT.freeAgencyEnds && (game.freeAgents ?? []).length > 0) ? 'market'
-    : md >= CONTRACT.renewalOpens && md <= CONTRACT.renewalCloses ? 'renewals' : 'search';
-  const [tab, setTab] = useState<TransfersTab>(initialTab ?? fallback);
+  const [tab, setTab] = useState<TransfersTab>(initialTab ?? (needsMyMove(game) ? 'bids' : 'home'));
+  const [filter, setFilter] = useState<{ position?: Position; maxAge?: number }>({ position, maxAge });
   const club = game.clubs[game.manager.clubId];
   if (!club) return null;
+  const go = (next: TransfersTab, nextFilter: { position?: Position; maxAge?: number } = {}) => {
+    setFilter(nextFilter);
+    setTab(next);
+  };
   return (
     <div className="page">
       <div className="toolbar">
         <h1>移籍</h1>
         <div className="segmented" data-tutorial="transfer-tabs">
           {TABS.map((t) => (
-            <button key={t.key} type="button" className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>{t.label}</button>
+            <button key={t.key} type="button" className={tab === t.key ? 'active' : ''} onClick={() => go(t.key)}>{t.label}</button>
           ))}
         </div>
       </div>
       <Summary game={game} club={club} />
       <div className="notice-box">{seasonNote(game.date)}</div>
-      {tab === 'search' && <Search game={game} />}
+      {tab === 'home' && <Entrances game={game} go={go} />}
+      {tab === 'search' && <Search key={`${filter.position ?? ''}-${filter.maxAge ?? ''}`} game={game} initialPosition={filter.position} initialMaxAge={filter.maxAge} />}
       {tab === 'bids' && <Bids game={game} />}
       {tab === 'mine' && <MyPlayers game={game} />}
       {tab === 'renewals' && <Renewals game={game} />}
       {tab === 'market' && <Market game={game} />}
       {tab === 'history' && <History game={game} />}
     </div>
+  );
+}
+
+type Go = (tab: TransfersTab, filter?: { position?: Position; maxAge?: number }) => void;
+
+/** 移籍の入口：やりたいことから選ぶ。コーチが見た弱いところと、進んでいる交渉も */
+function Entrances({ game, go }: { game: GameState; go: Go }) {
+  const md = monthDay(game.date);
+  const renewals = expiringPlayers(game).filter((p) => !p.leaving).length;
+  const renewalOpen = md >= CONTRACT.renewalOpens && md <= CONTRACT.renewalCloses;
+  const freeAgents = md.startsWith('12-') || md <= CONTRACT.freeAgencyEnds;
+  const myId = game.manager.clubId;
+  const open = (game.bids ?? []).filter((b) => (b.buyerId === myId || b.sellerId === myId) && isOpen(b)).slice().reverse();
+  const entrance = (icon: IconName, title: string, text: string, onClick: () => void, badge?: string) => (
+    <button type="button" className="entrance" onClick={onClick}>
+      <span className="entrance-icon"><Icon name={icon} size={22} /></span>
+      <span className="entrance-text"><strong>{title}{badge && <span className="badge">{badge}</span>}</strong><span className="muted small">{text}</span></span>
+    </button>
+  );
+  return (
+    <>
+      <section className="entrances" data-tutorial="transfer-entrances" aria-label="やりたいこと">
+        {entrance('transfers', '選手を探す', '他クラブの選手を探して、獲得を申し込む', () => go('search'))}
+        {entrance('squad', '選手を売る・貸す', '自分の選手を移籍リストやレンタルに出す', () => go('mine'))}
+        {entrance('owner', '契約を更新する', renewalOpen ? `今年で契約が切れる選手と話す（11月30日まで）` : '今年で契約が切れる選手（7月1日から話せる）', () => go('renewals'), renewals > 0 ? `${renewals}人` : undefined)}
+        {entrance('scouting', '若手を探す', '21歳以下の、これから伸びる選手を探す', () => go('search', { maxAge: 21 }))}
+        {freeAgents && entrance('heart', '契約満了の選手を獲る', '移籍金なしで獲れる選手（3月27日まで）', () => go('market'))}
+      </section>
+      <WeakSpots game={game} go={go} />
+      {open.length > 0 && (
+        <Panel title={`進んでいる交渉（${open.length}）`} icon="transfers" actions={<button type="button" className="secondary small" onClick={() => go('bids')}>交渉をすべて見る</button>}>
+          <ul className="bid-list">{open.slice(0, 4).map((b) => <BidRow key={b.id} game={game} bid={b} />)}</ul>
+        </Panel>
+      )}
+    </>
+  );
+}
+
+const SPOT_TEXT = (spot: ReturnType<typeof weakSpots>[number]): string => (spot.reason === 'quality'
+  ? `一番手でも力が${spot.best.toFixed(1)}で、先発の平均（${spot.average.toFixed(1)}）より低い`
+  : `この位置の選手が${spot.count}人。形で${spot.slots}人使うので、控えがいない`);
+
+/** コーチが見たチームの弱いところ（今のフォーメーションで） */
+function WeakSpots({ game, go }: { game: GameState; go: Go }) {
+  const spots = weakSpots(game, game.manager.clubId).slice(0, 3);
+  return (
+    <Panel title="コーチが見たチームの弱いところ" icon="tactics" tutorial="transfer-weak">
+      {spots.length === 0 ? <p className="muted">今のフォーメーションでは、目立って手薄な位置はありません。</p> : (
+        <ul className="weak-list">
+          {spots.map((spot) => (
+            <li key={spot.position}>
+              <PosChip position={spot.position} />
+              <span><strong>{POSITION_NAME[spot.position]}</strong>　{spot.reason === 'quality' ? '力が足りない' : '人数が足りない'}<br /><span className="muted small">{SPOT_TEXT(spot)}</span></span>
+              <button type="button" className="primary small" onClick={() => go('search', { position: spot.position })}>この位置の選手を探す</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 
@@ -234,9 +305,9 @@ function listingLabel(p: PlayerRecord): string {
   return '';
 }
 
-function Search({ game }: { game: GameState }) {
-  const [position, setPosition] = useState<Position | ''>('');
-  const [maxAge, setMaxAge] = useState(40);
+function Search({ game, initialPosition, initialMaxAge }: { game: GameState; initialPosition?: Position; initialMaxAge?: number }) {
+  const [position, setPosition] = useState<Position | ''>(initialPosition ?? '');
+  const [maxAge, setMaxAge] = useState(initialMaxAge ?? 40);
   const [minOverall, setMinOverall] = useState(10);
   const [onlyListed, setOnlyListed] = useState(false);
   const myId = game.manager.clubId;
@@ -246,7 +317,29 @@ function Search({ game }: { game: GameState }) {
     .filter((r) => mid(r.view) >= minOverall)
     .sort((a, b) => mid(b.view) - mid(a.view) || mid(b.value) - mid(a.value))
     .slice(0, 80);
+  // ポジションで絞ったときは、自分のクラブのその位置の一番手と比べる
+  const mine = position ? (game.clubs[myId]?.playerIds ?? []).map((id) => game.players[id])
+    .filter((p): p is PlayerRecord => p !== undefined && p.position === position && !p.leaving)
+    .sort((a, b) => overallRating(b) - overallRating(a)) : [];
+  const myBest = mine[0] ? overallRating(mine[0]) : null;
   return (
+    <>
+    {position && (
+      <Panel title={`自分のクラブの${POSITION_NAME[position]}（${mine.length}人）`} icon="squad">
+        {mine.length === 0 ? <p className="muted">この位置の選手がいません。</p> : (
+          <ul className="compare-list">
+            {mine.slice(0, 5).map((p) => (
+              <li key={p.id}>
+                <button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: p.id })}>{p.name}</button>
+                <span className="muted small">{p.age}歳</span>
+                <strong>{overallRating(p).toFixed(1)}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="muted small">下の表の「比べると」は、候補の総合力（見えている幅の真ん中）と、この位置の一番手との差です。</p>
+      </Panel>
+    )}
     <Panel title="他クラブの選手" tutorial="transfer-search" actions={
       <div className="inline-form">
         <select value={position} onChange={(e) => setPosition(e.target.value as Position | '')} aria-label="ポジション">
@@ -264,7 +357,7 @@ function Search({ game }: { game: GameState }) {
     }>
       <div className="table-wrap"><table className="data-table compact">
         <thead>
-          <tr><th>選手</th><th>クラブ</th><th>ポジ</th><th className="num">年齢</th><th className="num">総合力</th><th className="num">市場価値</th><th className="num">契約</th><th className="num">違約金</th><th /><th /></tr>
+          <tr><th>選手</th><th>クラブ</th><th>ポジ</th><th className="num">年齢</th><th className="num"><Term k="総合力">総合力</Term></th>{myBest !== null && <th className="num">比べると</th>}<th className="num"><Term k="市場価値">市場価値</Term></th><th className="num">契約</th><th className="num"><Term k="違約金">違約金</Term></th><th /><th /></tr>
         </thead>
         <tbody>
           {rows.map(({ p, view, value }) => (
@@ -274,6 +367,7 @@ function Search({ game }: { game: GameState }) {
               <td><PosChip position={p.position} /></td>
               <td className="num">{p.age}</td>
               <td className="num"><AttributeValue view={view} /></td>
+              {myBest !== null && <td className="num">{compareText(mid(view) - myBest)}</td>}
               <td className="num">{formatValueRange(value)}</td>
               <td className="num">{p.contract ? `${p.contract.endYear}年` : '-'}</td>
               <td className="num">{p.contract?.releaseClause != null ? yenText(p.contract.releaseClause) : 'なし'}</td>
@@ -287,9 +381,15 @@ function Search({ game }: { game: GameState }) {
         </tbody>
       </table></div>
       {rows.length === 0 && <p className="muted">条件に合う選手はいません。</p>}
-      <p className="muted small">他クラブの選手の総合力と市場価値は、知識度に応じた幅で見えます（スカウトはフェーズ4-C）。契約満了の選手は「契約満了の選手」から、移籍金なしで話せます。</p>
+      <p className="muted small">他クラブの選手の総合力と市場価値は、<Term k="知識度">知識度</Term>に応じた幅で見えます。スカウトに調べさせると、幅が狭くなります。契約満了の選手は「契約満了の選手」から、移籍金なしで話せます。</p>
     </Panel>
+    </>
   );
+}
+
+function compareText(diff: number) {
+  if (Math.abs(diff) < 0.3) return <span className="muted">同じくらい</span>;
+  return <span className={diff > 0 ? 'tone-good' : 'tone-low'}>{diff > 0 ? '+' : ''}{diff.toFixed(1)}</span>;
 }
 
 function Bids({ game }: { game: GameState }) {
@@ -297,19 +397,7 @@ function Bids({ game }: { game: GameState }) {
   const bids = (game.bids ?? []).filter((b) => b.buyerId === myId || b.sellerId === myId).slice().reverse();
   const open = bids.filter(isOpen);
   const closed = bids.filter((b) => !isOpen(b)).slice(0, 20);
-  const row = (b: (typeof bids)[number]) => {
-    const player = game.players[b.playerId];
-    return (
-      <li key={b.id} className="bid-row">
-        <div>
-          <strong>{player ? <button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: player.id })}>{player.name}</button> : '（去った選手）'}</strong>
-          <span className="muted small">　{b.buyerId === myId ? '獲得' : '放出'}　{bidSummary(game, b)}　{formatDate(b.date, false)}〜</span>
-          <div className="small">{bidStatusLabel(b, myId)}</div>
-        </div>
-        <BidActions game={game} bid={b} />
-      </li>
-    );
-  };
+  const row = (b: TransferBid) => <BidRow key={b.id} game={game} bid={b} />;
   return (
     <>
       <Panel title={`進んでいる交渉（${open.length}）`} tutorial="transfer-bids">
@@ -321,6 +409,33 @@ function Bids({ game }: { game: GameState }) {
         </Panel>
       )}
     </>
+  );
+}
+
+function BidProgress({ bid, myId }: { bid: TransferBid; myId: string }) {
+  const { steps, current } = bidSteps(bid, myId);
+  return (
+    <ol className="bid-progress" aria-label="交渉の進み具合">
+      {steps.map((label, i) => (
+        <li key={label} className={i < current ? 'done' : i === current ? 'now' : ''}>{label}</li>
+      ))}
+    </ol>
+  );
+}
+
+function BidRow({ game, bid }: { game: GameState; bid: TransferBid }) {
+  const myId = game.manager.clubId;
+  const player = game.players[bid.playerId];
+  return (
+    <li className="bid-row">
+      <div>
+        <strong>{player ? <button type="button" className="link" onClick={() => store.navigate({ name: 'player', id: player.id })}>{player.name}</button> : '（去った選手）'}</strong>
+        <span className="muted small">　{bid.buyerId === myId ? '獲得' : '放出'}　{bidSummary(game, bid)}　{formatDate(bid.date, false)}〜</span>
+        {isOpen(bid) ? <BidProgress bid={bid} myId={myId} /> : null}
+        <div className="small">{bidStatusLabel(bid, myId)}</div>
+      </div>
+      <BidActions game={game} bid={bid} />
+    </li>
   );
 }
 
