@@ -5,6 +5,12 @@ export type CommentaryMode = 'key' | 'all';
 export type Theme = 'light' | 'dark';
 /** 文字の大きさ（標準・大きめ） */
 export type UiScale = 'normal' | 'large';
+/** 観戦の見せ方（ゲームの画面の中で大きく見るか、今までの並びで見るか） */
+export type MatchView = 'big' | 'normal';
+/** 観戦のピッチの描き方（ドット絵か、上から見た今の図か） */
+export type PitchStyle = 'dot' | 'classic';
+/** ドット絵のピッチの映し方（全体か、ボールを追って寄るか） */
+export type CameraMode = 'whole' | 'follow';
 
 export interface Settings {
   matchSpeed: MatchSpeed;
@@ -33,6 +39,16 @@ export interface Settings {
   coachSeen: string[];
   /** 選手の一覧の見せ方（要点のカードか、表か） */
   squadView: 'cards' | 'table';
+  /** 観戦の見せ方。前回選んだほうから始める（1.2） */
+  matchView: MatchView;
+  /** 観戦のピッチの描き方（1.2） */
+  pitchStyle: PitchStyle;
+  /** ドット絵のピッチの映し方（1.2） */
+  camera: CameraMode;
+  /** 観戦の音を出す（1.2） */
+  sound: boolean;
+  /** 観戦の音量（0〜1） */
+  volume: number;
 }
 
 // 今までの設定を読めるように、リポジトリの名前を変えても変えない
@@ -40,6 +56,7 @@ const KEY = 'soccer-manager:settings';
 const DEFAULTS: Settings = {
   matchSpeed: 2, commentary: 'key', squadColumns: null, conversations: true, theme: 'light', tutorials: true, tutorialSeen: [], showPitch: true, celebrations: true,
   uiScale: 'normal', coach: true, coachCollapsed: false, coachSeen: [], squadView: 'cards',
+  matchView: 'big', pitchStyle: 'dot', camera: 'whole', sound: true, volume: 0.6,
 };
 
 export function loadSettings(): Settings {
