@@ -40,6 +40,10 @@ export function Settings() {
             観戦中にピッチの図（選手とボールの動き）を出す
           </label>
           <label className="inline">
+            <input type="checkbox" checked={s.settings.celebrations} onChange={(e) => store.updateSettings({ celebrations: e.target.checked })} />
+            ゴールや勝利、優勝、選手の加入を大きく見せる（演出）
+          </label>
+          <label className="inline">
             <input type="checkbox" checked={s.settings.conversations} onChange={(e) => store.updateSettings({ conversations: e.target.checked })} />
             大事な出来事（オーナーの予算、スポンサーの提案、選手の申し出など）を会話画面で開く
           </label>

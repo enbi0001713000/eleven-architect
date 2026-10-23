@@ -4,12 +4,14 @@ import { simulateMatch } from '../engine/match';
 import type { MatchResult, Team } from '../engine/types';
 import { clubReadiness } from './condition';
 import { settleHomeMatch } from './finance';
+import { addMessage } from './inbox';
+import { addMoment, titleDecided } from './moments';
 import { afterMatches } from './progress';
 import { bestRoles } from './roleFit';
 import { LEAGUE_RULES } from './rules';
 import { autoSelect, clubPlayers, validateSelection } from './selection';
 import { learnFromMatch } from './scouting';
-import { standingsOf } from './standings';
+import { standingsOf, type StandingRow } from './standings';
 import type { Fixture, GameState } from './types';
 
 export interface MatchdayFixture {
@@ -142,7 +144,25 @@ export function applyMatchday(state: GameState, results: Record<string, MatchRes
 
   state.date = fixtures[0]?.date ?? state.date;
   afterMatches(state, fixtures, results);
+  const round = state.season.round;
   state.season.round++;
+  const table = standingsOf(state);
+  if (table[0] && !titleDecided(tableBefore, LEAGUE_RULES.rounds - round + 1) && titleDecided(table, LEAGUE_RULES.rounds - round)) {
+    announceChampion(state, table[0], round);
+  }
+}
+
+/** 優勝が決まった節に知らせる。自分のクラブなら、画面で大きく見せる */
+function announceChampion(state: GameState, row: StandingRow, round: number): void {
+  const name = state.clubs[row.clubId]?.name ?? '';
+  const mine = row.clubId === state.manager.clubId;
+  const left = LEAGUE_RULES.rounds - round;
+  addMessage(state, {
+    category: 'league', from: 'リーグ事務局', important: false,
+    subject: mine ? '優勝が決まりました！' : `${name}の優勝が決まりました`,
+    body: `${left > 0 ? `第${round}節で、残り${left}試合を残して` : '最終節で'}${name}の${state.season.year}年の優勝が決まりました（勝ち点${row.points}）。`,
+  });
+  if (mine) addMoment(state, { kind: 'title', year: state.season.year, round, points: row.points });
 }
 
 export function averageRating(stats: { ratingTotal: number; ratingCount: number }): number | null {

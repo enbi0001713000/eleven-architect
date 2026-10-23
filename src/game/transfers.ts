@@ -13,6 +13,7 @@ import { agentOf, askingSalary, clauseFor, contractStartYear, deservedRole, mark
 import { addDays, monthDay, yearOf } from './dates';
 import { earn, spend, yenText } from './finance';
 import { addMessage } from './inbox';
+import { addMoment } from './moments';
 import { LEAGUE_RULES, HOME_NATIONALITY } from './rules';
 import { inOverseasPool, isFoundOverseas } from './scouting';
 import { standingsOf } from './standings';
@@ -244,6 +245,7 @@ function complete(state: GameState, bid: TransferBid): void {
   resolveMessages(state, bid.id);
   if (bid.kind === 'loan') {
     startLoan(state, player, bid.buyerId, bid.wageShare);
+    if (bid.buyerId === myId) addMoment(state, { kind: 'signing', playerId: player.id, fromClubId: bid.sellerId, fee: 0, via: 'loan' });
     if (bid.buyerId === myId || bid.sellerId === myId) {
       notify(state, bid, `${player.name}のレンタルが始まりました`,
         `${player.name}が、${clubName(state, bid.sellerId)}から${clubName(state, bid.buyerId)}へレンタルで移りました（${TRANSFER.loanEnds.replace('-', '月')}日まで）。年俸は借りたクラブが${Math.round(bid.wageShare * 100)}%を払います。`, true);
@@ -273,6 +275,10 @@ function complete(state: GameState, bid: TransferBid): void {
   }
   recordTransfer(state, player, bid.sellerId === OVERSEAS ? null : bid.sellerId, bid.buyerId, bid.fee, bid.sellerId === OVERSEAS ? 'fromAbroad' : 'transfer');
   if (bid.buyerId === myId) {
+    addMoment(state, {
+      kind: 'signing', playerId: player.id, fromClubId: bid.sellerId === OVERSEAS ? null : bid.sellerId, fee: bid.fee,
+      via: bid.sellerId === OVERSEAS ? 'abroad' : 'transfer',
+    });
     notify(state, bid, `${player.name}が加入しました`, `${player.name}が${clubName(state, bid.sellerId)}から加入しました（移籍金${yenText(bid.fee)}）。新しく入った選手は、まだ戦術に慣れていません。`, true);
   } else if (bid.sellerId === myId) {
     notify(state, bid, `${player.name}が${clubName(state, bid.buyerId)}へ移籍しました`, `移籍金${yenText(bid.fee)}が入りました。半分は今年の移籍予算に足されます。`, true);

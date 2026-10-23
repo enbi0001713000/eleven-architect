@@ -8,6 +8,7 @@ import { isSeasonOver } from '../../game/season';
 import { formatDate } from '../format';
 import { downloadSave } from '../storage';
 import { store, useStore, type Screen } from '../store';
+import { MomentOverlay } from './Celebration';
 import { Emblem } from './Emblem';
 import { TutorialOverlay } from './TutorialOverlay';
 
@@ -112,6 +113,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <main className="content">{children}</main>
       </div>
       <TutorialOverlay />
+      <MomentOverlay />
     </div>
   );
 }

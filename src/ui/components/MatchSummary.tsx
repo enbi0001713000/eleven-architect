@@ -50,16 +50,18 @@ export function KeyEvents({ events }: { events: readonly MatchEvent[] }) {
   );
 }
 
-export function ScoreHeader({ game, homeId, awayId, homeGoals, awayGoals, sub }: {
-  game: GameState; homeId: string; awayId: string; homeGoals: number | null; awayGoals: number | null; sub?: string;
+/** 試合の見出し（両クラブとスコア）。live なら、点が入ったときにその数字を弾ませる */
+export function ScoreHeader({ game, homeId, awayId, homeGoals, awayGoals, sub, live }: {
+  game: GameState; homeId: string; awayId: string; homeGoals: number | null; awayGoals: number | null; sub?: string; live?: boolean;
 }) {
   const home = game.clubs[homeId];
   const away = game.clubs[awayId];
+  const goals = (value: number | null) => (live && value ? <span key={value} className="score-pop">{value}</span> : value ?? '-');
   return (
     <div className="score-header">
       <div className="score-team">{home && <Emblem spec={home.emblem} size={48} />}<span>{home?.name}</span></div>
       <div className="score-center">
-        <div className="score-numbers">{homeGoals ?? '-'} <span className="muted">-</span> {awayGoals ?? '-'}</div>
+        <div className="score-numbers">{goals(homeGoals)} <span className="muted">-</span> {goals(awayGoals)}</div>
         {sub && <div className="muted small">{sub}</div>}
       </div>
       <div className="score-team away">{away && <Emblem spec={away.emblem} size={48} />}<span>{away?.name}</span></div>

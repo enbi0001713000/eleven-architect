@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LiveMatch, SUBSTITUTION_RULES } from '../../engine/match';
 import { createRng } from '../../engine/rng';
 import { roleLabel } from '../../engine/roles';
-import type { MatchResult, Side } from '../../engine/types';
+import type { MatchEvent, MatchResult, Side } from '../../engine/types';
 import { matchGate } from '../../game/finance';
 import { applyMatchday, isSeasonOver, nextFixtureOf, prepareMatchday } from '../../game/season';
 import { autoSelect, repairSelection, selectionWarnings, validateSelection } from '../../game/selection';
@@ -17,11 +17,13 @@ import {
 } from '../../game/talks';
 import type { Fixture, PlayerRecord } from '../../game/types';
 import { FormBadges, Panel, StaminaBar } from '../components/bits';
+import { Confetti, GOLD, useForAWhile } from '../components/Celebration';
 import { Reactions } from '../components/Reactions';
 import { Emblem } from '../components/Emblem';
 import { LiveTacticsPanel } from '../components/LiveTacticsPanel';
 import { kitColors, MatchPitch } from '../components/MatchPitch';
 import { KeyEvents, ScoreHeader, StatsTable } from '../components/MatchSummary';
+import { textOn } from '../colors';
 import { formatDate, POSITION_LABEL, ratingTone } from '../format';
 import type { CommentaryMode, MatchSpeed } from '../settings';
 import { simulateInBackground } from '../simClient';
@@ -271,7 +273,7 @@ export function MatchDay() {
     const attendance = matchGate(game, m.fixture, standingsOf(game)).total;
     return (
       <div className="page">
-        <h1>試合後のレポート</h1>
+        <h1>試合後のレポート <OutcomeBadge diff={result.score[m.mySide] - result.score[m.mySide === 0 ? 1 : 0]} /></h1>
         <ScoreHeader game={game} homeId={m.fixture.homeId} awayId={m.fixture.awayId}
           homeGoals={result.score[0]} awayGoals={result.score[1]}
           sub={`第${m.fixture.round}節　試合終了　${game.clubs[m.fixture.homeId]?.stadium.name ?? ''}　観客 ${attendance.toLocaleString('ja-JP')}人`} />
@@ -313,12 +315,28 @@ export function MatchDay() {
   const half: 1 | 2 = snap.phase === 'firstHalf' || snap.phase === 'halftime' ? 1 : 2;
   const mine = snap.sides[m.mySide];
   const theirs = snap.sides[m.mySide === 0 ? 1 : 0];
+  const kits = kitColors(game.clubs[m.fixture.homeId]?.colors ?? { primary: '#1559c2', secondary: '#ffffff' }, game.clubs[m.fixture.awayId]?.colors ?? { primary: '#d9480f', secondary: '#ffffff' });
+  const lastGoal = [...m.live.events].reverse().find((e) => (e.type === 'goal' || e.type === 'penaltyGoal') && e.side !== null);
+  const myClub = game.clubs[myId];
+  const diff = snap.score[m.mySide] - snap.score[m.mySide === 0 ? 1 : 0];
 
   return (
     <div className="page live">
       <ScoreHeader game={game} homeId={m.fixture.homeId} awayId={m.fixture.awayId}
-        homeGoals={snap.score[0]} awayGoals={snap.score[1]}
+        homeGoals={snap.score[0]} awayGoals={snap.score[1]} live={s.settings.celebrations}
         sub={snap.phase === 'halftime' ? 'ハーフタイム' : finished ? '試合終了' : snap.minute} />
+      {s.settings.celebrations && !finished && (
+        <GoalFlash goal={lastGoal} colors={kits} mySide={m.mySide}
+          scorer={(id) => (id ? game.players[id]?.name : undefined)} club={(side) => snap.sides[side].team.name} />
+      )}
+      {finished && (
+        <div className={`result-banner ${diff > 0 ? 'win' : diff === 0 ? 'draw' : 'loss'}`}
+          style={diff > 0 && myClub ? { background: myClub.colors.primary, color: textOn(myClub.colors.primary) } : undefined}>
+          {diff > 0 && s.settings.celebrations && myClub && <Confetti colors={[myClub.colors.secondary, GOLD, '#ffffff']} count={40} />}
+          <strong>{diff > 0 ? '勝利！' : diff === 0 ? '引き分け' : '敗戦'}</strong>
+          <span>{snap.score[m.mySide]} - {snap.score[m.mySide === 0 ? 1 : 0]}　{theirs.team.name}{diff > 0 ? 'に勝ちました' : diff === 0 ? 'と引き分けました' : 'に負けました'}</span>
+        </div>
+      )}
 
       <div className="live-controls">
         {!finished && snap.phase !== 'halftime' && (
@@ -370,9 +388,7 @@ export function MatchDay() {
         <div>
         {s.settings.showPitch && (
           <Panel title="ピッチ" actions={<button type="button" className="secondary small" onClick={() => store.updateSettings({ showPitch: false })}>隠す</button>}>
-            <MatchPitch snapshot={snap} events={m.live.events}
-              colors={kitColors(game.clubs[m.fixture.homeId]?.colors ?? { primary: '#1559c2', secondary: '#ffffff' }, game.clubs[m.fixture.awayId]?.colors ?? { primary: '#d9480f', secondary: '#ffffff' })}
-              numberOf={(id) => game.players[id]?.squadNumber ?? null} />
+            <MatchPitch snapshot={snap} events={m.live.events} colors={kits} numberOf={(id) => game.players[id]?.squadNumber ?? null} />
           </Panel>
         )}
         <Panel title={<>実況<span className="side-legend"><span className="swatch side-0" />{game.clubs[m.fixture.homeId]?.shortName}<span className="swatch side-1" />{game.clubs[m.fixture.awayId]?.shortName}</span></>}>
@@ -403,6 +419,22 @@ export function MatchDay() {
           </Panel>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 点が入ったら、スコアの下に少しの間（実際の時間で）、誰の得点かを大きく出す */
+function GoalFlash({ goal, colors, mySide, scorer, club }: {
+  goal: MatchEvent | undefined; colors: [string, string]; mySide: Side;
+  scorer: (playerId: string | undefined) => string | undefined; club: (side: Side) => string;
+}) {
+  const shown = useForAWhile(goal, 3200);
+  if (!shown || shown.side === null) return null;
+  const color = colors[shown.side];
+  return (
+    <div key={shown.clock} className={`goal-flash${shown.side === mySide ? ' mine' : ''}`} style={{ background: color, color: textOn(color) }} role="status">
+      <strong>{shown.type === 'penaltyGoal' ? 'PKで' : ''}ゴール！</strong>
+      <span>{shown.minute}　{scorer(shown.playerId) ?? ''}（{club(shown.side)}）</span>
     </div>
   );
 }
@@ -444,6 +476,10 @@ function PlayersOnPitch({ side, compact }: { side: ReturnType<LiveMatch['snapsho
       </tbody>
     </table>
   );
+}
+
+function OutcomeBadge({ diff }: { diff: number }) {
+  return <span className={`outcome-badge ${diff > 0 ? 'win' : diff === 0 ? 'draw' : 'loss'}`}>{diff > 0 ? '勝ち' : diff === 0 ? '引き分け' : '負け'}</span>;
 }
 
 const MOMENT_TITLE: Record<TalkMoment, string> = { pre: '試合前の声かけ', half: 'ハーフタイムの声かけ', post: '試合後の声かけ' };
